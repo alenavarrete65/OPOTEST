@@ -2091,23 +2091,33 @@ async function exportQuestionPNG(q){
 }
 // Construye el payload de la encuesta "quiz" de Telegram para una pregunta, o devuelve
 // {error} si el tipo de pregunta no encaja en el formato de encuesta de opción única.
+// Para preguntas de opción múltiple, Telegram no deja que una opción de encuesta pase de 100
+// caracteres (las corta con "…" si es más larga). Para no perder texto, en vez de meter la
+// opción completa en la encuesta, se manda antes un mensaje con el enunciado y las opciones
+// completas (A, B, C…) y la encuesta en sí solo lleva las letras, para votar sobre lo de arriba.
 function buildTelegramPollPayload(q){
   const tipo = qTipo(q);
-  const LIMITE_PREGUNTA = 290, LIMITE_OPCION = 100, LIMITE_EXPLIC = 195;
+  const LETRAS = 'ABCDEFGHIJ';
+  const LIMITE_PREGUNTA = 290, LIMITE_EXPLIC = 195;
   const recorta = (s,n)=> (s && s.length>n) ? s.slice(0,n-1)+'…' : (s||'');
   if(tipo==='multiple'){
     if(!q.enunciado) return { error:'Esta pregunta no tiene texto (es una imagen), así que no se puede convertir en encuesta de Telegram. Usa "Exportar a PNG" en su lugar.' };
     if(!q.opciones || q.opciones.length<2 || q.opciones.length>10) return { error:'Telegram solo admite encuestas de entre 2 y 10 opciones.' };
+    const preamble = q.enunciado + '\n\n' + q.opciones.map((o,i)=> LETRAS[i]+') '+o).join('\n');
     return {
-      question: recorta(q.enunciado, LIMITE_PREGUNTA),
-      options: q.opciones.map(o=> recorta(o, LIMITE_OPCION)),
+      preamble,
+      question: 'Elige la opción correcta 👆 (pregunta completa arriba)',
+      options: q.opciones.map((_,i)=> LETRAS[i]),
       correct_option_id: q.correcta,
       explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
     };
   }
   if(tipo==='gramatica'){
+    const frase = q.enunciado||'';
+    const cabe = ('¿Es correcta esta frase? "'+frase+'"').length <= LIMITE_PREGUNTA;
     return {
-      question: recorta('¿Es correcta esta frase? "'+(q.enunciado||'')+'"', LIMITE_PREGUNTA),
+      preamble: cabe ? null : ('¿Es correcta esta frase?\n\n"'+frase+'"'),
+      question: cabe ? '¿Es correcta esta frase? "'+frase+'"' : '¿Es correcta esta frase? 👆 (arriba)',
       options: ['Correcta','Incorrecta'],
       correct_option_id: q.correcta ? 0 : 1,
       explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
@@ -2116,9 +2126,13 @@ function buildTelegramPollPayload(q){
   if(tipo==='ortografia'){
     const malas = (q.palabras||[]).map((p,i)=>({p,i})).filter(x=>x.p.incorrecta);
     if(malas.length!==1) return { error:'Telegram solo permite marcar una respuesta correcta, y esta pregunta tiene '+(malas.length===0?'ninguna':malas.length)+' palabra(s) marcada(s) como incorrecta(s). Usa "Exportar a PNG" en su lugar.' };
+    const frase = q.enunciado ? ('"'+q.enunciado+'"') : '';
+    const preguntaLarga = '¿Cuál de estas palabras está mal escrita? '+frase;
+    const cabe = preguntaLarga.length <= LIMITE_PREGUNTA;
     return {
-      question: recorta('¿Cuál de estas palabras está mal escrita? '+(q.enunciado?('"'+q.enunciado+'"'):''), LIMITE_PREGUNTA),
-      options: q.palabras.map(p=> recorta(p.texto, LIMITE_OPCION)),
+      preamble: cabe ? null : ('¿Cuál de estas palabras está mal escrita?\n\n'+frase),
+      question: cabe ? preguntaLarga : '¿Cuál de estas palabras está mal escrita? 👆 (frase arriba)',
+      options: q.palabras.map(p=> recorta(p.texto, 100)),
       correct_option_id: malas[0].i,
       explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
     };
@@ -2130,8 +2144,16 @@ async function sendTelegramPoll(q){
   if(!token || !chatId){ showToast('Configura antes el token del bot y el chat de Telegram.'); return; }
   const payload = buildTelegramPollPayload(q);
   if(payload.error){ showToast(payload.error); return; }
-  showToast('Enviando encuesta a Telegram…');
+  showToast('Enviando a Telegram…');
   try{
+    if(payload.preamble){
+      const preRes = await fetch('https://api.telegram.org/bot'+token+'/sendMessage', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ chat_id: chatId, text: payload.preamble })
+      });
+      const preData = await preRes.json();
+      if(!preData.ok) throw new Error(preData.description || 'Telegram rechazó el mensaje con el enunciado.');
+    }
     const body = {
       chat_id: chatId,
       question: payload.question,
@@ -2146,7 +2168,7 @@ async function sendTelegramPoll(q){
     });
     const data = await res.json();
     if(!data.ok) throw new Error(data.description || 'Telegram rechazó el envío.');
-    showToast('Encuesta enviada al grupo de Telegram ✓');
+    showToast('Enviado al grupo de Telegram ✓');
   }catch(err){
     console.error(err);
     showToast('No se pudo enviar a Telegram: '+(err.message||'error desconocido'));
