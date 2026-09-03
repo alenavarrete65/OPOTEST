@@ -1939,6 +1939,204 @@ function setGeminiKey(v){ try{ localStorage.setItem('opotest-gemini-key', v); }c
 function getGeminiModel(){ try{ return localStorage.getItem('opotest-gemini-model') || 'gemini-3.6-flash'; }catch(e){ return 'gemini-3.6-flash'; } }
 function setGeminiModel(v){ try{ localStorage.setItem('opotest-gemini-model', v); }catch(e){} }
 
+/* ===================== COMPARTIR PREGUNTA (PNG / Telegram) =====================
+   Dos formas de compartir una pregunta con el grupo de Telegram, solo para el admin:
+   1) Exportar a PNG: genera una imagen de la pregunta (con sus opciones) SIN marcar
+      la respuesta correcta, lista para pegar en el grupo. Se monta un DOM oculto que
+      reutiliza los mismos estilos .tq-* del resto de la app y se rasteriza con
+      html2canvas (se carga bajo demanda, no forma parte del bundle).
+   2) Enviar encuesta a Telegram: usa un bot de Telegram (token + chat_id, guardados
+      solo en este dispositivo) para publicar directamente una encuesta tipo "quiz" con
+      la respuesta correcta ya marcada y la explicación, si la hay. Solo tiene sentido
+      para preguntas con opciones cerradas (tipo "multiple", "gramatica", u "ortografia"
+      cuando hay exactamente una palabra mal escrita). */
+function getTelegramBotToken(){ try{ return localStorage.getItem('opotest-tg-token') || ''; }catch(e){ return ''; } }
+function setTelegramBotToken(v){ try{ localStorage.setItem('opotest-tg-token', v); }catch(e){} }
+function getTelegramChatId(){ try{ return localStorage.getItem('opotest-tg-chat') || ''; }catch(e){ return ''; } }
+function setTelegramChatId(v){ try{ localStorage.setItem('opotest-tg-chat', v); }catch(e){} }
+let testsTelegramUI = { open:false };
+// Panel de configuración del bot de Telegram (token + chat/canal/grupo destino). Se reutiliza
+// tanto en el Banco como en la vista previa de cada pregunta.
+function renderTelegramConfigPanel(container){
+  const bodyDiv = createCollapsible(container, '🔧 Configurar bot de Telegram', testsTelegramUI, 'open', !getTelegramBotToken());
+  const p = document.createElement('p'); p.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.6;margin:0 0 10px;';
+  p.innerHTML = 'Se guarda solo en este dispositivo (no viaja a Firebase). Crea un bot hablando con <span style="color:var(--amber);">@BotFather</span> en Telegram, cópiate el token, y añade el bot al grupo/canal como administrador. El "chat ID" puede ser el @usuario_del_canal (si es público) o el ID numérico (a menudo empieza por -100 en grupos/canales); para averiguarlo, envía un mensaje al grupo y abre <span style="color:var(--amber);">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</span> en el navegador.';
+  bodyDiv.appendChild(p);
+  const row = document.createElement('div'); row.className='test-row';
+  const tokField = document.createElement('div'); tokField.className='test-field'; tokField.style.flex='2';
+  tokField.innerHTML = '<label>Token del bot</label>';
+  const tokInput = document.createElement('input'); tokInput.type='password'; tokInput.placeholder='123456:ABC-...'; tokInput.value = getTelegramBotToken();
+  tokInput.onchange = ()=> setTelegramBotToken(tokInput.value.trim());
+  tokField.appendChild(tokInput);
+  row.appendChild(tokField);
+  const chatField = document.createElement('div'); chatField.className='test-field';
+  chatField.innerHTML = '<label>Chat ID / @canal</label>';
+  const chatInput = document.createElement('input'); chatInput.type='text'; chatInput.placeholder='@mi_grupo o -1001234567890'; chatInput.value = getTelegramChatId();
+  chatInput.onchange = ()=> setTelegramChatId(chatInput.value.trim());
+  chatField.appendChild(chatInput);
+  row.appendChild(chatField);
+  bodyDiv.appendChild(row);
+}
+// Construye (fuera de pantalla) una tarjeta de la pregunta SIN revelar la respuesta correcta,
+// reutilizando las mismas clases .tq-* que usa el resto de la app para que se vea igual.
+function buildQuestionExportNode(q){
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:#1b2b24;border:1px solid #34493d;border-radius:6px;padding:22px;font-family:var(--font-body);color:#ece4d3;box-sizing:border-box;';
+  const top = document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
+  const brand = document.createElement('div'); brand.style.cssText='font-family:var(--font-display);letter-spacing:.14em;text-transform:uppercase;color:#d99a3c;font-size:13px;'; brand.textContent='OpoTest';
+  const tag = document.createElement('div'); tag.style.cssText='font-family:var(--font-mono);font-size:10.5px;color:#b9baa8;text-transform:uppercase;letter-spacing:.05em;'; tag.textContent = questionTemaTag(q);
+  top.appendChild(brand); top.appendChild(tag);
+  wrap.appendChild(top);
+  const card = document.createElement('div'); card.className='test-quiz-q'; card.style.cssText='margin:0;';
+  const tipo = qTipo(q);
+  const esOrtoNuevo = tipo==='ortografia' && ortoEsFormatoNuevo(q.enunciado, q.palabras);
+  if(tipo==='gramatica'){
+    const prompt = document.createElement('div'); prompt.className='tq-enun'; prompt.textContent = '¿Es correcta esta frase?';
+    card.appendChild(prompt);
+    const frase = document.createElement('div'); frase.className='tq-opt'; frase.style.cssText='font-style:italic;cursor:default;'; frase.textContent = '"'+(q.enunciado||'')+'"';
+    card.appendChild(frase);
+  } else if(tipo==='ortografia' && esOrtoNuevo){
+    const prompt = document.createElement('div'); prompt.className='tq-enun'; prompt.textContent = '¿Qué palabra numerada está mal escrita?';
+    card.appendChild(prompt);
+    const frase = document.createElement('div'); frase.style.marginBottom='8px';
+    pintarFraseConPalabras(frase, q.enunciado, q.palabras, {mostrarVerdad:false});
+    card.appendChild(frase);
+  } else if(tipo==='ortografia'){
+    const prompt = document.createElement('div'); prompt.className='tq-enun'; prompt.textContent = '¿Cuál de estas palabras está mal escrita?';
+    card.appendChild(prompt);
+    const palRow = document.createElement('div'); palRow.className='tq-palabras';
+    (q.palabras||[]).forEach((p,i)=>{ const chip=document.createElement('span'); chip.className='tq-palabra'; chip.style.color='#ece4d3'; chip.style.borderColor='#34493d'; chip.textContent=(i+1)+'. '+p.texto; palRow.appendChild(chip); });
+    card.appendChild(palRow);
+  } else {
+    if(q.enunciado){ const enun = document.createElement('div'); enun.className='tq-enun'; enun.textContent = q.enunciado; card.appendChild(enun); }
+  }
+  if(q.imagenes && q.imagenes.length){
+    const imgWrap = document.createElement('div'); imgWrap.className='tq-images';
+    q.imagenes.forEach(durl=>{ const img=document.createElement('img'); img.src=durl; imgWrap.appendChild(img); });
+    card.appendChild(imgWrap);
+  }
+  if(tipo==='multiple' && q.opciones && q.opciones.length){
+    const LETRAS='ABCDEFGHIJ';
+    q.opciones.forEach((op,oi)=>{
+      const optRow = document.createElement('div'); optRow.className='tq-opt'; optRow.style.cssText='cursor:default;';
+      const marker = document.createElement('span'); marker.style.cssText='flex-shrink:0;width:20px;color:#d99a3c;font-family:var(--font-mono);font-weight:700;'; marker.textContent = LETRAS[oi]+')';
+      optRow.appendChild(marker);
+      const span = document.createElement('span'); span.textContent = op;
+      optRow.appendChild(span);
+      card.appendChild(optRow);
+    });
+  }
+  wrap.appendChild(card);
+  const foot = document.createElement('div'); foot.style.cssText='margin-top:16px;font-family:var(--font-mono);font-size:10px;color:#8a8f7d;text-align:right;'; foot.textContent = '¿Te la sabes? 🧠';
+  wrap.appendChild(foot);
+  return wrap;
+}
+let html2canvasLoading = null;
+function loadHtml2Canvas(){
+  if(window.html2canvas) return Promise.resolve();
+  if(html2canvasLoading) return html2canvasLoading;
+  html2canvasLoading = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = ()=> resolve();
+    s.onerror = ()=>{ html2canvasLoading = null; reject(new Error('No se pudo cargar la librería de exportación (revisa la conexión).')); };
+    document.head.appendChild(s);
+  });
+  return html2canvasLoading;
+}
+async function exportQuestionPNG(q){
+  showToast('Generando imagen…');
+  let node = null;
+  try{
+    await loadHtml2Canvas();
+    node = buildQuestionExportNode(q);
+    document.body.appendChild(node);
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas = await window.html2canvas(node, { backgroundColor:'#1b2b24', scale:2, useCORS:true });
+    const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
+    if(!blob) throw new Error('No se pudo generar el PNG.');
+    const filename = 'opotest-pregunta-'+(q.id||Date.now())+'.png';
+    const file = new File([blob], filename, { type:'image/png' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file], title:'Pregunta OpoTest' }); return; }
+      catch(shareErr){ if(shareErr && shareErr.name==='AbortError') return; /* si falla el share, seguimos con la descarga */ }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=> URL.revokeObjectURL(url), 4000);
+    showToast('Imagen descargada ✓');
+  }catch(err){
+    console.error(err);
+    showToast(err.message || 'No se pudo exportar la imagen.');
+  }finally{
+    if(node && node.parentNode) node.parentNode.removeChild(node);
+  }
+}
+// Construye el payload de la encuesta "quiz" de Telegram para una pregunta, o devuelve
+// {error} si el tipo de pregunta no encaja en el formato de encuesta de opción única.
+function buildTelegramPollPayload(q){
+  const tipo = qTipo(q);
+  const LIMITE_PREGUNTA = 290, LIMITE_OPCION = 100, LIMITE_EXPLIC = 195;
+  const recorta = (s,n)=> (s && s.length>n) ? s.slice(0,n-1)+'…' : (s||'');
+  if(tipo==='multiple'){
+    if(!q.enunciado) return { error:'Esta pregunta no tiene texto (es una imagen), así que no se puede convertir en encuesta de Telegram. Usa "Exportar a PNG" en su lugar.' };
+    if(!q.opciones || q.opciones.length<2 || q.opciones.length>10) return { error:'Telegram solo admite encuestas de entre 2 y 10 opciones.' };
+    return {
+      question: recorta(q.enunciado, LIMITE_PREGUNTA),
+      options: q.opciones.map(o=> recorta(o, LIMITE_OPCION)),
+      correct_option_id: q.correcta,
+      explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
+    };
+  }
+  if(tipo==='gramatica'){
+    return {
+      question: recorta('¿Es correcta esta frase? "'+(q.enunciado||'')+'"', LIMITE_PREGUNTA),
+      options: ['Correcta','Incorrecta'],
+      correct_option_id: q.correcta ? 0 : 1,
+      explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
+    };
+  }
+  if(tipo==='ortografia'){
+    const malas = (q.palabras||[]).map((p,i)=>({p,i})).filter(x=>x.p.incorrecta);
+    if(malas.length!==1) return { error:'Telegram solo permite marcar una respuesta correcta, y esta pregunta tiene '+(malas.length===0?'ninguna':malas.length)+' palabra(s) marcada(s) como incorrecta(s). Usa "Exportar a PNG" en su lugar.' };
+    return {
+      question: recorta('¿Cuál de estas palabras está mal escrita? '+(q.enunciado?('"'+q.enunciado+'"'):''), LIMITE_PREGUNTA),
+      options: q.palabras.map(p=> recorta(p.texto, LIMITE_OPCION)),
+      correct_option_id: malas[0].i,
+      explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
+    };
+  }
+  return { error:'Este tipo de pregunta no se puede convertir en encuesta de Telegram.' };
+}
+async function sendTelegramPoll(q){
+  const token = getTelegramBotToken(), chatId = getTelegramChatId();
+  if(!token || !chatId){ showToast('Configura antes el token del bot y el chat de Telegram.'); return; }
+  const payload = buildTelegramPollPayload(q);
+  if(payload.error){ showToast(payload.error); return; }
+  showToast('Enviando encuesta a Telegram…');
+  try{
+    const body = {
+      chat_id: chatId,
+      question: payload.question,
+      options: payload.options,
+      type: 'quiz',
+      is_anonymous: true,
+      correct_option_id: payload.correct_option_id
+    };
+    if(payload.explanation) body.explanation = payload.explanation;
+    const res = await fetch('https://api.telegram.org/bot'+token+'/sendPoll', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.description || 'Telegram rechazó el envío.');
+    showToast('Encuesta enviada al grupo de Telegram ✓');
+  }catch(err){
+    console.error(err);
+    showToast('No se pudo enviar a Telegram: '+(err.message||'error desconocido'));
+  }
+}
+
 function fileToBase64(file){
   return new Promise((res, rej)=>{
     const r = new FileReader();
@@ -3238,6 +3436,7 @@ function renderTestsBanco(body){
   btnGroup.appendChild(trashBtn);
   headWrap.appendChild(btnGroup);
   panel.appendChild(headWrap);
+  if(!testsBancoFiltro.papelera) renderTelegramConfigPanel(panel);
   const row = document.createElement('div'); row.className='test-row';
   const catField = document.createElement('div'); catField.className='test-field';
   catField.innerHTML = '<label>Categoría</label>';
@@ -3434,6 +3633,18 @@ function openTestPreviewModal(q){
   const stat = document.createElement('div'); stat.className='tc-stat'; stat.style.margin='10px 0';
   stat.textContent = q.stats.veces ? `Practicada ${q.stats.veces} vez(es) · ${q.stats.aciertos} acierto(s)` : 'Sin practicar todavía';
   box.appendChild(stat);
+
+  if(isAdmin){
+    const shareRow = document.createElement('div'); shareRow.style.cssText='display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;';
+    const pngBtn = document.createElement('button'); pngBtn.type='button'; pngBtn.className='btn small ghost'; pngBtn.textContent='📸 Exportar a PNG (sin respuesta)';
+    pngBtn.onclick = ()=> exportQuestionPNG(q);
+    shareRow.appendChild(pngBtn);
+    const tgBtn = document.createElement('button'); tgBtn.type='button'; tgBtn.className='btn small ghost'; tgBtn.textContent='📊 Enviar encuesta a Telegram';
+    tgBtn.onclick = ()=> sendTelegramPoll(q);
+    shareRow.appendChild(tgBtn);
+    box.appendChild(shareRow);
+    renderTelegramConfigPanel(box);
+  }
 
   const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:6px;';
   const editBtn = document.createElement('button'); editBtn.type='button'; editBtn.className='btn small'; editBtn.textContent='Editar';
