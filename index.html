@@ -1694,6 +1694,11 @@ function renderOrtoBuilder(host, st, onChange){
   paintMalos();
 }
 let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
+// Estado de la pestaña "Generar con IA" (preguntas masivas a partir de un PDF: temario, examen, simulacro…).
+// candidatos: preguntas ya devueltas por la IA, pendientes de revisar/guardar (no están en el banco todavía).
+// file: PDF con las preguntas (temario, examen o simulacro). file2: opcional, PDF aparte con
+// las respuestas/plantilla de corrección, para cuando el examen no trae la solución incluida.
+let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[] };
 let testsQuiz = null; // {items:[...], corregido:false, instantaneo:bool, temporizador:{segundosPorPregunta,totalSegundos,restante}|null}
 let testsQuizTimerHandle = null; // id del setInterval del temporizador de test en curso
 let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:''};
@@ -1821,6 +1826,150 @@ Reglas: "correcta" es el índice (empezando en 0) de la opción correcta, dedúc
   return parsed;
 }
 
+/* ===================== IA (Google Gemini) para generar preguntas masivas desde un PDF ===================== */
+// Reutiliza la misma clave/modelo que la transcripción por foto. Aquí, en vez de UNA pregunta a
+// partir de una imagen, se sube un PDF (temario, examen ya corregido, simulacro…) y se le pide a
+// la IA que devuelva VARIAS preguntas a la vez, en el formato que corresponda según la categoría.
+function normTxt(s){ return (s||'').toString().trim().toLowerCase(); }
+// Intenta encajar el nombre de tema/subtema que sugiere la IA con el temario real ya guardado en
+// la app (coincidencia exacta primero, luego por inclusión de texto). Si no hay match claro, null.
+function matchTemaByName(categoria, nombre){
+  const n = normTxt(nombre);
+  if(!n) return null;
+  const temas = testCatTemario(categoria);
+  let idx = temas.findIndex(t=>normTxt(t.nombre)===n);
+  if(idx<0) idx = temas.findIndex(t=>normTxt(t.nombre).includes(n) || n.includes(normTxt(t.nombre)));
+  return idx>=0 ? idx+1 : null;
+}
+function matchSubtemaByName(categoria, temaNum, nombre){
+  const n = normTxt(nombre);
+  if(!n || !temaNum) return null;
+  const subs = testCatSubtemas(categoria, temaNum);
+  let idx = subs.findIndex(s=>normTxt(s)===n);
+  if(idx<0) idx = subs.findIndex(s=>normTxt(s).includes(n) || n.includes(normTxt(s)));
+  return idx>=0 ? idx+1 : null;
+}
+function buildTemarioPromptContext(categoria){
+  const temas = testCatTemario(categoria);
+  if(!temas.length) return '';
+  let s = 'Temario ya existente en la app para esta categoría (usa estos nombres EXACTOS al sugerir tema/subtema; si una pregunta no encaja claramente en ninguno, usa null):\n';
+  temas.forEach((t,i)=>{
+    s += (i+1)+'. '+t.nombre;
+    if(t.subtemas && t.subtemas.length) s += ' → subtemas: ' + t.subtemas.map((sub)=>'"'+sub+'"').join(', ');
+    s += '\n';
+  });
+  return s;
+}
+function jsonSchemaForTipoGen(tipo){
+  if(tipo==='ortografia') return '{"enunciado":"frase completa que contiene 4 palabras a valorar","palabras":[{"texto":"palabra1","incorrecta":false},{"texto":"palabra2","incorrecta":true},{"texto":"palabra3","incorrecta":false},{"texto":"palabra4","incorrecta":false}],"explicacion":"breve regla ortográfica aplicada","tema_sugerido":null,"subtema_sugerido":null}';
+  if(tipo==='gramatica') return '{"enunciado":"frase completa a valorar","correcta":true,"explicacion":"breve razón gramatical","tema_sugerido":null,"subtema_sugerido":null}';
+  return '{"enunciado":"texto de la pregunta","opciones":["opción A","opción B","opción C","opción D"],"correcta":0,"explicacion":"breve justificación de la respuesta correcta","tema_sugerido":null,"subtema_sugerido":null}';
+}
+async function callGeminiGenerarPreguntas(file, file2, categoria, cantidad, instrucciones){
+  const apiKey = getGeminiKey();
+  if(!apiKey) throw new Error('Falta la clave API de Google Gemini (configúrala arriba).');
+  const model = getGeminiModel();
+  const b64 = await fileToBase64(file);
+  const b64_2 = file2 ? await fileToBase64(file2) : null;
+  const tipo = testTipoForCategoria(categoria);
+  const temarioCtx = buildTemarioPromptContext(categoria);
+  const schema = jsonSchemaForTipoGen(tipo);
+  const prompt = 'Eres un preparador de oposiciones a Guardia Civil. Te adjunto '+(b64_2 ? 'DOS documentos PDF' : 'un documento PDF')+': '
+    + (b64_2
+        ? 'el DOCUMENTO 1 contiene las preguntas de un examen/simulacro (puede que sin la solución visible), y el DOCUMENTO 2 contiene la plantilla de respuestas o corrección de ese mismo examen (normalmente una lista de nº de pregunta → letra/opción correcta).\n'
+        : 'puede ser temario oficial (texto explicativo), un examen ya corregido, o un simulacro de test.\n')
+    + 'Categoría de destino en el banco de preguntas: "'+testCatLabel(categoria)+'".\n'
+    + (temarioCtx ? (temarioCtx+'\n') : '')
+    + (b64_2
+        ? ('Tarea: TRANSCRIBE literalmente cada pregunta del DOCUMENTO 1 (enunciado y las 4 opciones, sin resumir ni reformular), y para cada una busca en el DOCUMENTO 2 cuál es la opción correcta, emparejando por el número de pregunta. No te inventes la respuesta correcta: si para alguna pregunta no encuentras su número en el documento de respuestas, pon "correcta":null en vez de adivinar. Se esperan aproximadamente '+cantidad+' preguntas en el documento; transcribe todas las que encuentres (pueden ser más o menos).\n')
+        : ('Tarea: genera hasta '+cantidad+' preguntas de test EN ESPAÑOL a partir del contenido real de ese PDF.\n'
+           + '- Si el PDF ya contiene preguntas de examen con su solución/corrección, transcríbelas tal cual (respeta la opción marcada como correcta).\n'
+           + '- Si el PDF es temario explicativo sin preguntas, redacta tú preguntas nuevas que evalúen ese contenido con precisión, sin salirte de lo que dice el documento.\n'
+           + '- No inventes datos ni preguntas que no estén respaldadas por el documento: si no da para '+cantidad+', genera menos.\n'))
+    + '- No repitas preguntas entre sí.\n'
+    + (instrucciones ? ('Instrucciones adicionales del usuario: '+instrucciones+'\n') : '')
+    + 'Devuelve SOLO un array JSON válido (sin texto adicional, sin backticks, sin comentarios), donde cada elemento tiene esta forma exacta:\n'
+    + schema + '\n'
+    + 'Reglas: "tema_sugerido" es el nombre EXACTO de uno de los temas listados arriba si la pregunta encaja claramente, o null si no. "subtema_sugerido" igual, con nombre exacto de subtema, o null.';
+  const parts = [];
+  if(b64_2) parts.push({text:'DOCUMENTO 1 (preguntas):'});
+  parts.push({inline_data:{mime_type:'application/pdf', data:b64}});
+  if(b64_2){ parts.push({text:'DOCUMENTO 2 (respuestas / corrección):'}); parts.push({inline_data:{mime_type:'application/pdf', data:b64_2}}); }
+  parts.push({text:prompt});
+  const maxTokens = Math.min(32768, Math.max(4096, cantidad*220));
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(apiKey), {
+    method:'POST',
+    headers:{ 'content-type':'application/json' },
+    body: JSON.stringify({
+      contents:[{ parts }],
+      generationConfig:{ temperature:0.15, maxOutputTokens: maxTokens }
+    })
+  });
+  if(!resp.ok){
+    const errTxt = await resp.text().catch(()=> '');
+    throw new Error('Error de la API ('+resp.status+'): '+errTxt.slice(0,200));
+  }
+  const data = await resp.json();
+  const cand = (data.candidates||[])[0];
+  const textPart = cand && cand.content && (cand.content.parts||[]).find(p=>typeof p.text==='string');
+  if(!textPart) throw new Error('La IA no devolvió texto (puede que el PDF sea muy grande o esté escaneado sin texto reconocible).');
+  let clean = textPart.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+  let parsed;
+  try{ parsed = JSON.parse(clean); }catch(e){ throw new Error('No se pudo interpretar la respuesta de la IA como JSON. Prueba de nuevo o con un PDF más corto.'); }
+  if(!Array.isArray(parsed)) throw new Error('La IA no devolvió una lista de preguntas.');
+  return parsed;
+}
+function buildCandidatosFromParsed(parsed, categoria){
+  const tipo = testTipoForCategoria(categoria);
+  return parsed.map((p,i)=>{
+    const temaNum = p.tema_sugerido ? matchTemaByName(categoria, p.tema_sugerido) : null;
+    const subtemaNum = (temaNum && p.subtema_sugerido) ? matchSubtemaByName(categoria, temaNum, p.subtema_sugerido) : null;
+    const c = { _uid:'gen_'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,6), incluir:true, categoria, tipo, tema:temaNum, subtema:subtemaNum, explicacion:(p.explicacion||'').trim() };
+    if(tipo==='ortografia'){
+      c.enunciado = (p.enunciado||'').trim();
+      c.palabras = Array.isArray(p.palabras) ? p.palabras.slice(0,4).map(w=>({texto:(w&&w.texto||'').toString().trim(), incorrecta:!!(w&&w.incorrecta)})) : [];
+    } else if(tipo==='gramatica'){
+      c.enunciado = (p.enunciado||'').trim();
+      c.correcta = !!p.correcta;
+    } else {
+      c.enunciado = (p.enunciado||'').trim();
+      c.opciones = Array.isArray(p.opciones) ? p.opciones.map(o=>String(o).trim()).filter(o=>o.length) : [];
+      // null = la IA no encontró la respuesta correcta (p. ej. no la localizó en el documento de
+      // corrección); se deja sin marcar a propósito, mejor que adivinar, y hay que revisarla a mano.
+      c.correcta = (typeof p.correcta==='number') ? p.correcta : null;
+    }
+    return c;
+  }).filter(c=>c.enunciado);
+}
+function buildQuestionFromCandidato(c){
+  const q = {
+    id: 'q_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    categoria: c.categoria,
+    tema: c.tema || null,
+    subtema: c.subtema || null,
+    tipo: c.tipo,
+    origen: 'ia_pdf',
+    explicacion: (c.explicacion||'').trim(),
+    creado: Date.now(),
+    actualizado: Date.now(),
+    borrado: false,
+    stats: {veces:0, aciertos:0}
+  };
+  if(c.tipo==='ortografia'){
+    q.enunciado = c.enunciado;
+    q.palabras = c.palabras;
+  } else if(c.tipo==='gramatica'){
+    q.enunciado = c.enunciado;
+    q.correcta = !!c.correcta;
+  } else {
+    q.enunciado = c.enunciado;
+    q.opciones = c.opciones;
+    q.correcta = c.correcta;
+    q.imagenes = [];
+  }
+  return q;
+}
+
 function newTestQuestionFromState(){
   const tipo = testTipoForCategoria(testsAddState.categoria);
   const base = {
@@ -1865,7 +2014,7 @@ function renderTests(){
   // editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
   if(!isAdmin) testsActiveSubtab = 'practicar';
   const tabs = isAdmin
-    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario']]
+    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['generarIA','Generar con IA'],['temario','Temario']]
     : [['practicar','Practicar']];
   const nav = document.createElement('div'); nav.className='test-subnav';
   tabs.forEach(([key,label])=>{
@@ -1880,6 +2029,7 @@ function renderTests(){
   if(testsActiveSubtab==='practicar') renderTestsPracticar(body);
   else if(testsActiveSubtab==='banco') renderTestsBanco(body);
   else if(testsActiveSubtab==='temario') renderTestsTemario(body);
+  else if(testsActiveSubtab==='generarIA') renderTestsGenerarIA(body);
   else renderTestsAnadir(body);
 }
 
@@ -2145,6 +2295,333 @@ function renderTestsAnadir(body){
   };
   reviewPanel.appendChild(saveBtn);
   body.appendChild(reviewPanel);
+}
+
+/* ---- Sub-vista: Generar con IA (desde PDF: temario, exámenes, simulacros...) ---- */
+function renderTestsGenerarIA(body){
+  const infoPanel = document.createElement('div'); infoPanel.className='test-panel';
+  infoPanel.innerHTML = `<h4>Generar preguntas desde uno o dos PDF</h4>
+    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
+      Sube un PDF (temario oficial, un examen ya corregido o un simulacro de test) y la IA propondrá varias
+      preguntas de golpe para la categoría que elijas. Si el examen o simulacro NO trae la solución incluida,
+      puedes subir aparte, abajo, la plantilla de respuestas/corrección en un segundo PDF: la IA transcribirá
+      las preguntas literalmente y cruzará cada una con su respuesta correcta por número. Ninguna pregunta se
+      guarda automáticamente: primero las revisas abajo (puedes editarlas, cambiarles el tema/subtema, o
+      descartarlas) y solo se añaden al banco cuando pulses guardar.
+    </p>`;
+  body.appendChild(infoPanel);
+
+  const apiPanel = document.createElement('div'); apiPanel.className='test-panel';
+  apiPanel.innerHTML = `<h4>Clave API (Google Gemini)</h4>
+    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
+      La misma clave que usas para transcribir fotos. Se guarda solo en este dispositivo.
+      La puedes crear gratis en <span style="color:var(--amber);">aistudio.google.com/apikey</span> (Google AI Studio).
+    </p>`;
+  const keyRow = document.createElement('div'); keyRow.className='test-row';
+  const keyField = document.createElement('div'); keyField.className='test-field'; keyField.style.flex='2';
+  keyField.innerHTML = '<label>Clave API</label>';
+  const keyInput = document.createElement('input'); keyInput.type='password'; keyInput.placeholder='AIzaSy...'; keyInput.value = getGeminiKey();
+  keyInput.onchange = ()=> setGeminiKey(keyInput.value.trim());
+  keyField.appendChild(keyInput);
+  keyRow.appendChild(keyField);
+  const modelField = document.createElement('div'); modelField.className='test-field';
+  modelField.innerHTML = '<label>Modelo</label>';
+  const modelInput = document.createElement('input'); modelInput.type='text'; modelInput.value = getGeminiModel();
+  modelInput.onchange = ()=> setGeminiModel(modelInput.value.trim() || 'gemini-3.6-flash');
+  modelField.appendChild(modelInput);
+  keyRow.appendChild(modelField);
+  apiPanel.appendChild(keyRow);
+  body.appendChild(apiPanel);
+
+  const genPanel = document.createElement('div'); genPanel.className='test-panel';
+  genPanel.innerHTML = '<h4>1. Configura la generación</h4>';
+
+  const row1 = document.createElement('div'); row1.className='test-row';
+  const catField = document.createElement('div'); catField.className='test-field';
+  catField.innerHTML = '<label>Categoría de destino</label>';
+  const catSel = document.createElement('select');
+  TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(c.key===testsGenState.categoria) o.selected=true; catSel.appendChild(o); });
+  catSel.onchange = ()=>{ testsGenState.categoria = catSel.value; renderTests(); };
+  catField.appendChild(catSel);
+  row1.appendChild(catField);
+
+  const cantField = document.createElement('div'); cantField.className='test-field';
+  cantField.innerHTML = '<label>Nº de preguntas (aprox. si lo sabes)</label>';
+  const cantInput = document.createElement('input'); cantInput.type='number'; cantInput.min='1'; cantInput.max='150'; cantInput.value = testsGenState.cantidad;
+  cantInput.onchange = ()=>{ const v = parseInt(cantInput.value,10); testsGenState.cantidad = (v>0 && v<=150) ? v : 10; cantInput.value = testsGenState.cantidad; };
+  cantField.appendChild(cantInput);
+  row1.appendChild(cantField);
+  genPanel.appendChild(row1);
+
+  const instField = document.createElement('div'); instField.className='test-field';
+  instField.innerHTML = '<label>Instrucciones adicionales (opcional)</label>';
+  const instTa = document.createElement('textarea'); instTa.value = testsGenState.instrucciones; instTa.placeholder = 'Ej: "solo del Tema 4", "prioriza las preguntas que aparecen falladas en el examen", "nivel B1 de inglés"…';
+  instTa.oninput = ()=>{ testsGenState.instrucciones = instTa.value; };
+  instField.appendChild(instTa);
+  genPanel.appendChild(instField);
+
+  const fileField = document.createElement('div'); fileField.className='test-field';
+  fileField.innerHTML = '<label>PDF con las preguntas (temario, examen o simulacro)</label>';
+  const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf';
+  const fileNameSpan = document.createElement('div'); fileNameSpan.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-top:4px;';
+  fileNameSpan.textContent = testsGenState.file ? testsGenState.file.name : 'Ningún archivo seleccionado';
+  fileInput.onchange = (e)=>{
+    testsGenState.file = (e.target.files||[])[0] || null;
+    fileNameSpan.textContent = testsGenState.file ? testsGenState.file.name : 'Ningún archivo seleccionado';
+  };
+  fileField.appendChild(fileInput);
+  fileField.appendChild(fileNameSpan);
+  genPanel.appendChild(fileField);
+
+  const file2Field = document.createElement('div'); file2Field.className='test-field';
+  file2Field.innerHTML = '<label>PDF con las respuestas / corrección (opcional)</label>'
+    + '<p style="font-family:var(--font-mono);font-size:10px;color:var(--cream-dim);margin:2px 0 6px;">Súbelo solo si el examen de arriba NO trae ya la solución incluida.</p>';
+  const file2Input = document.createElement('input'); file2Input.type='file'; file2Input.accept='application/pdf';
+  const file2NameSpan = document.createElement('div'); file2NameSpan.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-top:4px;';
+  file2NameSpan.textContent = testsGenState.file2 ? testsGenState.file2.name : 'Ningún archivo seleccionado';
+  file2Input.onchange = (e)=>{
+    testsGenState.file2 = (e.target.files||[])[0] || null;
+    file2NameSpan.textContent = testsGenState.file2 ? testsGenState.file2.name : 'Ningún archivo seleccionado';
+  };
+  file2Field.appendChild(file2Input);
+  file2Field.appendChild(file2NameSpan);
+  genPanel.appendChild(file2Field);
+
+  const genBtn = document.createElement('button'); genBtn.type='button'; genBtn.className='btn small';
+  genBtn.textContent = testsGenState.generando ? 'Generando…' : 'Generar preguntas con IA';
+  genBtn.disabled = testsGenState.generando;
+  genBtn.onclick = async ()=>{
+    if(!testsGenState.file){ showToast('Selecciona primero un PDF.'); return; }
+    testsGenState.generando = true; renderTests();
+    try{
+      const parsed = await callGeminiGenerarPreguntas(testsGenState.file, testsGenState.file2, testsGenState.categoria, testsGenState.cantidad, testsGenState.instrucciones.trim());
+      const nuevos = buildCandidatosFromParsed(parsed, testsGenState.categoria);
+      if(!nuevos.length){ showToast('La IA no devolvió ninguna pregunta válida. Prueba con otro PDF o revisa la clave API.'); }
+      else { testsGenState.candidatos = testsGenState.candidatos.concat(nuevos); showToast(nuevos.length+' pregunta(s) generada(s), revísalas abajo antes de guardar ✓'); }
+    }catch(err){
+      console.error(err);
+      showToast(err.message || 'No se pudo generar preguntas desde el PDF.');
+    }finally{
+      testsGenState.generando = false; renderTests();
+      document.getElementById('genResultsAnchor')?.scrollIntoView({behavior:'smooth'});
+    }
+  };
+  genPanel.appendChild(genBtn);
+  body.appendChild(genPanel);
+
+  const resultsPanel = document.createElement('div'); resultsPanel.className='test-panel'; resultsPanel.id='genResultsAnchor';
+  resultsPanel.innerHTML = '<h4>2. Revisa antes de guardar</h4>';
+  if(!testsGenState.candidatos.length){
+    resultsPanel.innerHTML += '<div class="test-empty">Todavía no hay preguntas generadas pendientes de revisar.</div>';
+  } else {
+    const bulkRow = document.createElement('div'); bulkRow.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;';
+    const sinCorregir = c=> c.tipo==='multiple' && (typeof c.correcta!=='number');
+    const marcadasListas = testsGenState.candidatos.filter(c=>c.incluir && !sinCorregir(c)).length;
+    const marcadasPendientes = testsGenState.candidatos.filter(c=>c.incluir && sinCorregir(c)).length;
+    const saveAllBtn = document.createElement('button'); saveAllBtn.type='button'; saveAllBtn.className='btn small';
+    saveAllBtn.textContent = 'Guardar las marcadas ('+marcadasListas+')';
+    saveAllBtn.disabled = !marcadasListas;
+    saveAllBtn.onclick = ()=>{
+      const aGuardar = testsGenState.candidatos.filter(c=>c.incluir && !sinCorregir(c));
+      aGuardar.forEach(c=>{
+        const q = buildQuestionFromCandidato(c);
+        state.testBank.questions.push(q);
+        saveTestQuestionRemote(q);
+      });
+      const idsGuardados = new Set(aGuardar.map(c=>c._uid));
+      testsGenState.candidatos = testsGenState.candidatos.filter(c=>!idsGuardados.has(c._uid));
+      showToast(aGuardar.length+' pregunta(s) guardada(s) en el banco ✓');
+      renderTests();
+    };
+    bulkRow.appendChild(saveAllBtn);
+    if(marcadasPendientes){
+      const warn = document.createElement('span'); warn.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--amber);align-self:center;';
+      warn.textContent = '⚠ '+marcadasPendientes+' marcada(s) sin respuesta correcta detectada (revísalas a mano, no se guardarán con "Guardar las marcadas").';
+      bulkRow.appendChild(warn);
+    }
+    const discardAllBtn = document.createElement('button'); discardAllBtn.type='button'; discardAllBtn.className='btn small ghost';
+    discardAllBtn.textContent = 'Descartar todas';
+    discardAllBtn.onclick = ()=>{
+      if(!confirm('¿Descartar todas las preguntas generadas pendientes de revisar? No se guardará ninguna.')) return;
+      testsGenState.candidatos = [];
+      renderTests();
+    };
+    bulkRow.appendChild(discardAllBtn);
+    resultsPanel.appendChild(bulkRow);
+
+    const list = document.createElement('div'); list.className='test-list';
+    testsGenState.candidatos.forEach(c=>{
+      const card = document.createElement('div'); card.className='test-card';
+      const head = document.createElement('div'); head.className='tc-head'; head.style.cursor='default';
+      const check = document.createElement('input'); check.type='checkbox'; check.className='t-check'; check.checked = c.incluir; check.style.marginRight='8px';
+      check.onchange = ()=>{ c.incluir = check.checked; renderTests(); };
+      const tag = questionTemaTag(c);
+      const sinCorregirCard = c.tipo==='multiple' && (typeof c.correcta!=='number');
+      const span = document.createElement('span'); span.textContent = (sinCorregirCard ? '⚠ ' : '')+(c.enunciado||'(sin enunciado)').slice(0,140);
+      if(sinCorregirCard) span.style.color = 'var(--amber)';
+      const tagSpan = document.createElement('span'); tagSpan.className='tc-tag'; tagSpan.textContent = c.tema ? tag : (testCatLabel(c.categoria)+' · sin tema asignado');
+      head.appendChild(check); head.appendChild(span); head.appendChild(tagSpan);
+      card.appendChild(head);
+      const actions = document.createElement('div'); actions.className='tc-actions';
+      const editBtn = document.createElement('button'); editBtn.type='button'; editBtn.textContent='Revisar / editar';
+      editBtn.onclick = ()=> openGenCandidatoModal(c);
+      actions.appendChild(editBtn);
+      const delBtn = document.createElement('button'); delBtn.type='button'; delBtn.textContent='Descartar';
+      delBtn.onclick = ()=>{
+        testsGenState.candidatos = testsGenState.candidatos.filter(x=>x._uid!==c._uid);
+        renderTests();
+      };
+      actions.appendChild(delBtn);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+    resultsPanel.appendChild(list);
+  }
+  body.appendChild(resultsPanel);
+}
+
+// Modal de revisión/edición de una pregunta generada por IA antes de guardarla en el banco.
+function openGenCandidatoModal(c){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-panel);border:1px solid var(--line);border-radius:4px;padding:18px;max-width:560px;width:100%;';
+  overlay.appendChild(box);
+  const titleEl = document.createElement('h3'); titleEl.style.cssText='font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0 0 12px;';
+  titleEl.textContent = 'Revisar pregunta generada — '+testCatLabel(c.categoria);
+  box.appendChild(titleEl);
+
+  const temaField = document.createElement('div'); temaField.className='test-field';
+  const temaMax = testCatTemas(c.categoria);
+  if(temaMax>0){
+    temaField.innerHTML = '<label>Tema</label>';
+    const temaSel = document.createElement('select');
+    const optSin = document.createElement('option'); optSin.value=''; optSin.textContent='Todos / sin especificar'; temaSel.appendChild(optSin);
+    for(let i=1;i<=temaMax;i++){ const t = testCatTemaObj(c.categoria,i); const o=document.createElement('option'); o.value=i; o.textContent=t.nombre; if(c.tema===i) o.selected=true; temaSel.appendChild(o); }
+    temaSel.onchange = ()=>{ c.tema = temaSel.value ? Number(temaSel.value) : null; c.subtema = null; document.body.removeChild(overlay); openGenCandidatoModal(c); };
+    temaField.appendChild(temaSel);
+    box.appendChild(temaField);
+
+    const subtemasArr = c.tema ? testCatSubtemas(c.categoria, c.tema) : [];
+    if(subtemasArr.length){
+      const subField = document.createElement('div'); subField.className='test-field';
+      subField.innerHTML = '<label>Subtema</label>';
+      const subSel = document.createElement('select');
+      const optSinSub = document.createElement('option'); optSinSub.value=''; optSinSub.textContent='Todos / sin especificar'; subSel.appendChild(optSinSub);
+      subtemasArr.forEach((nombre,i)=>{ const o=document.createElement('option'); o.value=i+1; o.textContent=nombre; if(c.subtema===i+1) o.selected=true; subSel.appendChild(o); });
+      subSel.onchange = ()=>{ c.subtema = subSel.value ? Number(subSel.value) : null; };
+      subField.appendChild(subSel);
+      box.appendChild(subField);
+    }
+  }
+
+  const enunField = document.createElement('div'); enunField.className='test-field';
+  enunField.innerHTML = '<label>'+(c.tipo==='ortografia' ? 'Frase' : c.tipo==='gramatica' ? 'Frase a valorar' : 'Enunciado')+'</label>';
+  const enunTa = document.createElement('textarea'); enunTa.value = c.enunciado;
+  enunTa.oninput = ()=>{ c.enunciado = enunTa.value; };
+  enunField.appendChild(enunTa);
+  box.appendChild(enunField);
+
+  if(c.tipo==='ortografia'){
+    const palWrap = document.createElement('div'); palWrap.className='test-field';
+    palWrap.innerHTML = '<label>Las 4 palabras (marca cuáles están mal escritas)</label>';
+    while(c.palabras.length<4) c.palabras.push({texto:'', incorrecta:false});
+    c.palabras.slice(0,4).forEach((p,i)=>{
+      const r = document.createElement('div'); r.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+      const inp = document.createElement('input'); inp.type='text'; inp.value = p.texto; inp.style.flex='1';
+      inp.oninput = ()=>{ c.palabras[i].texto = inp.value; };
+      r.appendChild(inp);
+      const lbl = document.createElement('label'); lbl.style.cssText='display:flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:11px;white-space:nowrap;';
+      const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = !!p.incorrecta;
+      chk.onchange = ()=>{ c.palabras[i].incorrecta = chk.checked; };
+      lbl.appendChild(chk); lbl.appendChild(document.createTextNode('Mal escrita'));
+      r.appendChild(lbl);
+      palWrap.appendChild(r);
+    });
+    box.appendChild(palWrap);
+  } else if(c.tipo==='gramatica'){
+    const correctField = document.createElement('div'); correctField.className='test-field';
+    correctField.innerHTML = '<label>¿La frase está bien escrita gramaticalmente?</label>';
+    [[true,'Sí, está bien'],[false,'No, está mal']].forEach(([val,txt])=>{
+      const r = document.createElement('label'); r.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+      const radio = document.createElement('input'); radio.type='radio'; radio.name='genGramaticaRadio'; radio.checked = c.correcta===val;
+      radio.onchange = ()=>{ c.correcta = val; };
+      r.appendChild(radio); r.appendChild(document.createTextNode(txt));
+      correctField.appendChild(r);
+    });
+    box.appendChild(correctField);
+  } else {
+    const optsWrap = document.createElement('div'); optsWrap.className='test-field';
+    optsWrap.innerHTML = '<label>Opciones (marca la correcta)</label>'
+      + (typeof c.correcta!=='number' ? '<p style="font-family:var(--font-mono);font-size:11px;color:var(--amber);margin:2px 0 8px;">⚠ La IA no encontró la respuesta correcta para esta pregunta (revisa el documento de corrección y márcala tú).</p>' : '');
+    const optsList = document.createElement('div');
+    function paintOpts(){
+      optsList.innerHTML = '';
+      c.opciones.forEach((op,i)=>{
+        const r = document.createElement('div'); r.className='test-opt-row';
+        const radio = document.createElement('input'); radio.type='radio'; radio.name='genCorrectaRadio'; radio.checked = c.correcta===i;
+        radio.onchange = ()=>{ c.correcta = i; };
+        r.appendChild(radio);
+        const inp = document.createElement('input'); inp.type='text'; inp.value = op; inp.placeholder='Opción '+(i+1);
+        inp.oninput = ()=>{ c.opciones[i] = inp.value; };
+        r.appendChild(inp);
+        const del = document.createElement('button'); del.type='button'; del.className='test-opt-del'; del.textContent='✕';
+        del.onclick = ()=>{ c.opciones.splice(i,1); if(c.correcta>=c.opciones.length) c.correcta=0; paintOpts(); };
+        r.appendChild(del);
+        optsList.appendChild(r);
+      });
+    }
+    paintOpts();
+    optsWrap.appendChild(optsList);
+    const addOptBtn = document.createElement('button'); addOptBtn.type='button'; addOptBtn.className='tick-add'; addOptBtn.textContent='+ Añadir opción';
+    addOptBtn.onclick = ()=>{ c.opciones.push(''); paintOpts(); };
+    optsWrap.appendChild(addOptBtn);
+    box.appendChild(optsWrap);
+  }
+
+  const explField = document.createElement('div'); explField.className='test-field';
+  explField.innerHTML = '<label>Explicación (opcional)</label>';
+  const explTa = document.createElement('textarea'); explTa.value = c.explicacion;
+  explTa.oninput = ()=>{ c.explicacion = explTa.value; };
+  explField.appendChild(explTa);
+  box.appendChild(explField);
+
+  const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;';
+  const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small';
+  saveBtn.textContent = 'Guardar esta pregunta en el banco';
+  saveBtn.onclick = ()=>{
+    if(!c.enunciado.trim()){ showToast('Falta el enunciado.'); return; }
+    if(c.tipo==='multiple'){
+      const opciones = c.opciones.map(o=>o.trim()).filter(o=>o.length);
+      if(opciones.length<2){ showToast('Hacen falta al menos 2 opciones.'); return; }
+      c.opciones = opciones;
+      if(typeof c.correcta!=='number'){ showToast('Marca cuál es la opción correcta antes de guardar.'); return; }
+    }
+    if(c.tipo==='ortografia' && (c.palabras||[]).filter(p=>p.texto.trim()).length!==4){ showToast('Rellena las 4 palabras.'); return; }
+    const q = buildQuestionFromCandidato(c);
+    state.testBank.questions.push(q);
+    saveTestQuestionRemote(q);
+    testsGenState.candidatos = testsGenState.candidatos.filter(x=>x._uid!==c._uid);
+    showToast('Pregunta guardada ✓');
+    document.body.removeChild(overlay);
+    renderTests();
+  };
+  btnRow.appendChild(saveBtn);
+  const discardBtn = document.createElement('button'); discardBtn.type='button'; discardBtn.className='btn small ghost';
+  discardBtn.textContent = 'Descartar';
+  discardBtn.onclick = ()=>{
+    testsGenState.candidatos = testsGenState.candidatos.filter(x=>x._uid!==c._uid);
+    document.body.removeChild(overlay);
+    renderTests();
+  };
+  btnRow.appendChild(discardBtn);
+  const closeBtn = document.createElement('button'); closeBtn.type='button'; closeBtn.className='btn small ghost';
+  closeBtn.textContent = 'Cerrar sin guardar cambios';
+  closeBtn.onclick = ()=> document.body.removeChild(overlay);
+  btnRow.appendChild(closeBtn);
+  box.appendChild(btnRow);
+
+  document.body.appendChild(overlay);
 }
 
 /* ---- Sub-vista: Banco de preguntas ---- */

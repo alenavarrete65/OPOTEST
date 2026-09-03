@@ -77,6 +77,38 @@ futuro hacia una plataforma de test multiusuario.
 - También puedes escribir las preguntas a mano sin usar ninguna IA (botón
   "Escribir manualmente"), sin coste ni clave API.
 
+## Generar preguntas desde un PDF (temario, exámenes, simulacros)
+
+- **Como admin**, en la pestaña **Generar con IA** (dentro de Tests) puedes subir un PDF —
+  temario oficial, un examen ya corregido o un simulacro de test— y pedirle a la IA (Gemini,
+  la misma clave/modelo que usas para transcribir fotos) que proponga varias preguntas de golpe
+  para la categoría que elijas, en vez de una a una.
+- Eliges la **categoría de destino**, cuántas preguntas pedir (hasta 60 por PDF) y, si quieres,
+  instrucciones adicionales en texto libre (p. ej. "solo del Tema 4", "prioriza las que aparecen
+  falladas en el examen"). La IA usa el temario que ya tienes configurado en esa categoría para
+  intentar clasificar cada pregunta por tema/subtema automáticamente.
+- **Nada se guarda solo**: las preguntas generadas aparecen en una lista de revisión con casilla
+  "incluir" marcada por defecto. Puedes pulsar "Revisar / editar" en cualquiera para corregir el
+  enunciado, las opciones, la correcta, el tema/subtema o la explicación antes de guardarla, o
+  "Descartar" para tirarla. El botón "Guardar las marcadas" añade de golpe al banco todas las que
+  sigan con la casilla activada.
+- Si el PDF es un temario explicativo (sin preguntas), la IA redacta preguntas nuevas basadas en
+  ese contenido; si el PDF ya trae preguntas de examen con su corrección, las transcribe tal cual.
+  En ambos casos puede generar menos de las pedidas si el documento no da para tantas — mejor eso
+  que preguntas inventadas.
+- Los PDF muy largos o escaneados como imagen (sin texto seleccionable) pueden fallar o dar peor
+  resultado; si eso pasa, prueba a subir el PDF por partes más cortas.
+- Igual que con la transcripción por foto, la clave API se guarda solo en el navegador de cada
+  dispositivo.
+- **Examen y respuestas en documentos separados**: si el simulacro no trae ya la solución
+  incluida, puedes subir un segundo PDF opcional con la plantilla de respuestas/corrección. En
+  ese caso la IA deja de redactar preguntas nuevas: transcribe cada pregunta del primer PDF
+  literalmente (enunciado y opciones tal cual) y busca su respuesta correcta en el segundo PDF,
+  emparejando por número de pregunta. Si para alguna pregunta no encuentra su número en el
+  documento de respuestas, la marca con ⚠ como "sin respuesta correcta detectada" en vez de
+  adivinar — esas quedan bloqueadas para el guardado rápido y solo se pueden guardar entrando a
+  "Revisar / editar" y marcando tú la opción correcta a mano.
+
 ## Temario (temas y subtemas)
 
 - Cada categoría de test (Test teoría, Test inglés, Psicotécnicos, Ortografía,
@@ -219,6 +251,9 @@ tener una base fiable; a partir de ahí, las aperturas son incrementales.
 - [x] Orden/desorden de las preguntas al practicar, preguntas de Psicotécnicos
       con imagen, y tipos de pregunta de Ortografía/Gramática con su propia
       corrección (implementado: ver apartado de arriba).
+- [x] Generación masiva de preguntas desde un PDF (temario, exámenes,
+      simulacros) con pantalla de revisión antes de guardar (implementado:
+      ver apartado "Generar preguntas desde un PDF" de arriba).
 - [ ] Ajustar el nº de preguntas de cada tema de Teoría al peso real que le da
       Jefatura de Enseñanza en el examen oficial (pendiente: Alejandro tiene
       que pasar esos porcentajes por tema).
