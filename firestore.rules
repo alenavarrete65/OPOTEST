@@ -2,22 +2,54 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // UID de la cuenta admin (Authentication > Users > columna "User UID"). Debe ser
-    // EXACTAMENTE el mismo valor que ADMIN_UID en index.html.
-    function esAdmin() {
+    // UID de la cuenta admin "dueña" del proyecto (Authentication > Users > columna
+    // "User UID"). Debe ser EXACTAMENTE el mismo valor que ADMIN_UID en index.html.
+    // Esta cuenta es la única que puede aprobar/revocar cuentas y asignar roles.
+    function esSuperAdmin() {
       return request.auth != null && request.auth.uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
     }
 
-    // Banco de preguntas único, guardado en users/{ADMIN_UID}/testQuestions/{idPregunta}.
-    // - La cuenta admin puede leer y escribir (crear, editar, borrar preguntas).
-    // - Cualquier otra cuenta autenticada solo puede LEER (practicar), nunca escribir.
-    match /users/{uid}/testQuestions/{questionId} {
-      allow read: if request.auth != null && uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
-      allow write: if esAdmin() && uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
+    function perfil(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
     }
 
-    // Cualquier otra ruta (incluido el banco propio de cuentas no-admin, que ya no
-    // se usa) queda bloqueada por defecto.
+    function estaAprobado(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) && perfil(uid).aprobado == true;
+    }
+
+    // Cuentas aprobadas con rol "admin" pueden gestionar el banco de preguntas,
+    // igual que la cuenta dueña del proyecto.
+    function esEditor(uid) {
+      return estaAprobado(uid) && perfil(uid).rol == 'admin';
+    }
+
+    // Perfil de cada cuenta: users/{uid} = { email, aprobado, rol, creado }.
+    match /users/{uid} {
+      // Cada cuenta lee su propio perfil (para saber si está aprobada y su rol); la
+      // cuenta dueña puede leer y listar todos los perfiles (panel de administración).
+      allow read: if request.auth != null && (request.auth.uid == uid || esSuperAdmin());
+      // Cada cuenta crea su propio perfil la primera vez que entra, siempre
+      // empezando en aprobado:false — no puede auto-aprobarse ni auto-asignarse rol.
+      allow create: if request.auth != null && request.auth.uid == uid
+                    && request.resource.data.aprobado == false;
+      // Solo la cuenta dueña del proyecto puede aprobar, revocar o cambiar el rol
+      // de una cuenta — ni siquiera las cuentas con rol "admin" pueden hacerlo.
+      allow update: if esSuperAdmin();
+      allow delete: if esSuperAdmin();
+    }
+
+    // Banco de preguntas único, guardado en users/{ADMIN_UID}/testQuestions/{idPregunta}.
+    match /users/{uid}/testQuestions/{questionId} {
+      // Lee la cuenta dueña, o cualquier cuenta ya aprobada (para practicar).
+      allow read: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                  (esSuperAdmin() || estaAprobado(request.auth.uid));
+      // Escribe (añade/edita/borra preguntas) la cuenta dueña, o cualquier cuenta
+      // aprobada con rol "admin".
+      allow write: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                   (esSuperAdmin() || esEditor(request.auth.uid));
+    }
+
+    // Cualquier otra ruta queda bloqueada por defecto.
     match /{document=**} {
       allow read, write: if false;
     }
