@@ -102,10 +102,13 @@
   .wrap{max-width:980px;margin:0 auto;padding:20px 16px 40px;}
 
   header.app-head{
-    display:flex;align-items:baseline;justify-content:space-between;
-    padding-bottom:14px;margin-bottom:18px;flex-wrap:wrap;gap:8px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding-bottom:14px;margin-bottom:18px;gap:12px;
   }
-  .brand{display:flex;flex-direction:column;gap:2px;}
+  .app-head-controls{
+    display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+  }
+  .brand{display:flex;flex-direction:column;align-items:center;gap:2px;}
   .brand .eyebrow{
     font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;color:var(--amber);text-transform:uppercase;
   }
@@ -690,7 +693,7 @@
   .test-panel h4{font-family:var(--font-display);text-transform:uppercase;color:var(--amber);margin:0 0 10px;font-size:15px;letter-spacing:.03em;}
   .test-field{margin-bottom:12px;}
   .test-field label{font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);text-transform:uppercase;display:block;margin-bottom:4px;}
-  .test-field input[type="text"], .test-field input[type="password"], .test-field input[type="number"], .test-field select, .test-field textarea{
+  .test-field input[type="text"], .test-field input[type="email"], .test-field input[type="password"], .test-field input[type="number"], .test-field select, .test-field textarea{
     width:100%;background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream);padding:8px;border-radius:2px;font-family:var(--font-body);font-size:14px;
   }
   .test-field textarea{min-height:64px;resize:vertical;font-family:var(--font-body);}
@@ -800,7 +803,7 @@
         <p class="brand-motto">Tu banco de preguntas, en cualquier dispositivo.</p>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div class="app-head-controls">
       <div class="plan-id" id="userEmailLabel"></div>
       <button type="button" class="icon-btn" id="themeToggleBtn" title="Cambiar a tema claro/oscuro" aria-label="Cambiar tema" style="font-size:14px;">🌙</button>
       <div class="save-indicator" id="offlineIndicator" role="status" aria-live="polite" style="display:none;border-color:var(--red-text);color:var(--red-text);">
