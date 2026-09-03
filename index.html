@@ -2104,23 +2104,25 @@ function buildTelegramPollPayload(q){
     if(!q.enunciado) return { error:'Esta pregunta no tiene texto (es una imagen), así que no se puede convertir en encuesta de Telegram. Usa "Exportar a PNG" en su lugar.' };
     if(!q.opciones || q.opciones.length<2 || q.opciones.length>10) return { error:'Telegram solo admite encuestas de entre 2 y 10 opciones.' };
     const preamble = q.enunciado + '\n\n' + q.opciones.map((o,i)=> LETRAS[i]+') '+o).join('\n');
+    const explicPorDefecto = 'Respuesta correcta: '+LETRAS[q.correcta]+') '+q.opciones[q.correcta];
     return {
       preamble,
       question: 'Elige la opción correcta 👆 (pregunta completa arriba)',
       options: q.opciones.map((_,i)=> LETRAS[i]),
       correct_option_id: q.correcta,
-      explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
+      explanation: recorta(q.explicacion || explicPorDefecto, LIMITE_EXPLIC)
     };
   }
   if(tipo==='gramatica'){
     const frase = q.enunciado||'';
     const cabe = ('¿Es correcta esta frase? "'+frase+'"').length <= LIMITE_PREGUNTA;
+    const explicPorDefecto = 'Respuesta correcta: la frase está '+(q.correcta ? 'BIEN' : 'MAL')+' escrita gramaticalmente.';
     return {
       preamble: cabe ? null : ('¿Es correcta esta frase?\n\n"'+frase+'"'),
       question: cabe ? '¿Es correcta esta frase? "'+frase+'"' : '¿Es correcta esta frase? 👆 (arriba)',
       options: ['Correcta','Incorrecta'],
       correct_option_id: q.correcta ? 0 : 1,
-      explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
+      explanation: recorta(q.explicacion || explicPorDefecto, LIMITE_EXPLIC)
     };
   }
   if(tipo==='ortografia'){
@@ -2129,12 +2131,13 @@ function buildTelegramPollPayload(q){
     const frase = q.enunciado ? ('"'+q.enunciado+'"') : '';
     const preguntaLarga = '¿Cuál de estas palabras está mal escrita? '+frase;
     const cabe = preguntaLarga.length <= LIMITE_PREGUNTA;
+    const explicPorDefecto = 'Respuesta correcta: la palabra mal escrita es "'+q.palabras[malas[0].i].texto+'".';
     return {
       preamble: cabe ? null : ('¿Cuál de estas palabras está mal escrita?\n\n'+frase),
       question: cabe ? preguntaLarga : '¿Cuál de estas palabras está mal escrita? 👆 (frase arriba)',
       options: q.palabras.map(p=> recorta(p.texto, 100)),
       correct_option_id: malas[0].i,
-      explanation: q.explicacion ? recorta(q.explicacion, LIMITE_EXPLIC) : undefined
+      explanation: recorta(q.explicacion || explicPorDefecto, LIMITE_EXPLIC)
     };
   }
   return { error:'Este tipo de pregunta no se puede convertir en encuesta de Telegram.' };
