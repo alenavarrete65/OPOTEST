@@ -2381,15 +2381,15 @@ function renderTests(){
   const host = document.getElementById('testsHost');
   if(!host) return;
   host.innerHTML = '';
-  // Los usuarios no-admin solo pueden practicar: no ven el banco de preguntas (verlo,
-  // editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
-  if(!isAdmin) testsActiveSubtab = 'practicar';
+  // Los usuarios no-admin solo pueden practicar (y ver su propio progreso): no ven el banco de
+  // preguntas (verlo, editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
+  if(!isAdmin && testsActiveSubtab!=='progreso') testsActiveSubtab = 'practicar';
   // "Generar con IA" vive ahora dentro de "Añadir pregunta" (como uno de los 3 métodos), en vez
   // de ser una pestaña aparte; si alguien llega con el estado antiguo, lo redirige sin más.
   if(testsActiveSubtab==='generarIA') testsActiveSubtab = 'anadir';
   const tabs = isAdmin
-    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario']]
-    : [['practicar','Practicar']];
+    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario'],['progreso','Progreso']]
+    : [['practicar','Practicar'],['progreso','Progreso']];
   const nav = document.createElement('div'); nav.className='test-subnav';
   tabs.forEach(([key,label])=>{
     const b = document.createElement('button'); b.type='button'; b.textContent=label;
@@ -2403,6 +2403,7 @@ function renderTests(){
   if(testsActiveSubtab==='practicar') renderTestsPracticar(body);
   else if(testsActiveSubtab==='banco') renderTestsBanco(body);
   else if(testsActiveSubtab==='temario') renderTestsTemario(body);
+  else if(testsActiveSubtab==='progreso') renderTestsProgreso(body);
   else renderTestsAnadir(body);
 }
 
@@ -3110,6 +3111,103 @@ function openGenCandidatoModal(c){
 }
 
 /* ---- Sub-vista: Banco de preguntas ---- */
+/* ---- Sub-vista: Progreso (agregado de stats.veces/stats.aciertos por categoría y tema) ---- */
+// stats.veces/aciertos viven en cada pregunta del banco (se actualizan al practicar, en
+// corregirQuizActual y compañía) pero hasta ahora no había ninguna vista que los agregara: esta
+// pestaña responde a "¿en qué temas fallo más?" para poder priorizar el estudio.
+function buildStatBarRow(label, aciertos, intentos, subtext){
+  const pct = intentos ? Math.round((aciertos/intentos)*100) : 0;
+  const row = document.createElement('div'); row.style.cssText='margin-bottom:12px;';
+  const head = document.createElement('div'); head.style.cssText='display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:3px;';
+  head.innerHTML = `<span>${label}</span><span style="font-family:var(--font-mono);white-space:nowrap;">${pct}% (${aciertos}/${intentos})</span>`;
+  row.appendChild(head);
+  const barBg = document.createElement('div'); barBg.style.cssText='background:var(--line);border-radius:3px;height:8px;overflow:hidden;';
+  const barFill = document.createElement('div');
+  const color = pct>=75 ? 'var(--green)' : (pct>=50 ? 'var(--amber)' : 'var(--red-text)');
+  barFill.style.cssText = 'height:100%;width:'+pct+'%;background:'+color+';';
+  barBg.appendChild(barFill);
+  row.appendChild(barBg);
+  if(subtext){
+    const sub = document.createElement('div'); sub.style.cssText='font-size:10px;color:var(--cream-dim);margin-top:2px;';
+    sub.textContent = subtext;
+    row.appendChild(sub);
+  }
+  return row;
+}
+function renderTestsProgreso(body){
+  const questions = state.testBank.questions || [];
+  const panel = document.createElement('div'); panel.className='test-panel';
+  panel.innerHTML = '<h4>Progreso</h4>';
+
+  const totalPreguntas = questions.length;
+  const practicadas = questions.filter(q=>q.stats && q.stats.veces>0);
+  const totalIntentos = questions.reduce((s,q)=> s+(q.stats && q.stats.veces||0), 0);
+  const totalAciertos = questions.reduce((s,q)=> s+(q.stats && q.stats.aciertos||0), 0);
+  const precisionGlobal = totalIntentos ? Math.round((totalAciertos/totalIntentos)*100) : null;
+  const resumen = document.createElement('p');
+  resumen.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-bottom:16px;';
+  resumen.textContent = totalPreguntas+' preguntas en el banco · '+practicadas.length+' practicada(s) al menos una vez · '+totalIntentos+' intento(s) en total'+(precisionGlobal!==null ? ' · '+precisionGlobal+'% de acierto global' : '');
+  panel.appendChild(resumen);
+
+  if(!totalIntentos){
+    const empty = document.createElement('div'); empty.className='test-empty';
+    empty.textContent = 'Todavía no hay preguntas practicadas: en cuanto hagas algún test aparecerán aquí las estadísticas.';
+    panel.appendChild(empty);
+    body.appendChild(panel);
+    return;
+  }
+
+  // Por categoría
+  const porCategoria = {};
+  questions.forEach(q=>{
+    const st = q.stats||{};
+    if(!st.veces) return;
+    const c = porCategoria[q.categoria] = porCategoria[q.categoria] || {intentos:0, aciertos:0, preguntas:0};
+    c.intentos += st.veces; c.aciertos += st.aciertos||0; c.preguntas++;
+  });
+  const catTitle = document.createElement('h5');
+  catTitle.style.cssText = 'margin:0 0 8px;font-family:var(--font-display);color:var(--amber);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
+  catTitle.textContent = 'Por categoría';
+  panel.appendChild(catTitle);
+  TEST_CATEGORIAS.forEach(c=>{
+    const d = porCategoria[c.key];
+    if(!d) return;
+    panel.appendChild(buildStatBarRow(c.label, d.aciertos, d.intentos, d.preguntas+' pregunta(s) practicada(s)'));
+  });
+
+  // Por tema, para el ranking de "dónde más fallo" (con un mínimo de intentos para que no salga
+  // arriba un tema con un único fallo suelto y descoloque las prioridades de estudio)
+  const UMBRAL_INTENTOS = 3;
+  const porTema = {};
+  questions.forEach(q=>{
+    const st = q.stats||{};
+    if(!st.veces || !q.tema) return;
+    const key = q.categoria+'|'+q.tema;
+    const t = porTema[key] = porTema[key] || {categoria:q.categoria, tema:q.tema, intentos:0, aciertos:0, preguntas:0};
+    t.intentos += st.veces; t.aciertos += st.aciertos||0; t.preguntas++;
+  });
+  const temasArr = Object.values(porTema).filter(t=>t.intentos>=UMBRAL_INTENTOS);
+  temasArr.sort((a,b)=> (a.aciertos/a.intentos) - (b.aciertos/b.intentos));
+
+  const rankTitle = document.createElement('h5');
+  rankTitle.style.cssText = 'margin:20px 0 8px;font-family:var(--font-display);color:var(--amber);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
+  rankTitle.textContent = 'Temas donde más fallas (mín. '+UMBRAL_INTENTOS+' intentos)';
+  panel.appendChild(rankTitle);
+  if(!temasArr.length){
+    const nota = document.createElement('div'); nota.className='test-empty';
+    nota.textContent = 'Todavía no hay ningún tema con al menos '+UMBRAL_INTENTOS+' intentos para poder compararlos.';
+    panel.appendChild(nota);
+  } else {
+    temasArr.slice(0,10).forEach(t=>{
+      const temaObj = testCatTemaObj(t.categoria, t.tema);
+      const nombre = testCatLabel(t.categoria)+' · '+(temaObj ? temaObj.nombre : 'Tema '+t.tema);
+      panel.appendChild(buildStatBarRow(nombre, t.aciertos, t.intentos, t.preguntas+' pregunta(s) de este tema practicadas'));
+    });
+  }
+
+  body.appendChild(panel);
+}
+
 function renderTestsBanco(body){
   const questions = state.testBank.questions;
   const trash = getTestBankTrash();
