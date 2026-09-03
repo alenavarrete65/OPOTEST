@@ -726,6 +726,45 @@
   .test-score-banner{text-align:center;padding:16px;background:var(--bg-panel-2);border:1px solid var(--amber-dim);border-radius:3px;margin-bottom:16px;}
   .test-score-banner .num{font-family:var(--font-display);font-size:32px;color:var(--amber);}
   .test-empty{font-family:var(--font-mono);font-size:12px;color:var(--muted);padding:10px 0;}
+
+  /* ---- Selector de temas/subtemas (checkboxes) para configurar un test ---- */
+  .tema-picker{border:1px solid var(--line);border-radius:2px;margin-top:6px;max-height:420px;overflow-y:auto;}
+  .tema-picker-all{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg-panel-2);border-bottom:1px solid var(--line);font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--amber);}
+  .tema-picker-empty{padding:12px;font-family:var(--font-mono);font-size:12px;color:var(--muted);}
+  .tema-node{border-bottom:1px solid var(--line);}
+  .tema-node:last-child{border-bottom:none;}
+  .tema-node-head{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;}
+  .tema-node-head:hover{background:var(--bg-panel-2);}
+  .tema-node-head .tn-label{flex:1;font-size:13px;color:var(--cream);}
+  .tema-node-head .tn-chev{color:var(--cream-dim);font-family:var(--font-mono);font-size:11px;width:14px;text-align:center;}
+  .tema-node-body{display:none;padding:0 12px 10px 34px;}
+  .tema-node.open .tema-node-body{display:block;}
+  .subtema-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:var(--cream-dim);}
+  .subtema-row.all{color:var(--amber);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.02em;border-bottom:1px dashed var(--line);padding-bottom:8px;margin-bottom:4px;}
+  input[type="checkbox"].t-check{accent-color:var(--amber);width:15px;height:15px;flex-shrink:0;cursor:pointer;}
+
+  /* ---- Panel de administración del temario ---- */
+  .temario-admin-cat{margin-bottom:14px;}
+  .temario-admin-list{margin-top:8px;}
+  .ta-tema{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:2px;margin-bottom:8px;overflow:hidden;}
+  .ta-tema-head{display:flex;align-items:center;gap:6px;padding:8px 10px;}
+  .ta-tema-head .ta-chev{cursor:pointer;color:var(--cream-dim);font-family:var(--font-mono);width:16px;text-align:center;flex-shrink:0;}
+  .ta-tema-head input.ta-name{flex:1;background:var(--bg-panel);color:var(--cream);border:1px solid var(--line);border-radius:2px;padding:6px 8px;font-family:var(--font-body);font-size:13px;}
+  .ta-tema-head .ta-btns{display:flex;gap:4px;flex-shrink:0;}
+  .ta-tema-head .ta-btns button{background:transparent;border:1px solid var(--line);color:var(--cream-dim);padding:4px 7px;border-radius:2px;cursor:pointer;font-size:12px;}
+  .ta-tema-head .ta-btns button:hover{border-color:var(--amber);color:var(--amber);}
+  .ta-tema-body{display:none;padding:4px 10px 10px 30px;}
+  .ta-tema.open .ta-tema-body{display:block;}
+  .ta-sub-row{display:flex;align-items:center;gap:6px;padding:4px 0;}
+  .ta-sub-row input.ta-name{flex:1;background:var(--bg-panel);color:var(--cream);border:1px solid var(--line);border-radius:2px;padding:5px 7px;font-family:var(--font-body);font-size:12px;}
+  .ta-sub-row button{background:transparent;border:1px solid var(--line);color:var(--cream-dim);padding:3px 7px;border-radius:2px;cursor:pointer;font-size:11px;}
+  .ta-sub-row button:hover{border-color:var(--amber);color:var(--amber);}
+  .ta-add-row{display:flex;gap:6px;margin-top:6px;}
+  .ta-add-row input{flex:1;background:var(--bg-panel);color:var(--cream);border:1px solid var(--line);border-radius:2px;padding:6px 8px;font-family:var(--font-body);font-size:12px;}
+  .ta-add-row button{background:var(--amber-dim);border:1px solid var(--amber-dim);color:var(--bg);padding:6px 10px;border-radius:2px;cursor:pointer;font-family:var(--font-mono);font-size:11px;white-space:nowrap;}
+  .ta-add-tema{margin-top:10px;display:flex;gap:6px;}
+  .ta-add-tema input{flex:1;background:var(--bg-panel-2);color:var(--cream);border:1px solid var(--amber-dim);border-radius:2px;padding:8px 10px;font-family:var(--font-body);font-size:13px;}
+  .ta-add-tema button{background:var(--amber);border:1px solid var(--amber);color:var(--bg);padding:8px 14px;border-radius:2px;cursor:pointer;font-family:var(--font-mono);font-size:12px;text-transform:uppercase;white-space:nowrap;}
   .test-check-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .test-check-row input[type="checkbox"]{accent-color:var(--amber);width:16px;height:16px;cursor:pointer;}
   .test-check-row label{font-weight:normal;font-family:var(--font-body);color:var(--cream);cursor:pointer;}
@@ -920,7 +959,7 @@ try{
 }catch(e){ console.error('Error iniciando Firebase', e); firebaseOk = false; }
 
 /* ===================== ESTADO ===================== */
-let state = { testBank:{questions:[]} };
+let state = { testBank:{questions:[]}, temario: null };
 let currentUid = null;
 let isAdmin = false;
 let isSuperAdmin = false;
@@ -1082,22 +1121,430 @@ async function trySyncTestBankPending(){
   if(!remaining.length) setSaveStatus('saved');
 }
 
+/* ===================== TEMARIO (temas y subtemas por categoría) ===================== */
+// Estructura por defecto la primera vez que se usa la app en un proyecto Firebase nuevo.
+// A partir de ahí, la cuenta admin puede añadir/editar/reordenar temas y subtemas desde
+// la pestaña "Temario" (dentro de Tests) y esos cambios se guardan en Firestore, por lo
+// que este objeto solo se usa como arranque inicial / respaldo si no hay nada guardado.
+// Un "tema" es {nombre, subtemas:[nombre, nombre, ...]}. La posición dentro del array (1,2,3…)
+// es el número de tema/subtema que se guarda en cada pregunta (igual que ya hacía la app).
+const DEFAULT_TEMARIO = {
+  conocimientos: [
+    {nombre:`1. Derechos Humanos`, subtemas:[
+      `Carta de las Naciones Unidas`,
+      `Órganos`,
+      `Declaración Universal de Derechos Humanos`,
+      `Convenio europeo para la protección de los derechos y de las libertades fundamentales`,
+      `Tribunal Europeo de Derechos Humanos`,
+      `Pacto Internacional de Derechos Económicos, Sociales y Culturales`,
+      `Pacto internacional de Derechos Civiles y Políticos`,
+      `Consejo de Derechos Humanos de la ONU`,
+      `Convención contra la tortura y otros tratos o penas crueles, inhumanas o degradantes, de la Asamblea General de Naciones Unidas`,
+      `Protocolo facultativo de la Convención contra la tortura y otros tratos o penas crueles, inhumanas o degradantes, de la Asamblea General de Naciones Unidas`,
+      `Carta de los Derechos Fundamentales de la UE`,
+      `Estatuto de Roma de la Corte Penal Internacional`,
+      `Cooperación con la Corte Penal Internacional`,
+      `Consejo Asesor del Mecanismo Nacional de Prevención de la Tortura`,
+      `Carta Social Europea`
+    ]},
+    {nombre:`2. Igualdad`, subtemas:[]},
+    {nombre:`3. Prevención de Riesgos Laborales`, subtemas:[
+      `Prevención de Riesgos Laborales`,
+      `PRL en la Administración General del Estado`,
+      `PRL en la Guardia Civil`
+    ]},
+    {nombre:`4.1 Constitución Española de 1978`, subtemas:[
+      `Preámbulo`,
+      `Título Preliminar`,
+      `Título I De los Derechos y Deberes Fundamentales`,
+      `Título II De la Corona`,
+      `Título III De las Cortes Generales`,
+      `Título IV Del Gobierno y de la Administración`,
+      `Título V De las relaciones entre el Gobierno y las Cortes Generales`,
+      `Título VI Del Poder Judicial`,
+      `Título VII Economía y Hacienda`,
+      `Título VIII De la Organización Territorial del Estado`,
+      `Título IX Del Tribunal Constitucional`,
+      `Título X De la Reforma Constitucional`,
+      `Disposiciones`
+    ]},
+    {nombre:`4.2 Defensor del Pueblo`, subtemas:[]},
+    {nombre:`4.3 Protección Civil del Derecho al Honor, a la Intimidad Personal y Familiar y a la propia Imagen`, subtemas:[]},
+    {nombre:`5.1 Tratado de la Unión Europea`, subtemas:[]},
+    {nombre:`5.2 Tratado de Funcionamiento de la Unión Europea`, subtemas:[]},
+    {nombre:`6. Instituciones Internacionales`, subtemas:[
+      `Organización de las Naciones Unidas (ONU)`,
+      `El Consejo de Europa`,
+      `Unión Europea`,
+      `La Organización del Tratado del Atlántico Norte (OTAN o NATO)`,
+      `INTERPOL`,
+      `EUROPOL`,
+      `EUROJUST`,
+      `FRONTEX`,
+      `CEPOL`,
+      `ONU para la Alimentación y la Agricultura (FAO)`,
+      `Fondo Monetario Internacional (FMI)`,
+      `Organización Mundial de la Salud (OMS)`
+    ]},
+    {nombre:`7. Derecho Civil`, subtemas:[
+      `Fuentes del ordenamiento español y normas jurídicas`,
+      `La persona`,
+      `Circunstancias modificativas de la capacidad`,
+      `7.1 TÍTULO PRELIMINAR. De las normas jurídicas, su aplicación y eficacia.`,
+      `7.2 TÍTULO PRIMERO. De los españoles y extranjeros.`,
+      `7.3 TÍTULO II. Del nacimiento y la extinción de la personalidad civil.`,
+      `7.4 TÍTULO III. Del domicilio.`,
+      `7.5 TÍTULO IV. Del matrimonio.`,
+      `7.6 TÍTULO V. De la paternidad y filiación.`,
+      `7.7 TÍTULO VI. De los alimentos entre parientes.`,
+      `7.8 TÍTULO VII. De las relaciones paterno-filiales.`,
+      `7.9 TÍTULO VIII. De la ausencia.`,
+      `7.10 TÍTULO IX. De la tutela y de la guarda de los menores.`,
+      `7.11 TÍTULO X. De la mayor edad y de la emancipación.`,
+      `7.12 TÍTULO XI. De las medidas de apoyo a las personas con discapacidad para el ejercicio de su capacidad jurídica.`,
+      `7.13 TÍTULO XII. Disposiciones comunes.`
+    ]},
+    {nombre:`8. Derecho Penal`, subtemas:[
+      `La infracción penal`,
+      `Personas criminalmente responsables`,
+      `Medidas de seguridad`,
+      `Delitos contra la Administración Pública`,
+      `Delitos contra la Constitución`,
+      `Garantías penales y de la aplicación de la Ley penal`,
+      `Infracción penal`,
+      `Personas criminalmente responsables de los delitos`,
+      `Penas`,
+      `Responsabilidad civil derivada de los delitos y de las costas procesales`,
+      `Extinción de la responsabilidad criminal y sus efectos`,
+      `Homicidio y sus formas`,
+      `Lesiones`,
+      `Delitos contra la libertad`,
+      `Torturas y otros delitos contra la integridad moral`,
+      `Trata de seres humanos`,
+      `Delitos contra la libertad e indemnidad sexuales`,
+      `Delitos contra las relaciones familiares`,
+      `Delitos contra la Comunidad Internacional`
+    ]},
+    {nombre:`9. Derecho Procesal`, subtemas:[
+      `Ley de Enjuiciamiento Criminal`,
+      `Habeas Corpus`,
+      `Poder Judicial`,
+      `Policía Judicial`,
+      `Estatuto de la Víctima del Delito`
+    ]},
+    {nombre:`10.1 Ley 39/2015 Procedimiento Administrativo`, subtemas:[]},
+    {nombre:`10.2 Ley 40/2015 Régimen jurídico del sector público`, subtemas:[]},
+    {nombre:`11. Protección de Datos`, subtemas:[]},
+    {nombre:`12.1 Extranjería. Inmigración`, subtemas:[
+      `Derechos y Libertades Extranjeros`,
+      `Infracciones`
+    ]},
+    {nombre:`12.2 Entrada, Libre Circulación y Residencia en España de ciudadanos de la UE y del Espacio Económico Europeo`, subtemas:[]},
+    {nombre:`13.1 Seguridad Pública`, subtemas:[
+      `Protección de la Seguridad Ciudadana`,
+      `Infracciones`
+    ]},
+    {nombre:`13.2 Seguridad Privada`, subtemas:[]},
+    {nombre:`14.1 Ministerio del Interior`, subtemas:[
+      `Estructura Orgánica Básica`,
+      `Funciones`
+    ]},
+    {nombre:`14.2 Ministerio de Defensa`, subtemas:[]},
+    {nombre:`15 Fuerzas y Cuerpos de Seguridad. Guardia Civil`, subtemas:[
+      `Fuerzas y Cuerpos de Seguridad`,
+      `Régimen de Personal de la Guardia Civil`,
+      `Dirección General de la Guardia Civil`,
+      `Historia de la Guardia Civil`,
+      `Derechos y Deberes de la Guardia Civil`
+    ]},
+    {nombre:`16.1 Protección Civil`, subtemas:[]},
+    {nombre:`16.2 Desarrollo Sostenible`, subtemas:[
+      `Ley 42/2007, de 13 de diciembre, del Patrimonio Natural y de la Biodiversidad`,
+      `Definiciones`
+    ]},
+    {nombre:`16.3 Eficiencia Energética`, subtemas:[]},
+    {nombre:`17. TIC`, subtemas:[
+      `Tecnologías de la Información y las Comunicaciones`,
+      `Firma Electrónica`,
+      `Ciberseguridad del CCN-CERT`,
+      `Esquema Nacional de Interoperabilidad`,
+      `General de Telecomunicaciones`
+    ]},
+    {nombre:`18. Topografía`, subtemas:[
+      `Teoría`,
+      `Definiciones`,
+      `Ejercicios`
+    ]},
+    {nombre:`19.1 Empleo de la Fuerza y de Armas de Fuego`, subtemas:[]},
+    {nombre:`19.2 Código de Conducta de la Guardia Civil`, subtemas:[
+      `Valores Fundamentales`,
+      `Principios Institucionales`,
+      `Normas de comportamiento`,
+      `Decálogo`
+    ]},
+    {nombre:`20. Responsabilidad Penal de los Menores`, subtemas:[]},
+    {nombre:`21. Violencia de Género`, subtemas:[]},
+    {nombre:`22.1 Armas`, subtemas:[
+      `Reglamento`,
+      `Definiciones`,
+      `Categorías`,
+      `Licencias`
+    ]},
+    {nombre:`22.2 Explosivos`, subtemas:[
+      `Reglamento`,
+      `Definiciones`,
+      `Clasificación`
+    ]},
+    {nombre:`23.1 Contrabando`, subtemas:[
+      `Represión del Contrabando`,
+      `Infracciones Administrativas`
+    ]},
+    {nombre:`23.2 Código Aduanero de la Unión Europea`, subtemas:[
+      `Definiciones`
+    ]}
+  ],
+  ingles: [
+    {nombre:`TEMA 1: BE (ser, estar)`, subtemas:[
+      `1.1: Expresiones hechas con "be"`,
+      `1.2: Expresiones hechas: edad`
+    ]},
+    {nombre:`TEMA 2: PRONOMBRES`, subtemas:[
+      `2.1: Pronombres sujeto, pronombres objeto`,
+      `2.2: Pronombres reflexivos`,
+      `2.3: Pronombres indefinidos`,
+      `2.4: Pronombres recíprocos`,
+      `2.5: One(s) como pronombres`,
+      `2.6: Other, another, (the) other(s)`
+    ]},
+    {nombre:`TEMA 3: POSESIÓN`, subtemas:[
+      `3.1: Have (got)`,
+      `3.2: Genitivo sajón y 'of'`,
+      `3.3: Adjetivos posesivos y pronombres posesivos`
+    ]},
+    {nombre:`TEMA 4: SINGULAR Y PLURAL`, subtemas:[
+      `4.1: Formación regular e irregular`,
+      `4.2: Palabras siempre en singular o siempre en plural`,
+      `4.3: Palabras colectivas`
+    ]},
+    {nombre:`TEMA 5: PARTÍCULAS QUE PRECEDEN AL SUSTANTIVO O LO SUSTITUYE: ARTÍCULOS, ADJETIVOS Y PRONOMBRES`, subtemas:[
+      `5.1: This, that, these, those`,
+      `5.2: A(n), the, --`,
+      `5.3: Both, either, neither`,
+      `5.4: Both/All, Either/Any, Neither/None`,
+      `5.5: All, whole, every, each`,
+      `5.6: Such/so`,
+      `5.7: Too, enough`
+    ]},
+    {nombre:`TEMA 6: EXPRESIONES DE CANTIDAD`, subtemas:[
+      `6.1: Números`,
+      `6.2: Cuantificadores`,
+      `6.3: Expresiones partitivas`
+    ]},
+    {nombre:`TEMA 7: ADJETIVOS`, subtemas:[
+      `7.1: Orden`,
+      `7.2: Formación de adjetivos con "-ing" y "-ed"`,
+      `7.3: Formación de adjetivos con otros sufijos`,
+      `7.4: Formación de gentilicios`,
+      `7.5: Adjetivos y su relación con el plural`
+    ]},
+    {nombre:`TEMA 8: ADVERBIOS Y SINTAGMAS ADVERBIALES`, subtemas:[
+      `8.1: Formación de adverbios`,
+      `8.2: Adverbios intensificadores`,
+      `8.3: Posición`,
+      `8.4: Inversión tras adverbios negativos`
+    ]},
+    {nombre:`TEMA 9: COMPARACIÓN`, subtemas:[
+      `9.1: Comparativo`,
+      `9.2: Superlativo`,
+      `9.3: Igualdad`,
+      `9.4: Doble comparativo`
+    ]},
+    {nombre:`TEMA 10: TIEMPOS VERBALES PRESENTES`, subtemas:[
+      `10.1: Presente simple`,
+      `10.2: Presente continuo`
+    ]},
+    {nombre:`TEMA 11: TIEMPOS VERBALES PASADOS`, subtemas:[
+      `11.1: Pasado simple`,
+      `11.2: Pasado continuo`,
+      `11.3: Used to, be used to, get used to`,
+      `11.4: Presente perfecto simple`,
+      `11.5: Presente perfecto continuo`,
+      `11.6: Pasado perfecto simple`,
+      `11.7: Pasado perfecto continuo`
+    ]},
+    {nombre:`TEMA 12: TIEMPOS VERBALES FUTUROS`, subtemas:[
+      `12.1: Will`,
+      `12.2: Be going to`,
+      `12.3: Presente continuo`,
+      `12.4: Futuro continuo`,
+      `12.5: Futuro perfecto simple`,
+      `12.7: Futuro perfecto continuo`,
+      `12.8: Expresiones que pueden expresar futuro`
+    ]},
+    {nombre:`TEMA 13: VERBOS MODALES`, subtemas:[
+      `13.1: Verbos modales simples`,
+      `13.2: Verbos modales perfectos`
+    ]},
+    {nombre:`TEMA 14: THERE BE`, subtemas:[
+      `14.1: Significado de existencia ("haber")`,
+      `14.2: There vs it`
+    ]},
+    {nombre:`TEMA 15: PREGUNTAS`, subtemas:[
+      `15.1: Partículas interrogativas`,
+      `15.2: Tag questions`,
+      `15.3: Preguntas objeto`,
+      `15.4: Preguntas sujeto`,
+      `15.5: Preguntas indirectas/subordinadas`,
+      `15.6: Preguntas especiales y formulaicas`
+    ]},
+    {nombre:`TEMA 16: EXCLAMACIONES CON "WHAT/HOW…!"`, subtemas:[
+      `16.1: Exclamaciones con "what/how…!"`
+    ]},
+    {nombre:`TEMA 17: IMPERATIVO Y "LET"`, subtemas:[
+      `17.1: Imperativo en segunda persona`,
+      `17.2: Imperativo inclusivo con "Let"`
+    ]},
+    {nombre:`TEMA 18: AUXILIARES CON "SO, NOT, NEITHER, NOR"`, subtemas:[
+      `18.1: Uso de "so" y "neither/nor" para expresar "también" y "tampoco"`,
+      `18.2: Uso de "so" y "not" para evitar repetir información`
+    ]},
+    {nombre:`TEMA 19: PREPOSICIONES`, subtemas:[
+      `19.1: Preposiciones de lugar`,
+      `19.2: Preposiciones de movimiento`,
+      `19.3: Preposiciones de tiempo`,
+      `19.4: Adjetivos preposicionales`,
+      `19.5: Verbos preposicionales`,
+      `19.6: Phrasal verbs`,
+      `19.7: Preposiciones en expresiones hechas`
+    ]},
+    {nombre:`TEMA 20: INFINITIVO Y GERUNDIO`, subtemas:[
+      `20.1: Gerundio (detrás de verbos)`,
+      `20.1: Gerundio (como sujeto)`,
+      `20.2: Infinitivo`,
+      `20.3: Verbos seguidos de infinitivo y gerundio con cambio de significado`,
+      `20.4: Infinitivo sin "to" (bare infinitive)`
+    ]},
+    {nombre:`TEMA 21: ESTILO INDIRECTO`, subtemas:[
+      `21.1: Oraciones enunciativas`,
+      `21.2: Preguntas`,
+      `21.3: Órdenes`,
+      `21.4: Sugerencias`
+    ]},
+    {nombre:`TEMA 22: ORACIONES CONDICIONALES`, subtemas:[
+      `22.1: Condicionales con conectores estándar "if/Whether y Unless"`,
+      `22.2: Condicionales con conectores especiales`,
+      `22.3: Oraciones temporales`
+    ]},
+    {nombre:`TEMA 23: ORACIONES DESIDERATIVAS "WISH/ IF ONLY"`, subtemas:[
+      `23: Oraciones desiderativas "WISH/ IF ONLY"`
+    ]},
+    {nombre:`TEMA 24: PASIVA`, subtemas:[
+      `24.1: Pasiva con un complemento`,
+      `24.2: Pasiva con dos complementos`,
+      `24.3: Pasiva causativa`,
+      `24.4: Pasiva impersonal`
+    ]},
+    {nombre:`TEMA 25: ORACIONES RELATIVAS`, subtemas:[
+      `25: Oraciones relativas`
+    ]},
+    {nombre:`TEMA 26: CONECTORES`, subtemas:[
+      `26: Conectores`
+    ]},
+    {nombre:`VOCABULARIO: Countries and nationalities`, subtemas:[]},
+    {nombre:`VOCABULARIO: Crime`, subtemas:[]},
+    {nombre:`VOCABULARIO: Expressions with "do/make"`, subtemas:[
+      `VOCABULARIO: Expressions with "do/make"`
+    ]},
+    {nombre:`VOCABULARIO: False friends`, subtemas:[]},
+    {nombre:`VOCABULARIO: Gender-marked words`, subtemas:[]},
+    {nombre:`VOCABULARIO: Minimal pairs`, subtemas:[]},
+    {nombre:`VOCABULARIO: Telling the time`, subtemas:[]}
+  ],
+  psico: [],
+  ortografia: [],
+  gramatica: []
+};
+function cloneTemario(t){ return JSON.parse(JSON.stringify(t)); }
+
 /* ===================== CATEGORÍAS ===================== */
 const TEST_CATEGORIAS = [
-  {key:'conocimientos', label:'Temario general (1–23)', temas:23},
-  {key:'ingles', label:'Inglés (1–32)', temas:32},
-  {key:'psico', label:'Psicotécnicos', temas:23},
-  {key:'ortografia', label:'Ortografía', temas:0},
-  {key:'gramatica', label:'Gramática', temas:0}
+  {key:'conocimientos', label:'Test teoría'},
+  {key:'ingles', label:'Test inglés'},
+  {key:'psico', label:'Psicotécnicos'},
+  {key:'ortografia', label:'Ortografía'},
+  {key:'gramatica', label:'Gramática'}
 ];
 function testCatLabel(key){ const c = TEST_CATEGORIAS.find(c=>c.key===key); return c ? c.label : key; }
-function testCatTemas(key){ const c = TEST_CATEGORIAS.find(c=>c.key===key); return c ? c.temas : 0; }
+// Nº de temas de una categoría: viene del temario cargado (editable por el admin), no de un
+// número fijo, así que si se añade o quita un tema el resto de la app se entera automáticamente.
+function testCatTemario(key){ return (state.temario && state.temario[key]) || []; }
+function testCatTemas(key){ return testCatTemario(key).length; }
+function testCatTemaObj(key, temaNum){ const arr = testCatTemario(key); return arr[temaNum-1] || null; }
+function testCatSubtemas(key, temaNum){ const t = testCatTemaObj(key, temaNum); return t ? t.subtemas : []; }
+function questionTemaTag(q){
+  let tag = testCatLabel(q.categoria);
+  if(q.tema){
+    const t = testCatTemaObj(q.categoria, q.tema);
+    tag += ' · ' + (t ? t.nombre : 'Tema '+q.tema);
+    if(q.subtema){
+      const subs = testCatSubtemas(q.categoria, q.tema);
+      tag += ' · ' + (subs[q.subtema-1] || 'Subtema '+q.subtema);
+    }
+  }
+  return tag;
+}
+
+/* ===================== TEMARIO: persistencia (Firestore: users/{ADMIN_UID}/config/temario) ===================== */
+// Un único documento con el temario completo de todas las categorías. Solo la cuenta admin
+// puede escribirlo (mismo criterio que el banco de preguntas); el resto de cuentas lo leen
+// para poder practicar por tema/subtema. Se guarda también en localStorage para abrir sin red.
+function temarioCacheKey(){ return 'opotest_temario_'+currentUid; }
+function loadTemarioFromCache(){
+  try{
+    const cached = localStorage.getItem(temarioCacheKey());
+    if(cached){ state.temario = JSON.parse(cached); return true; }
+  }catch(e){}
+  return false;
+}
+function cacheTemarioLocally(){ try{ localStorage.setItem(temarioCacheKey(), JSON.stringify(state.temario)); }catch(e){} }
+async function loadTemario(){
+  const hasCache = loadTemarioFromCache();
+  if(!hasCache) state.temario = cloneTemario(DEFAULT_TEMARIO);
+  if(!firebaseOk || !currentUid) return;
+  try{
+    const snap = await db.collection('users').doc(bankOwnerUid()).collection('config').doc('temario').get();
+    if(snap.exists && snap.data() && snap.data().categorias){
+      state.temario = snap.data().categorias;
+      cacheTemarioLocally();
+    } else if(isAdmin){
+      // Primera vez que se usa esta cuenta: sembramos el temario por defecto en Firestore
+      // para que también lo vean el resto de cuentas que practican con este banco.
+      await saveTemarioRemote();
+    }
+  }catch(e){ console.error('No se pudo cargar el temario remoto', e); }
+}
+async function saveTemarioRemote(){
+  if(!isAdmin) return;
+  cacheTemarioLocally();
+  if(!firebaseOk || !currentUid) return;
+  try{
+    await db.collection('users').doc(bankOwnerUid()).collection('config').doc('temario')
+      .set({ categorias: state.temario, actualizado: Date.now() });
+  }catch(e){
+    console.error(e);
+    showToast('Sin conexión: los cambios del temario se guardaron en este dispositivo y se sincronizarán después.');
+  }
+}
+
 
 let testsActiveSubtab = 'practicar';
-let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'' };
+let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'' };
 let testsQuiz = null; // {items:[...], corregido:false, instantaneo:bool, temporizador:{segundosPorPregunta,totalSegundos,restante}|null}
 let testsQuizTimerHandle = null; // id del setInterval del temporizador de test en curso
-let testsBancoFiltro = {categoria:'', tema:'', q:''};
+let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:''};
+// Selección de temas/subtemas para el test que se está configurando en "Practicar":
+// parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
+let testsPickState = { categoria:'', parciales:new Map() };
 
 /* ===================== IA (Google Gemini) para transcribir fotos ===================== */
 function getGeminiKey(){ try{ return localStorage.getItem('opotest-gemini-key') || ''; }catch(e){ return ''; } }
@@ -1155,6 +1602,7 @@ function newTestQuestionFromState(){
     id: 'q_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
     categoria: testsAddState.categoria,
     tema: testsAddState.tema,
+    subtema: testsAddState.subtema,
     enunciado: testsAddState.enunciado.trim(),
     opciones,
     correcta: testsAddState.correcta,
@@ -1167,7 +1615,7 @@ function newTestQuestionFromState(){
   };
 }
 function resetTestsAddState(){
-  testsAddState = { files:[], parsed:null, categoria: testsAddState.categoria, tema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'' };
+  testsAddState = { files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'' };
 }
 
 function renderTests(){
@@ -1178,7 +1626,7 @@ function renderTests(){
   // editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
   if(!isAdmin) testsActiveSubtab = 'practicar';
   const tabs = isAdmin
-    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir desde foto']]
+    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir desde foto'],['temario','Temario']]
     : [['practicar','Practicar']];
   const nav = document.createElement('div'); nav.className='test-subnav';
   tabs.forEach(([key,label])=>{
@@ -1192,6 +1640,7 @@ function renderTests(){
   host.appendChild(body);
   if(testsActiveSubtab==='practicar') renderTestsPracticar(body);
   else if(testsActiveSubtab==='banco') renderTestsBanco(body);
+  else if(testsActiveSubtab==='temario') renderTestsTemario(body);
   else renderTestsAnadir(body);
 }
 
@@ -1258,6 +1707,7 @@ function renderTestsAnadir(body){
       testsAddState.explicacion = parsed.explicacion || '';
       if(parsed.categoria_sugerida && TEST_CATEGORIAS.some(c=>c.key===parsed.categoria_sugerida)) testsAddState.categoria = parsed.categoria_sugerida;
       testsAddState.tema = (typeof parsed.tema_sugerido === 'number') ? parsed.tema_sugerido : null;
+      testsAddState.subtema = null;
       showToast('Transcripción lista, revísala abajo ✓');
       renderTests();
     }catch(err){
@@ -1284,7 +1734,7 @@ function renderTestsAnadir(body){
   catField.innerHTML = '<label>Categoría</label>';
   const catSel = document.createElement('select');
   TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(c.key===testsAddState.categoria) o.selected=true; catSel.appendChild(o); });
-  catSel.onchange = ()=>{ testsAddState.categoria = catSel.value; testsAddState.tema=null; renderTests(); };
+  catSel.onchange = ()=>{ testsAddState.categoria = catSel.value; testsAddState.tema=null; testsAddState.subtema=null; renderTests(); };
   catField.appendChild(catSel);
   catRow.appendChild(catField);
 
@@ -1293,11 +1743,23 @@ function renderTestsAnadir(body){
     const temaField = document.createElement('div'); temaField.className='test-field';
     temaField.innerHTML = '<label>Tema</label>';
     const temaSel = document.createElement('select');
-    const optSin = document.createElement('option'); optSin.value=''; optSin.textContent='Sin especificar'; temaSel.appendChild(optSin);
-    for(let i=1;i<=temaMax;i++){ const o=document.createElement('option'); o.value=i; o.textContent='Tema '+i; if(testsAddState.tema===i) o.selected=true; temaSel.appendChild(o); }
-    temaSel.onchange = ()=>{ testsAddState.tema = temaSel.value ? Number(temaSel.value) : null; };
+    const optSin = document.createElement('option'); optSin.value=''; optSin.textContent='Todos / sin especificar'; temaSel.appendChild(optSin);
+    for(let i=1;i<=temaMax;i++){ const t = testCatTemaObj(testsAddState.categoria,i); const o=document.createElement('option'); o.value=i; o.textContent=t.nombre; if(testsAddState.tema===i) o.selected=true; temaSel.appendChild(o); }
+    temaSel.onchange = ()=>{ testsAddState.tema = temaSel.value ? Number(temaSel.value) : null; testsAddState.subtema=null; renderTests(); };
     temaField.appendChild(temaSel);
     catRow.appendChild(temaField);
+
+    const subtemasArr = testsAddState.tema ? testCatSubtemas(testsAddState.categoria, testsAddState.tema) : [];
+    if(subtemasArr.length){
+      const subField = document.createElement('div'); subField.className='test-field';
+      subField.innerHTML = '<label>Subtema</label>';
+      const subSel = document.createElement('select');
+      const optSinSub = document.createElement('option'); optSinSub.value=''; optSinSub.textContent='Todos / sin especificar'; subSel.appendChild(optSinSub);
+      subtemasArr.forEach((nombre,i)=>{ const o=document.createElement('option'); o.value=i+1; o.textContent=nombre; if(testsAddState.subtema===i+1) o.selected=true; subSel.appendChild(o); });
+      subSel.onchange = ()=>{ testsAddState.subtema = subSel.value ? Number(subSel.value) : null; };
+      subField.appendChild(subSel);
+      catRow.appendChild(subField);
+    }
   }
   const origField = document.createElement('div'); origField.className='test-field';
   origField.innerHTML = '<label>Resultado original (informativo)</label>';
@@ -1382,9 +1844,31 @@ function renderTestsBanco(body){
   const catSel = document.createElement('select');
   const optAll = document.createElement('option'); optAll.value=''; optAll.textContent='Todas'; catSel.appendChild(optAll);
   TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(testsBancoFiltro.categoria===c.key) o.selected=true; catSel.appendChild(o); });
-  catSel.onchange = ()=>{ testsBancoFiltro.categoria = catSel.value; testsBancoFiltro.tema=''; renderTests(); };
+  catSel.onchange = ()=>{ testsBancoFiltro.categoria = catSel.value; testsBancoFiltro.tema=''; testsBancoFiltro.subtema=''; renderTests(); };
   catField.appendChild(catSel);
   row.appendChild(catField);
+  const temaMaxBanco = testCatTemas(testsBancoFiltro.categoria);
+  if(temaMaxBanco>0){
+    const temaField = document.createElement('div'); temaField.className='test-field';
+    temaField.innerHTML = '<label>Tema</label>';
+    const temaSel = document.createElement('select');
+    const optAllTema = document.createElement('option'); optAllTema.value=''; optAllTema.textContent='Todos'; temaSel.appendChild(optAllTema);
+    for(let i=1;i<=temaMaxBanco;i++){ const t = testCatTemaObj(testsBancoFiltro.categoria,i); const o=document.createElement('option'); o.value=i; o.textContent=t.nombre; if(String(testsBancoFiltro.tema)===String(i)) o.selected=true; temaSel.appendChild(o); }
+    temaSel.onchange = ()=>{ testsBancoFiltro.tema = temaSel.value; testsBancoFiltro.subtema=''; renderTests(); };
+    temaField.appendChild(temaSel);
+    row.appendChild(temaField);
+    const subtemasBanco = testsBancoFiltro.tema ? testCatSubtemas(testsBancoFiltro.categoria, Number(testsBancoFiltro.tema)) : [];
+    if(subtemasBanco.length){
+      const subField = document.createElement('div'); subField.className='test-field';
+      subField.innerHTML = '<label>Subtema</label>';
+      const subSel = document.createElement('select');
+      const optAllSub = document.createElement('option'); optAllSub.value=''; optAllSub.textContent='Todos'; subSel.appendChild(optAllSub);
+      subtemasBanco.forEach((nombre,i)=>{ const o=document.createElement('option'); o.value=i+1; o.textContent=nombre; if(String(testsBancoFiltro.subtema)===String(i+1)) o.selected=true; subSel.appendChild(o); });
+      subSel.onchange = ()=>{ testsBancoFiltro.subtema = subSel.value; renderTests(); };
+      subField.appendChild(subSel);
+      row.appendChild(subField);
+    }
+  }
   const searchField = document.createElement('div'); searchField.className='test-field'; searchField.style.flex='2';
   searchField.innerHTML = '<label>Buscar</label>';
   const searchInp = document.createElement('input'); searchInp.type='text'; searchInp.value = testsBancoFiltro.q; searchInp.placeholder='Buscar en el enunciado…';
@@ -1399,6 +1883,8 @@ function renderTestsBanco(body){
   function paintList(){
     let filtered = questions.filter(q=>{
       if(testsBancoFiltro.categoria && q.categoria!==testsBancoFiltro.categoria) return false;
+      if(testsBancoFiltro.tema && q.tema!==Number(testsBancoFiltro.tema)) return false;
+      if(testsBancoFiltro.subtema && q.subtema!==Number(testsBancoFiltro.subtema)) return false;
       if(testsBancoFiltro.q && !q.enunciado.toLowerCase().includes(testsBancoFiltro.q.toLowerCase())) return false;
       return true;
     }).sort((a,b)=>b.creado-a.creado);
@@ -1410,7 +1896,7 @@ function renderTestsBanco(body){
       card.onclick = ()=> openTestPreviewModal(q);
       const head = document.createElement('div'); head.className='tc-head';
       head.innerHTML = `<span>${(q.enunciado||'(sin enunciado)').slice(0,140)}</span>
-        <span class="tc-tag">${testCatLabel(q.categoria)}${q.tema?' · Tema '+q.tema:''}</span>`;
+        <span class="tc-tag">${questionTemaTag(q)}</span>`;
       card.appendChild(head);
       const stat = document.createElement('div'); stat.className='tc-stat';
       stat.textContent = q.stats.veces ? `Practicada ${q.stats.veces} vez(es) · ${q.stats.aciertos} acierto(s)` : 'Sin practicar todavía';
@@ -1444,7 +1930,7 @@ function openTestPreviewModal(q){
 
   const headRow = document.createElement('div'); headRow.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px;';
   headRow.innerHTML = `<h3 style="font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0;">Vista previa</h3>
-    <span class="tc-tag">${testCatLabel(q.categoria)}${q.tema?' · Tema '+q.tema:''}</span>`;
+    <span class="tc-tag">${questionTemaTag(q)}</span>`;
   box.appendChild(headRow);
 
   const card = document.createElement('div'); card.className='test-quiz-q corregida';
@@ -1523,17 +2009,41 @@ function openTestEditModal(q){
   box.appendChild(optsWrap);
 
   const row = document.createElement('div'); row.className='test-row';
+  let editCategoria = q.categoria, editTema = q.tema || null, editSubtema = q.subtema || null;
   const catField = document.createElement('div'); catField.className='test-field';
   catField.innerHTML = '<label>Categoría</label>';
   const catSel = document.createElement('select');
   TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(c.key===q.categoria) o.selected=true; catSel.appendChild(o); });
   catField.appendChild(catSel);
   row.appendChild(catField);
-  const temaField = document.createElement('div'); temaField.className='test-field';
-  temaField.innerHTML = '<label>Tema</label>';
-  const temaInput = document.createElement('input'); temaInput.type='number'; temaInput.min='1'; temaInput.value = q.tema || '';
-  temaField.appendChild(temaInput);
-  row.appendChild(temaField);
+  const temaSubWrap = document.createElement('div'); temaSubWrap.style.cssText='display:flex;gap:10px;flex-wrap:wrap;flex:2;';
+  row.appendChild(temaSubWrap);
+  function paintTemaSub(){
+    temaSubWrap.innerHTML = '';
+    const temaMax = testCatTemas(editCategoria);
+    if(!temaMax) return;
+    const temaField = document.createElement('div'); temaField.className='test-field'; temaField.style.flex='1';
+    temaField.innerHTML = '<label>Tema</label>';
+    const temaSel = document.createElement('select');
+    const optSin = document.createElement('option'); optSin.value=''; optSin.textContent='Todos / sin especificar'; temaSel.appendChild(optSin);
+    for(let i=1;i<=temaMax;i++){ const t=testCatTemaObj(editCategoria,i); const o=document.createElement('option'); o.value=i; o.textContent=t.nombre; if(editTema===i) o.selected=true; temaSel.appendChild(o); }
+    temaSel.onchange = ()=>{ editTema = temaSel.value?Number(temaSel.value):null; editSubtema=null; paintTemaSub(); };
+    temaField.appendChild(temaSel);
+    temaSubWrap.appendChild(temaField);
+    const subs = editTema ? testCatSubtemas(editCategoria, editTema) : [];
+    if(subs.length){
+      const subField = document.createElement('div'); subField.className='test-field'; subField.style.flex='1';
+      subField.innerHTML = '<label>Subtema</label>';
+      const subSel = document.createElement('select');
+      const optSinSub = document.createElement('option'); optSinSub.value=''; optSinSub.textContent='Todos / sin especificar'; subSel.appendChild(optSinSub);
+      subs.forEach((nombre,i)=>{ const o=document.createElement('option'); o.value=i+1; o.textContent=nombre; if(editSubtema===i+1) o.selected=true; subSel.appendChild(o); });
+      subSel.onchange = ()=>{ editSubtema = subSel.value?Number(subSel.value):null; };
+      subField.appendChild(subSel);
+      temaSubWrap.appendChild(subField);
+    }
+  }
+  catSel.onchange = ()=>{ editCategoria = catSel.value; editTema=null; editSubtema=null; paintTemaSub(); };
+  paintTemaSub();
   box.appendChild(row);
 
   const explField = document.createElement('div'); explField.className='test-field';
@@ -1550,8 +2060,9 @@ function openTestEditModal(q){
     q.enunciado = enunTa.value.trim();
     q.opciones = opciones;
     q.correcta = localCorrecta;
-    q.categoria = catSel.value;
-    q.tema = temaInput.value ? Number(temaInput.value) : null;
+    q.categoria = editCategoria;
+    q.tema = editTema;
+    q.subtema = editSubtema;
     q.explicacion = explTa.value.trim();
     saveTestQuestionRemote(q);
     document.body.removeChild(overlay);
@@ -1567,11 +2078,201 @@ function openTestEditModal(q){
   document.body.appendChild(overlay);
 }
 
+/* ---- Sub-vista: Temario (solo admin) ---- */
+let testsTemarioState = { categoria: 'conocimientos', open: new Set() };
+function renderTestsTemario(body){
+  const st = testsTemarioState;
+  const panel = document.createElement('div'); panel.className='test-panel';
+  panel.innerHTML = `<h4>Organiza el temario</h4>
+    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
+      Añade, edita, reordena o borra temas y subtemas de cada categoría. Los cambios se guardan
+      para todo el mundo que practique con este banco de preguntas.
+    </p>`;
+  const catField = document.createElement('div'); catField.className='test-field';
+  catField.innerHTML = '<label>Categoría</label>';
+  const catSel = document.createElement('select');
+  TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(st.categoria===c.key) o.selected=true; catSel.appendChild(o); });
+  catSel.onchange = ()=>{ st.categoria = catSel.value; renderTests(); };
+  catField.appendChild(catSel);
+  panel.appendChild(catField);
+
+  function persist(){ saveTemarioRemote(); }
+
+  const listWrap = document.createElement('div'); listWrap.className='temario-admin-list';
+  panel.appendChild(listWrap);
+
+  function paintList(){
+    listWrap.innerHTML = '';
+    const temas = testCatTemario(st.categoria);
+    if(!temas.length){
+      listWrap.innerHTML = '<div class="test-empty">Esta categoría todavía no tiene ningún tema. Añade el primero abajo (o déjala así si solo quieres usar la opción "Todo", como en Psicotécnicos, Ortografía o Gramática).</div>';
+    }
+    temas.forEach((tema, idx)=>{
+      const box = document.createElement('div'); box.className='ta-tema'+(st.open.has(idx)?' open':'');
+      const head = document.createElement('div'); head.className='ta-tema-head';
+      const chev = document.createElement('span'); chev.className='ta-chev'; chev.textContent='▾';
+      chev.onclick = ()=>{ st.open.has(idx) ? st.open.delete(idx) : st.open.add(idx); paintList(); };
+      head.appendChild(chev);
+      const nameInp = document.createElement('input'); nameInp.className='ta-name'; nameInp.value = tema.nombre;
+      nameInp.onchange = ()=>{ tema.nombre = nameInp.value.trim() || tema.nombre; persist(); };
+      head.appendChild(nameInp);
+      const btns = document.createElement('div'); btns.className='ta-btns';
+      const upBtn = document.createElement('button'); upBtn.type='button'; upBtn.textContent='▲'; upBtn.title='Subir';
+      upBtn.disabled = idx===0;
+      upBtn.onclick = ()=>{ if(idx===0) return; [temas[idx-1],temas[idx]]=[temas[idx],temas[idx-1]]; persist(); paintList(); };
+      btns.appendChild(upBtn);
+      const downBtn = document.createElement('button'); downBtn.type='button'; downBtn.textContent='▼'; downBtn.title='Bajar';
+      downBtn.disabled = idx===temas.length-1;
+      downBtn.onclick = ()=>{ if(idx===temas.length-1) return; [temas[idx+1],temas[idx]]=[temas[idx],temas[idx+1]]; persist(); paintList(); };
+      btns.appendChild(downBtn);
+      const delBtn = document.createElement('button'); delBtn.type='button'; delBtn.textContent='✕'; delBtn.title='Eliminar tema';
+      delBtn.onclick = ()=>{
+        if(!confirm('¿Eliminar el tema "'+tema.nombre+'" y todos sus subtemas? Las preguntas que ya lo tenían asignado dejarán de coincidir con ningún tema (no se borran).')) return;
+        temas.splice(idx,1);
+        persist(); paintList();
+      };
+      btns.appendChild(delBtn);
+      head.appendChild(btns);
+      box.appendChild(head);
+
+      const bodyEl = document.createElement('div'); bodyEl.className='ta-tema-body';
+      tema.subtemas.forEach((nombreSub, si)=>{
+        const subRow = document.createElement('div'); subRow.className='ta-sub-row';
+        const subInp = document.createElement('input'); subInp.className='ta-name'; subInp.value = nombreSub;
+        subInp.onchange = ()=>{ tema.subtemas[si] = subInp.value.trim() || nombreSub; persist(); };
+        subRow.appendChild(subInp);
+        const subUp = document.createElement('button'); subUp.type='button'; subUp.textContent='▲'; subUp.disabled = si===0;
+        subUp.onclick = ()=>{ if(si===0) return; [tema.subtemas[si-1],tema.subtemas[si]]=[tema.subtemas[si],tema.subtemas[si-1]]; persist(); paintList(); };
+        subRow.appendChild(subUp);
+        const subDown = document.createElement('button'); subDown.type='button'; subDown.textContent='▼'; subDown.disabled = si===tema.subtemas.length-1;
+        subDown.onclick = ()=>{ if(si===tema.subtemas.length-1) return; [tema.subtemas[si+1],tema.subtemas[si]]=[tema.subtemas[si],tema.subtemas[si+1]]; persist(); paintList(); };
+        subRow.appendChild(subDown);
+        const subDel = document.createElement('button'); subDel.type='button'; subDel.textContent='✕';
+        subDel.onclick = ()=>{
+          if(!confirm('¿Eliminar el subtema "'+nombreSub+'"?')) return;
+          tema.subtemas.splice(si,1); persist(); paintList();
+        };
+        subRow.appendChild(subDel);
+        bodyEl.appendChild(subRow);
+      });
+      const addRow = document.createElement('div'); addRow.className='ta-add-row';
+      const addInp = document.createElement('input'); addInp.type='text'; addInp.placeholder='Nuevo subtema…';
+      addRow.appendChild(addInp);
+      const addBtn = document.createElement('button'); addBtn.type='button'; addBtn.textContent='+ Añadir subtema';
+      const doAddSub = ()=>{
+        const v = addInp.value.trim();
+        if(!v) return;
+        tema.subtemas.push(v);
+        persist(); paintList();
+      };
+      addBtn.onclick = doAddSub;
+      addInp.onkeydown = (e)=>{ if(e.key==='Enter') doAddSub(); };
+      addRow.appendChild(addBtn);
+      bodyEl.appendChild(addRow);
+      box.appendChild(bodyEl);
+      listWrap.appendChild(box);
+    });
+
+    const addTemaRow = document.createElement('div'); addTemaRow.className='ta-add-tema';
+    const addTemaInp = document.createElement('input'); addTemaInp.type='text'; addTemaInp.placeholder='Nombre del nuevo tema…';
+    addTemaRow.appendChild(addTemaInp);
+    const addTemaBtn = document.createElement('button'); addTemaBtn.type='button'; addTemaBtn.textContent='+ Añadir tema';
+    const doAddTema = ()=>{
+      const v = addTemaInp.value.trim();
+      if(!v) return;
+      if(!state.temario[st.categoria]) state.temario[st.categoria] = [];
+      state.temario[st.categoria].push({nombre:v, subtemas:[]});
+      persist(); paintList();
+    };
+    addTemaBtn.onclick = doAddTema;
+    addTemaInp.onkeydown = (e)=>{ if(e.key==='Enter') doAddTema(); };
+    addTemaRow.appendChild(addTemaBtn);
+    listWrap.appendChild(addTemaRow);
+  }
+  paintList();
+  body.appendChild(panel);
+}
+
 /* ---- Sub-vista: Practicar ---- */
 function shuffleArr(arr){
   const a = arr.slice();
   for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   return a;
+}
+// Comprueba si una pregunta cae dentro de la selección de temas/subtemas hecha en "Practicar".
+// pick.parciales vacío = sin filtro (toda la categoría). Un tema puede estar como 'ALL' (todo el
+// tema, incluidas preguntas sin subtema asignado) o como Set de números de subtema concretos.
+function questionMatchesPick(q, pick){
+  if(!pick.categoria) return true; // "Todas" las categorías: no se aplica ningún filtro de tema
+  if(q.categoria !== pick.categoria) return false;
+  if(!pick.parciales.size) return true; // "Todos" los temas de la categoría
+  const sel = pick.parciales.get(q.tema);
+  if(!sel) return false;
+  if(sel === 'ALL') return true;
+  return q.subtema != null && sel.has(q.subtema);
+}
+function renderTemaPicker(host, pick, onChange){
+  host.innerHTML = '';
+  const max = testCatTemas(pick.categoria);
+  if(!pick.categoria){ host.innerHTML = '<div class="tema-picker-empty">Elige una categoría para poder filtrar por tema.</div>'; return; }
+  if(!max){ host.innerHTML = '<div class="tema-picker-empty">Esta categoría no se divide en temas: se usarán todas sus preguntas.</div>'; return; }
+  const wrap = document.createElement('div'); wrap.className='tema-picker';
+  const allRow = document.createElement('label'); allRow.className='tema-picker-all';
+  const allCheck = document.createElement('input'); allCheck.type='checkbox'; allCheck.className='t-check';
+  allCheck.checked = pick.parciales.size===0;
+  allCheck.onchange = ()=>{ pick.parciales.clear(); onChange(); };
+  allRow.appendChild(allCheck);
+  allRow.appendChild(document.createTextNode('Todos los temas'));
+  wrap.appendChild(allRow);
+  for(let i=1;i<=max;i++){
+    const t = testCatTemaObj(pick.categoria, i);
+    const subs = t.subtemas || [];
+    const node = document.createElement('div'); node.className='tema-node';
+    const head = document.createElement('div'); head.className='tema-node-head';
+    const check = document.createElement('input'); check.type='checkbox'; check.className='t-check';
+    const sel = pick.parciales.get(i);
+    check.checked = sel==='ALL';
+    check.onclick = (e)=> e.stopPropagation();
+    check.onchange = ()=>{
+      if(check.checked) pick.parciales.set(i,'ALL'); else pick.parciales.delete(i);
+      onChange();
+    };
+    head.appendChild(check);
+    const label = document.createElement('span'); label.className='tn-label'; label.textContent = t.nombre;
+    head.appendChild(label);
+    if(subs.length){
+      const chev = document.createElement('span'); chev.className='tn-chev'; chev.textContent='▾';
+      head.appendChild(chev);
+      head.onclick = ()=> node.classList.toggle('open');
+    }
+    node.appendChild(head);
+    if(subs.length){
+      const bodyEl = document.createElement('div'); bodyEl.className='tema-node-body';
+      subs.forEach((nombre,si)=>{
+        const subNum = si+1;
+        const subRow = document.createElement('label'); subRow.className='subtema-row';
+        const subCheck = document.createElement('input'); subCheck.type='checkbox'; subCheck.className='t-check';
+        const curSel = pick.parciales.get(i);
+        subCheck.checked = curSel==='ALL' || (curSel instanceof Set && curSel.has(subNum));
+        subCheck.onchange = ()=>{
+          let cur = pick.parciales.get(i);
+          if(cur==='ALL') cur = new Set(subs.map((_,x)=>x+1));
+          if(!(cur instanceof Set)) cur = new Set();
+          if(subCheck.checked) cur.add(subNum); else cur.delete(subNum);
+          if(!cur.size) pick.parciales.delete(i);
+          else if(cur.size===subs.length) pick.parciales.set(i,'ALL');
+          else pick.parciales.set(i,cur);
+          onChange();
+        };
+        subRow.appendChild(subCheck);
+        subRow.appendChild(document.createTextNode(nombre));
+        bodyEl.appendChild(subRow);
+      });
+      node.appendChild(bodyEl);
+    }
+    wrap.appendChild(node);
+  }
+  host.appendChild(wrap);
 }
 function renderTestsPracticar(body){
   if(testsQuiz){ renderTestsQuizUI(body); return; }
@@ -1579,42 +2280,33 @@ function renderTestsPracticar(body){
   const panel = document.createElement('div'); panel.className='test-panel';
   panel.innerHTML = `<h4>Configura tu test de práctica</h4>`;
   const row = document.createElement('div'); row.className='test-row';
-  let filtCat = '', filtTema = '';
   const catField = document.createElement('div'); catField.className='test-field';
   catField.innerHTML = '<label>Categoría</label>';
   const catSel = document.createElement('select');
   const optAll = document.createElement('option'); optAll.value=''; optAll.textContent='Todas'; catSel.appendChild(optAll);
-  TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; catSel.appendChild(o); });
+  TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(testsPickState.categoria===c.key) o.selected=true; catSel.appendChild(o); });
   catField.appendChild(catSel);
   row.appendChild(catField);
-  const temaField = document.createElement('div'); temaField.className='test-field';
-  temaField.innerHTML = '<label>Tema</label>';
-  const temaSel = document.createElement('select');
-  temaSel.innerHTML = '<option value="">Todos</option>';
-  temaField.appendChild(temaSel);
-  row.appendChild(temaField);
-  catSel.onchange = ()=>{
-    filtCat = catSel.value; filtTema='';
-    const max = testCatTemas(filtCat);
-    temaSel.innerHTML = '<option value="">Todos</option>';
-    for(let i=1;i<=max;i++){ const o=document.createElement('option'); o.value=i; o.textContent='Tema '+i; temaSel.appendChild(o); }
-  };
-  temaSel.onchange = ()=>{ filtTema = temaSel.value; };
   const nField = document.createElement('div'); nField.className='test-field';
   nField.innerHTML = '<label>Nº de preguntas</label>';
   const nInput = document.createElement('input'); nInput.type='number'; nInput.min='1'; nInput.value='10';
   nField.appendChild(nInput);
   row.appendChild(nField);
   panel.appendChild(row);
+  const temaFieldWrap = document.createElement('div'); temaFieldWrap.className='test-field';
+  temaFieldWrap.innerHTML = '<label>Temas y subtemas</label>';
+  const pickerHost = document.createElement('div');
+  temaFieldWrap.appendChild(pickerHost);
+  panel.appendChild(temaFieldWrap);
   const disponibles = document.createElement('div'); disponibles.className='test-empty';
   panel.appendChild(disponibles);
   function updateCount(){
-    const filtered = questions.filter(q=> (!filtCat || q.categoria===filtCat) && (!filtTema || q.tema===Number(filtTema)) );
+    const filtered = questions.filter(q=> questionMatchesPick(q, testsPickState));
     disponibles.textContent = filtered.length + ' pregunta(s) disponibles con este filtro.';
   }
-  catSel.addEventListener('change', updateCount);
-  temaSel.addEventListener('change', updateCount);
-  updateCount();
+  function refreshPicker(){ renderTemaPicker(pickerHost, testsPickState, updateCount); updateCount(); }
+  catSel.onchange = ()=>{ testsPickState.categoria = catSel.value; testsPickState.parciales = new Map(); refreshPicker(); };
+  refreshPicker();
   const optsRow = document.createElement('div'); optsRow.className='test-row'; optsRow.style.marginTop='6px';
   const timerField = document.createElement('div'); timerField.className='test-field';
   timerField.innerHTML = '<label>Temporizador</label>';
@@ -1640,7 +2332,7 @@ function renderTestsPracticar(body){
   const startBtn = document.createElement('button'); startBtn.type='button'; startBtn.className='btn small'; startBtn.style.marginTop='10px';
   startBtn.textContent = 'Empezar test';
   startBtn.onclick = ()=>{
-    const filtered = questions.filter(q=> (!filtCat || q.categoria===filtCat) && (!filtTema || q.tema===Number(filtTema)) );
+    const filtered = questions.filter(q=> questionMatchesPick(q, testsPickState));
     if(!filtered.length){ showToast('No hay preguntas guardadas con ese filtro todavía.'); return; }
     const n = Math.max(1, Math.min(Number(nInput.value)||10, filtered.length));
     const chosen = shuffleArr(filtered).slice(0,n);
@@ -1920,6 +2612,7 @@ async function bootApprovedApp(){
   document.getElementById('pendingBox').style.display = 'none';
   document.getElementById('approvedApp').style.display = 'block';
   await loadTestBank();
+  await loadTemario();
   renderTests();
   renderBackupBox();
   renderAdminUsersBox();

@@ -49,6 +49,17 @@ service cloud.firestore {
                    (esSuperAdmin() || esEditor(request.auth.uid));
     }
 
+    // Configuración única (por ahora solo el temario: users/{ADMIN_UID}/config/temario).
+    // Mismo criterio de permisos que el banco de preguntas: la cuenta dueña o cualquier
+    // cuenta aprobada puede leerlo (para practicar por tema/subtema); solo la cuenta dueña
+    // o una cuenta aprobada con rol "admin" puede editarlo (añadir/reordenar/borrar temas).
+    match /users/{uid}/config/{docId} {
+      allow read: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                  (esSuperAdmin() || estaAprobado(request.auth.uid));
+      allow write: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                   (esSuperAdmin() || esEditor(request.auth.uid));
+    }
+
     // Cualquier otra ruta queda bloqueada por defecto.
     match /{document=**} {
       allow read, write: if false;
