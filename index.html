@@ -707,10 +707,12 @@
   .test-field textarea{min-height:64px;resize:vertical;font-family:var(--font-body);}
   .test-row{display:flex;gap:10px;flex-wrap:wrap;}
   .test-row .test-field{flex:1;min-width:140px;}
-  .test-opt-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-  .test-opt-row input[type="radio"]{flex-shrink:0;width:16px;height:16px;accent-color:var(--amber);}
+  .test-opt-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;}
+  .test-opt-row input[type="radio"]{flex-shrink:0;width:16px;height:16px;margin-top:9px;accent-color:var(--amber);}
   .test-opt-row input[type="text"]{flex:1;background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream);padding:7px 8px;border-radius:2px;font-family:var(--font-body);font-size:14px;}
-  .test-opt-del{background:none;border:none;color:var(--red-text);cursor:pointer;font-size:14px;flex-shrink:0;}
+  .test-opt-row .test-opt-textarea{flex:1;background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream);padding:7px 8px;border-radius:2px;font-family:var(--font-body);font-size:14px;resize:none;overflow:hidden;line-height:1.4;min-height:34px;}
+  .test-opt-row .test-opt-textarea:focus{outline:none;border-color:var(--amber-dim);}
+  .test-opt-del{background:none;border:none;color:var(--red-text);cursor:pointer;font-size:14px;flex-shrink:0;margin-top:6px;}
   .test-thumbs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
   .test-thumbs .thumb{position:relative;width:74px;height:74px;border:1px solid var(--line);border-radius:2px;overflow:hidden;}
   .test-thumbs .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
@@ -1782,6 +1784,20 @@ let testsAddState = { metodo:'manual', uiKeyOpen:false, files:[], parsed:null, c
 // Crea (o reutiliza) una sección <details> plegable dentro de container, cuyo estado abierto/cerrado
 // se recuerda en stateObj[key] entre renders (si no, cada renderTests() la volvería a colapsar).
 // Devuelve el <div> interno donde meter el contenido de la sección.
+// Campo de opción de respuesta que crece verticalmente en vez de hacer scroll horizontal: así
+// nunca se pierde el final de una opción larga (antes eran <input type="text"> de una sola línea).
+function createOptionTextarea(value, placeholder, onInput){
+  const ta = document.createElement('textarea');
+  ta.className = 'test-opt-textarea';
+  ta.value = value; if(placeholder) ta.placeholder = placeholder;
+  ta.rows = 1;
+  const autoGrow = ()=>{ ta.style.height='auto'; ta.style.height = ta.scrollHeight+'px'; };
+  ta.oninput = ()=>{ onInput(ta.value); autoGrow(); };
+  // El auto-crecido inicial se hace tras insertarla en el DOM (con textarea desconectada
+  // scrollHeight no es fiable), así que se dispara en el siguiente frame.
+  requestAnimationFrame(autoGrow);
+  return ta;
+}
 function createCollapsible(container, titleHtml, stateObj, key, defaultOpen){
   if(stateObj[key]===undefined) stateObj[key] = !!defaultOpen;
   const det = document.createElement('details'); det.className='test-collapsible';
@@ -2245,10 +2261,13 @@ function addDupIgnore(id1, id2){
     localStorage.setItem(testBankDupIgnoreKey(), JSON.stringify(Array.from(set)));
   }catch(e){}
 }
-async function buscarDuplicadosEnBanco(onProgress){
+async function buscarDuplicadosEnBanco(onProgress, categoriaFiltro){
   const ignore = getDupIgnoreSet();
   const porCategoria = {};
-  (state.testBank.questions||[]).forEach(q=>{ (porCategoria[q.categoria] = porCategoria[q.categoria] || []).push(q); });
+  (state.testBank.questions||[]).forEach(q=>{
+    if(categoriaFiltro && q.categoria!==categoriaFiltro) return;
+    (porCategoria[q.categoria] = porCategoria[q.categoria] || []).push(q);
+  });
   const categorias = Object.keys(porCategoria);
   const totalAprox = categorias.reduce((s,c)=>s+porCategoria[c].length, 0);
   const resultados = [];
@@ -2274,7 +2293,7 @@ async function buscarDuplicadosEnBanco(onProgress){
   resultados.sort((a,b)=>b.score-a.score);
   return resultados;
 }
-function openDuplicatesModal(){
+function openDuplicatesModal(initialCategoria){
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
   overlay.onclick = (e)=>{ if(e.target===overlay) document.body.removeChild(overlay); };
@@ -2290,8 +2309,17 @@ function openDuplicatesModal(){
   box.appendChild(headRow);
 
   const info = document.createElement('p'); info.style.cssText='font-size:12px;color:var(--cream-dim);margin:0 0 12px;';
-  info.textContent = 'Compara todas las preguntas del banco, dentro de cada categoría, por parecido de enunciado. Con miles de preguntas puede tardar varios segundos.';
+  info.textContent = 'Compara preguntas por parecido de enunciado, siempre dentro de la misma categoría. Elige una sección o compáralas todas a la vez; con miles de preguntas puede tardar varios segundos.';
   box.appendChild(info);
+
+  const catField = document.createElement('div'); catField.className='test-field'; catField.style.maxWidth='260px';
+  catField.innerHTML = '<label>Sección</label>';
+  const catSel = document.createElement('select');
+  const optAll = document.createElement('option'); optAll.value=''; optAll.textContent='Todas las secciones'; catSel.appendChild(optAll);
+  TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; catSel.appendChild(o); });
+  catSel.value = initialCategoria || '';
+  catField.appendChild(catSel);
+  box.appendChild(catField);
 
   const statusEl = document.createElement('div'); statusEl.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-bottom:10px;';
   box.appendChild(statusEl);
@@ -2299,8 +2327,8 @@ function openDuplicatesModal(){
   box.appendChild(resultsHost);
   document.body.appendChild(overlay);
 
-  const cardsByQid = {}; // id -> [elementos de tarjeta] que mencionan esa pregunta, para poder
-                          // retirarlos todos si se elimina desde cualquiera de sus parejas.
+  let cardsByQid = {}; // id -> [elementos de tarjeta] que mencionan esa pregunta, para poder
+                        // retirarlos todos si se elimina desde cualquiera de sus parejas.
 
   function marcarEliminada(q, card){
     (cardsByQid[q.id]||[]).forEach(c=>{ if(c!==card && c.parentNode) c.remove(); });
@@ -2315,7 +2343,7 @@ function openDuplicatesModal(){
     (cardsByQid[par.b.id] = cardsByQid[par.b.id]||[]).push(card);
     const scoreRow = document.createElement('div');
     scoreRow.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:6px;';
-    scoreRow.textContent = '🔁 '+Math.round(par.score*100)+'% de parecido';
+    scoreRow.textContent = '🔁 '+Math.round(par.score*100)+'% de parecido'+(!catSel.value ? ' · '+testCatLabel(par.a.categoria) : '');
     card.appendChild(scoreRow);
     [par.a, par.b].forEach((q, idx)=>{
       const row = document.createElement('div');
@@ -2348,14 +2376,26 @@ function openDuplicatesModal(){
     resultsHost.appendChild(card);
   }
 
-  statusEl.textContent = 'Analizando el banco…';
-  buscarDuplicadosEnBanco((hecho, total)=>{ statusEl.textContent = 'Analizando el banco… ('+hecho+'/'+total+')'; })
-    .then(resultados=>{
-      statusEl.textContent = resultados.length
-        ? resultados.length+' posible(s) duplicado(s) encontrado(s), de más a menos parecidos.'
-        : 'No se han encontrado duplicados con este nivel de parecido ✓';
-      resultados.forEach(renderParCard);
-    });
+  let dupSearchToken = 0;
+  function runSearch(){
+    const myToken = ++dupSearchToken;
+    cardsByQid = {};
+    resultsHost.innerHTML = '';
+    statusEl.textContent = 'Analizando '+(catSel.value ? testCatLabel(catSel.value) : 'todo el banco')+'…';
+    buscarDuplicadosEnBanco((hecho, total)=>{
+      if(myToken!==dupSearchToken) return;
+      statusEl.textContent = 'Analizando '+(catSel.value ? testCatLabel(catSel.value) : 'todo el banco')+'… ('+hecho+'/'+total+')';
+    }, catSel.value)
+      .then(resultados=>{
+        if(myToken!==dupSearchToken) return; // se canceló porque se cambió de sección mientras corría
+        statusEl.textContent = resultados.length
+          ? resultados.length+' posible(s) duplicado(s) encontrado(s), de más a menos parecidos.'
+          : 'No se han encontrado duplicados con este nivel de parecido ✓';
+        resultados.forEach(renderParCard);
+      });
+  }
+  catSel.onchange = runSearch;
+  runSearch();
 }
 // Intenta encajar el nombre de tema/subtema que sugiere la IA con el temario real ya guardado en
 // la app (coincidencia exacta primero, luego por inclusión de texto). Si no hay match claro, null.
@@ -2834,8 +2874,7 @@ function renderTestsAnadir(body){
       const radio = document.createElement('input'); radio.type='radio'; radio.name='correctaRadio'; radio.checked = testsAddState.correcta===i;
       radio.onchange = ()=>{ testsAddState.correcta = i; };
       r.appendChild(radio);
-      const inp = document.createElement('input'); inp.type='text'; inp.value = op; inp.placeholder='Opción '+(i+1);
-      inp.oninput = ()=>{ testsAddState.opciones[i] = inp.value; };
+      const inp = createOptionTextarea(op, 'Opción '+(i+1), (v)=>{ testsAddState.opciones[i] = v; });
       r.appendChild(inp);
       const del = document.createElement('button'); del.type='button'; del.className='test-opt-del'; del.textContent='✕';
       del.onclick = ()=>{ testsAddState.opciones.splice(i,1); if(testsAddState.correcta>=testsAddState.opciones.length) testsAddState.correcta=0; paintOpts(); };
@@ -3246,8 +3285,7 @@ function openGenCandidatoModal(c){
         const radio = document.createElement('input'); radio.type='radio'; radio.name='genCorrectaRadio'; radio.checked = c.correcta===i;
         radio.onchange = ()=>{ c.correcta = i; };
         r.appendChild(radio);
-        const inp = document.createElement('input'); inp.type='text'; inp.value = op; inp.placeholder='Opción '+(i+1);
-        inp.oninput = ()=>{ c.opciones[i] = inp.value; };
+        const inp = createOptionTextarea(op, 'Opción '+(i+1), (v)=>{ c.opciones[i] = v; });
         r.appendChild(inp);
         const del = document.createElement('button'); del.type='button'; del.className='test-opt-del'; del.textContent='✕';
         del.onclick = ()=>{ c.opciones.splice(i,1); if(c.correcta>=c.opciones.length) c.correcta=0; paintOpts(); };
@@ -3427,7 +3465,7 @@ function renderTestsBanco(body){
   if(!testsBancoFiltro.papelera){
     const dupBtn = document.createElement('button'); dupBtn.type='button'; dupBtn.className='btn ghost small';
     dupBtn.textContent = '🔁 Buscar duplicados';
-    dupBtn.onclick = ()=> openDuplicatesModal();
+    dupBtn.onclick = ()=> openDuplicatesModal(testsBancoFiltro.categoria);
     btnGroup.appendChild(dupBtn);
   }
   const trashBtn = document.createElement('button'); trashBtn.type='button'; trashBtn.className='btn ghost small';
@@ -3772,8 +3810,7 @@ function openTestEditModal(q){
           const radio = document.createElement('input'); radio.type='radio'; radio.name='editCorrectaRadio'; radio.checked = localCorrecta===i;
           radio.onchange = ()=>{ localCorrecta = i; };
           r.appendChild(radio);
-          const inp = document.createElement('input'); inp.type='text'; inp.value = op;
-          inp.oninput = ()=>{ localOpts[i] = inp.value; };
+          const inp = createOptionTextarea(op, 'Opción '+(i+1), (v)=>{ localOpts[i] = v; });
           r.appendChild(inp);
           const del = document.createElement('button'); del.type='button'; del.className='test-opt-del'; del.textContent='✕';
           del.onclick = ()=>{ localOpts.splice(i,1); if(localCorrecta>=localOpts.length) localCorrecta=0; paintOpts(); };
