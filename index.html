@@ -899,6 +899,9 @@
       <div class="save-indicator" id="offlineIndicator" role="status" aria-live="polite" style="display:none;border-color:var(--red-text);color:var(--red-text);">
         <span class="dot" aria-hidden="true" style="background:var(--red-text);"></span><span>Sin conexión</span>
       </div>
+      <div class="save-indicator" id="localCacheWarnIndicator" role="status" aria-live="polite" style="display:none;border-color:var(--red-text);color:var(--red-text);cursor:pointer;" title="No se pudo guardar la copia local del banco (almacenamiento del dispositivo lleno). Pulsa para descargar ahora una copia de seguridad.">
+        <span class="dot" aria-hidden="true" style="background:var(--red-text);"></span><span>⚠ Guardado local lleno</span>
+      </div>
       <div class="save-indicator" id="saveIndicator" role="status" aria-live="polite">
         <span class="dot" aria-hidden="true"></span><span id="saveIndicatorText">Sin cambios</span>
       </div>
@@ -1063,7 +1066,32 @@ function queueTestBankPending(op){
   arr.push(op);
   setTestBankPending(arr);
 }
-function cacheTestBankLocally(){ try{ localStorage.setItem(testBankCacheKey(), JSON.stringify(state.testBank.questions)); }catch(e){} }
+// localStorage suele tener un límite de 5-10 MB por dominio, y el banco completo (incluidas las
+// imágenes de Psicotécnicos en base64) se guarda entero ahí para poder abrir la app sin conexión.
+// Si algún día se llena, `setItem` no falla en silencio "más o menos": lanza una excepción
+// (típicamente QuotaExceededError) que antes se tragaba un `catch(e){}` vacío. Centralizamos
+// aquí el guardado para detectar ese fallo y avisar, en vez de descubrirlo el día que se necesite
+// abrir la app sin conexión y falte la mitad del banco.
+let localCacheWriteFailed = false;
+function safeLocalStorageSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ console.error('No se pudo guardar en localStorage (¿lleno?)', e); return false; }
+}
+function refreshLocalCacheWarnBadge(){
+  const el = document.getElementById('localCacheWarnIndicator');
+  if(el) el.style.display = localCacheWriteFailed ? 'inline-flex' : 'none';
+}
+function cacheTestBankLocally(){
+  const ok = safeLocalStorageSet(testBankCacheKey(), JSON.stringify(state.testBank.questions));
+  if(!ok && !localCacheWriteFailed){
+    localCacheWriteFailed = true;
+    showToast('⚠ El banco ya no cabe en el almacenamiento local del dispositivo: descarga una copia de seguridad (JSON) cuanto antes, en Ajustes.');
+  } else if(ok && localCacheWriteFailed){
+    localCacheWriteFailed = false; // p.ej. tras liberar espacio o cambiar de dispositivo
+  }
+  refreshLocalCacheWarnBadge();
+  return ok;
+}
 function getTestBankLastSync(){ try{ const v = localStorage.getItem(testBankLastSyncKey()); return v ? Number(v) : 0; }catch(e){ return 0; } }
 function setTestBankLastSync(ms){ try{ localStorage.setItem(testBankLastSyncKey(), String(ms)); }catch(e){} }
 function loadTestBankFromCache(){
@@ -4247,6 +4275,13 @@ let authMode = 'login'; // 'login' | 'register'
 const authScreenEl = document.getElementById('authScreen');
 const appMainEl = document.getElementById('appMain');
 const logoutBtnEl = document.getElementById('logoutBtn');
+const localCacheWarnIndicatorEl = document.getElementById('localCacheWarnIndicator');
+if(localCacheWarnIndicatorEl){
+  localCacheWarnIndicatorEl.onclick = ()=>{
+    exportBackup(false);
+    showToast('Copia de seguridad descargada. Para liberar espacio, revisa si hay preguntas con muchas imágenes o usa "Buscar duplicados" para limpiar el banco.');
+  };
+}
 const userEmailLabelEl = document.getElementById('userEmailLabel');
 const authTitleEl = document.getElementById('authTitle');
 const authEmailEl = document.getElementById('authEmail');
