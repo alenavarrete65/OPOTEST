@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada usuario autenticado solo puede leer/escribir su propio banco de preguntas,
+    // guardado en users/{uid}/testQuestions/{idPregunta}. Nadie puede leer ni listar
+    // el banco de otro usuario, ni siquiera otro usuario autenticado.
+    match /users/{uid}/testQuestions/{questionId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Cualquier otra ruta queda bloqueada por defecto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
