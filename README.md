@@ -77,12 +77,30 @@ futuro hacia una plataforma de test multiusuario.
 - También puedes escribir las preguntas a mano sin usar ninguna IA (botón
   "Escribir manualmente"), sin coste ni clave API.
 
+## Añadir preguntas al banco (a mano, desde foto, o varias desde un PDF)
+
+- **Como admin**, la pestaña **Añadir pregunta** (dentro de Tests) es donde entra toda pregunta
+  nueva, por tres métodos que se eligen arriba con un selector: **A mano**, **Desde foto (IA)** y
+  **Varias desde PDF (IA)**. Antes "Generar con IA" era una pestaña aparte; ahora es uno de estos
+  tres métodos, para no repartir en dos sitios distintos lo que en el fondo es la misma tarea.
+- Los bloques que no usas todo el rato (la clave API de Gemini, la explicación de "cómo funciona"
+  la generación por PDF) están plegados por defecto en secciones desplegables — pulsa sobre el
+  título para abrirlas. Se recuerdan abiertas o cerradas mientras estés en esa pestaña.
+- **A mano**: el formulario de siempre (categoría, tema/subtema, enunciado, opciones…), sin nada
+  de IA de por medio.
+- **Desde foto (IA)**: sube una o varias capturas de una pregunta ya respondida y la IA la
+  transcribe (enunciado, opciones, cuál era la correcta) directamente en el mismo formulario de
+  abajo, para que la revises y la guardes. Solo tiene sentido para preguntas de opción múltiple.
+- **Varias desde PDF (IA)**: el generador masivo de antes (temario, examen o simulacro → varias
+  preguntas de golpe, con su propia lista de revisión separada). Ver el apartado siguiente para el
+  detalle completo.
+
 ## Generar preguntas desde un PDF (temario, exámenes, simulacros)
 
-- **Como admin**, en la pestaña **Generar con IA** (dentro de Tests) puedes subir un PDF —
-  temario oficial, un examen ya corregido o un simulacro de test— y pedirle a la IA (Gemini,
-  la misma clave/modelo que usas para transcribir fotos) que proponga varias preguntas de golpe
-  para la categoría que elijas, en vez de una a una.
+- **Como admin**, dentro de **Añadir pregunta** (pestaña de Tests), eligiendo el método "Varias
+  desde PDF (IA)" arriba, puedes subir un PDF — temario oficial, un examen ya corregido o un
+  simulacro de test— y pedirle a la IA (Gemini, la misma clave/modelo que usas para transcribir
+  fotos) que proponga varias preguntas de golpe para la categoría que elijas, en vez de una a una.
 - Eliges la **categoría de destino**, cuántas preguntas pedir (hasta 60 por PDF) y, si quieres,
   instrucciones adicionales en texto libre (p. ej. "solo del Tema 4", "prioriza las que aparecen
   falladas en el examen"). La IA usa el temario que ya tienes configurado en esa categoría para
@@ -136,8 +154,9 @@ futuro hacia una plataforma de test multiusuario.
   el botón de guardado rápido. Puedes revisarla y guardarla igualmente si el parecido es casual.
 - **Borrador automático**: las preguntas generadas y aún sin guardar en el banco se guardan solo
   en este dispositivo (no en Firebase) mientras las revisas, así que si cierras la pestaña o se
-  va la conexión a medio revisar, al volver a abrir "Generar con IA" las recuperas tal cual las
-  dejaste. El borrador desaparece en cuanto guardas o descartas todas las preguntas pendientes.
+  va la conexión a medio revisar, al volver a abrir "Añadir pregunta" → "Varias desde PDF (IA)"
+  las recuperas tal cual las dejaste. El borrador desaparece en cuanto guardas o descartas todas
+  las preguntas pendientes.
 - **Nombre del PDF de origen**: cada pregunta generada guarda el nombre del archivo del que salió
   (campo `origenArchivo`). Se ve en la tarjeta de revisión, y también en el Banco de preguntas (bajo
   las estadísticas de cada pregunta) una vez guardada; el buscador del Banco también busca por ese

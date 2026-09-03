@@ -691,6 +691,14 @@
   .test-subnav button.active{border-color:var(--amber);color:var(--amber);}
   .test-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:3px;padding:16px;margin-bottom:16px;}
   .test-panel h4{font-family:var(--font-display);text-transform:uppercase;color:var(--amber);margin:0 0 10px;font-size:15px;letter-spacing:.03em;}
+  /* Secciones plegables reutilizadas en "Añadir pregunta" (config. de la IA, generación por PDF…)
+     para no saturar la pantalla con paneles que no se usan constantemente. */
+  .test-collapsible{background:var(--bg-panel);border:1px solid var(--line);border-radius:3px;margin-bottom:16px;}
+  .test-collapsible>summary{cursor:pointer;padding:14px 16px;font-family:var(--font-display);text-transform:uppercase;color:var(--amber);font-size:14px;letter-spacing:.03em;list-style:none;user-select:none;}
+  .test-collapsible>summary::-webkit-details-marker{display:none;}
+  .test-collapsible>summary::before{content:'▸';display:inline-block;width:14px;transition:transform .15s;}
+  .test-collapsible[open]>summary::before{transform:rotate(90deg);}
+  .test-collapsible>.test-collapsible-body{padding:0 16px 16px;}
   .test-field{margin-bottom:12px;}
   .test-field label{font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);text-transform:uppercase;display:block;margin-bottom:4px;}
   .test-field input[type="text"], .test-field input[type="email"], .test-field input[type="password"], .test-field input[type="number"], .test-field select, .test-field textarea{
@@ -1697,7 +1705,44 @@ function renderOrtoBuilder(host, st, onChange){
   paintSentence();
   paintMalos();
 }
-let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
+let testsAddState = { metodo:'manual', uiKeyOpen:false, files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
+// Crea (o reutiliza) una sección <details> plegable dentro de container, cuyo estado abierto/cerrado
+// se recuerda en stateObj[key] entre renders (si no, cada renderTests() la volvería a colapsar).
+// Devuelve el <div> interno donde meter el contenido de la sección.
+function createCollapsible(container, titleHtml, stateObj, key, defaultOpen){
+  if(stateObj[key]===undefined) stateObj[key] = !!defaultOpen;
+  const det = document.createElement('details'); det.className='test-collapsible';
+  det.open = !!stateObj[key];
+  det.ontoggle = ()=>{ stateObj[key] = det.open; };
+  const sum = document.createElement('summary'); sum.innerHTML = titleHtml;
+  det.appendChild(sum);
+  const bodyDiv = document.createElement('div'); bodyDiv.className='test-collapsible-body';
+  det.appendChild(bodyDiv);
+  container.appendChild(det);
+  return bodyDiv;
+}
+// Panel de clave/modelo de Gemini, reutilizado tanto en "Desde foto" como en "Desde PDF". Se pliega
+// por defecto una vez que ya tienes la clave puesta, para no repetir el mismo bloque siempre visible.
+function renderGeminiKeyPanel(container, stateObj){
+  const bodyDiv = createCollapsible(container, 'Clave API (Google Gemini)', stateObj, 'uiKeyOpen', !getGeminiKey());
+  const p = document.createElement('p'); p.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;margin:0 0 10px;';
+  p.innerHTML = 'Se guarda solo en este dispositivo (no viaja a Firebase). La puedes crear gratis en <span style="color:var(--amber);">aistudio.google.com/apikey</span> (Google AI Studio).';
+  bodyDiv.appendChild(p);
+  const row = document.createElement('div'); row.className='test-row';
+  const keyField = document.createElement('div'); keyField.className='test-field'; keyField.style.flex='2';
+  keyField.innerHTML = '<label>Clave API</label>';
+  const keyInput = document.createElement('input'); keyInput.type='password'; keyInput.placeholder='AIzaSy...'; keyInput.value = getGeminiKey();
+  keyInput.onchange = ()=> setGeminiKey(keyInput.value.trim());
+  keyField.appendChild(keyInput);
+  row.appendChild(keyField);
+  const modelField = document.createElement('div'); modelField.className='test-field';
+  modelField.innerHTML = '<label>Modelo</label>';
+  const modelInput = document.createElement('input'); modelInput.type='text'; modelInput.value = getGeminiModel();
+  modelInput.onchange = ()=> setGeminiModel(modelInput.value.trim() || 'gemini-3.6-flash');
+  modelField.appendChild(modelInput);
+  row.appendChild(modelField);
+  bodyDiv.appendChild(row);
+}
 // Estado de la pestaña "Generar con IA" (preguntas masivas a partir de un PDF: temario, examen, simulacro…).
 // candidatos: preguntas ya devueltas por la IA, pendientes de revisar/guardar (no están en el banco todavía).
 // file: PDF con las preguntas (temario, examen o simulacro). file2: opcional, PDF aparte con
@@ -1707,7 +1752,7 @@ let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:nul
 // paginasPorTrozo: nº de páginas de temario/examen por cada llamada a la IA cuando se trocea.
 // ultimoError: mensaje del último fallo, para poder mostrar "Reintentar" sin perder la configuración.
 // tiempoInicio / progreso: para el contador de tiempo y el aviso de "trozo X de Y" mientras genera.
-let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[], draftChecked:false, trocear:true, paginasPorTrozo:20, ultimoError:null, tiempoInicio:null, progreso:null };
+let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[], draftChecked:false, trocear:true, paginasPorTrozo:20, ultimoError:null, tiempoInicio:null, progreso:null, uiKeyOpen:false, uiConfigOpen:true };
 
 /* ---- Borrador local de "Generar con IA": para no perder preguntas ya generadas y aún sin
    guardar en el banco si se cierra la pestaña o falla algo. Se guarda solo en este dispositivo,
@@ -2117,7 +2162,7 @@ function newTestQuestionFromState(){
   return base;
 }
 function resetTestsAddState(){
-  testsAddState = { files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
+  testsAddState = { metodo: testsAddState.metodo, uiKeyOpen: testsAddState.uiKeyOpen, files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
 }
 
 function renderTests(){
@@ -2127,8 +2172,11 @@ function renderTests(){
   // Los usuarios no-admin solo pueden practicar: no ven el banco de preguntas (verlo,
   // editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
   if(!isAdmin) testsActiveSubtab = 'practicar';
+  // "Generar con IA" vive ahora dentro de "Añadir pregunta" (como uno de los 3 métodos), en vez
+  // de ser una pestaña aparte; si alguien llega con el estado antiguo, lo redirige sin más.
+  if(testsActiveSubtab==='generarIA') testsActiveSubtab = 'anadir';
   const tabs = isAdmin
-    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['generarIA','Generar con IA'],['temario','Temario']]
+    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario']]
     : [['practicar','Practicar']];
   const nav = document.createElement('div'); nav.className='test-subnav';
   tabs.forEach(([key,label])=>{
@@ -2143,97 +2191,98 @@ function renderTests(){
   if(testsActiveSubtab==='practicar') renderTestsPracticar(body);
   else if(testsActiveSubtab==='banco') renderTestsBanco(body);
   else if(testsActiveSubtab==='temario') renderTestsTemario(body);
-  else if(testsActiveSubtab==='generarIA') renderTestsGenerarIA(body);
   else renderTestsAnadir(body);
 }
 
-/* ---- Sub-vista: Añadir desde foto ---- */
+/* ---- Sub-vista: Añadir pregunta (a mano, desde foto con IA, o generando varias desde un PDF) ---- */
 function renderTestsAnadir(body){
-  const apiPanel = document.createElement('div'); apiPanel.className='test-panel';
-  apiPanel.innerHTML = `<h4>Clave API (Google Gemini)</h4>
-    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
-      Necesaria para que la IA lea la foto y transcriba la pregunta. Se guarda solo en este dispositivo (no viaja a Firebase).
-      La puedes crear gratis en <span style="color:var(--amber);">aistudio.google.com/apikey</span> (Google AI Studio).
-    </p>`;
-  const row = document.createElement('div'); row.className='test-row';
-  const keyField = document.createElement('div'); keyField.className='test-field'; keyField.style.flex='2';
-  keyField.innerHTML = `<label>Clave API</label>`;
-  const keyInput = document.createElement('input'); keyInput.type='password'; keyInput.placeholder='AIzaSy...'; keyInput.value = getGeminiKey();
-  keyInput.onchange = ()=> setGeminiKey(keyInput.value.trim());
-  keyField.appendChild(keyInput);
-  row.appendChild(keyField);
-  const modelField = document.createElement('div'); modelField.className='test-field';
-  modelField.innerHTML = `<label>Modelo</label>`;
-  const modelInput = document.createElement('input'); modelInput.type='text'; modelInput.value = getGeminiModel();
-  modelInput.onchange = ()=> setGeminiModel(modelInput.value.trim() || 'gemini-3.6-flash');
-  modelField.appendChild(modelInput);
-  row.appendChild(modelField);
-  apiPanel.appendChild(row);
   const tipoActual = testTipoForCategoria(testsAddState.categoria);
-  if(tipoActual==='multiple') body.appendChild(apiPanel);
 
-  if(tipoActual==='multiple'){
-    const panel = document.createElement('div'); panel.className='test-panel';
-    panel.innerHTML = `<h4>1. Sube la(s) foto(s) de la pregunta</h4>
-      <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">
-        Puedes subir varias imágenes si la pregunta y su corrección/retroalimentación están en capturas distintas: todas se tratan como UNA sola pregunta.
-      </p>`;
-    const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*'; fileInput.multiple = true;
-    fileInput.onchange = (e)=>{
-      testsAddState.files = Array.from(e.target.files||[]);
-      paintThumbs();
-    };
-    panel.appendChild(fileInput);
-    const thumbs = document.createElement('div'); thumbs.className='test-thumbs';
-    panel.appendChild(thumbs);
-    function paintThumbs(){
-      thumbs.innerHTML = '';
-      testsAddState.files.forEach((f,i)=>{
-        const t = document.createElement('div'); t.className='thumb';
-        const img = document.createElement('img'); img.src = URL.createObjectURL(f);
-        t.appendChild(img);
-        const del = document.createElement('button'); del.type='button'; del.textContent='✕';
-        del.onclick = ()=>{ testsAddState.files.splice(i,1); paintThumbs(); };
-        t.appendChild(del);
-        thumbs.appendChild(t);
-      });
-    }
-    const btnRow = document.createElement('div'); btnRow.style.marginTop='10px'; btnRow.style.display='flex'; btnRow.style.gap='8px'; btnRow.style.flexWrap='wrap';
-    const transcribeBtn = document.createElement('button'); transcribeBtn.type='button'; transcribeBtn.className='btn small';
-    transcribeBtn.textContent='Transcribir con IA';
-    transcribeBtn.onclick = async ()=>{
-      if(!testsAddState.files.length){ showToast('Selecciona al menos una foto.'); return; }
-      transcribeBtn.disabled = true; transcribeBtn.textContent = 'Transcribiendo…';
-      try{
-        const parsed = await callClaudeVisionTranscribe(testsAddState.files);
-        testsAddState.enunciado = parsed.enunciado || '';
-        testsAddState.opciones = (Array.isArray(parsed.opciones) && parsed.opciones.length) ? parsed.opciones : ['',''];
-        testsAddState.correcta = (typeof parsed.correcta === 'number') ? parsed.correcta : 0;
-        testsAddState.explicacion = parsed.explicacion || '';
-        if(parsed.categoria_sugerida && TEST_CATEGORIAS.some(c=>c.key===parsed.categoria_sugerida) && testTipoForCategoria(parsed.categoria_sugerida)==='multiple') testsAddState.categoria = parsed.categoria_sugerida;
-        testsAddState.tema = (typeof parsed.tema_sugerido === 'number') ? parsed.tema_sugerido : null;
-        testsAddState.subtema = null;
-        showToast('Transcripción lista, revísala abajo ✓');
-        renderTests();
-      }catch(err){
-        console.error(err);
-        showToast(err.message || 'No se pudo transcribir la imagen.');
-      }finally{
-        transcribeBtn.disabled = false; transcribeBtn.textContent = 'Transcribir con IA';
+  // Selector de método: decide qué bloque de "captura" se ve debajo. Los tres acaban en el mismo
+  // sitio (una pregunta guardada en el banco), pero "pdf" tiene su propio flujo de revisión en
+  // lista y no comparte el formulario de abajo con los otros dos.
+  const metodoNav = document.createElement('div'); metodoNav.className='test-subnav';
+  [['manual','✍️ A mano'],['foto','📷 Desde foto (IA)'],['pdf','📄 Varias desde PDF (IA)']].forEach(([key,label])=>{
+    const b = document.createElement('button'); b.type='button'; b.textContent=label;
+    if(testsAddState.metodo===key) b.classList.add('active');
+    b.onclick = ()=>{ testsAddState.metodo = key; renderTests(); };
+    metodoNav.appendChild(b);
+  });
+  body.appendChild(metodoNav);
+
+  if(testsAddState.metodo==='pdf'){
+    renderTestsGenerarIA(body);
+    return;
+  }
+
+  if(testsAddState.metodo==='foto'){
+    if(tipoActual!=='multiple'){
+      const nota = document.createElement('div'); nota.className='test-panel';
+      nota.innerHTML = '<p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">'
+        + 'La transcripción por foto solo está pensada para preguntas de opción múltiple. '
+        + testCatLabel(testsAddState.categoria) + ' usa otro formato — cambia la categoría de abajo o escribe la pregunta a mano.</p>';
+      body.appendChild(nota);
+    } else {
+      renderGeminiKeyPanel(body, testsAddState);
+
+      const panel = document.createElement('div'); panel.className='test-panel';
+      panel.innerHTML = `<h4>Sube la(s) foto(s) de la pregunta</h4>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">
+          Puedes subir varias imágenes si la pregunta y su corrección/retroalimentación están en capturas distintas: todas se tratan como UNA sola pregunta.
+        </p>`;
+      const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*'; fileInput.multiple = true;
+      fileInput.onchange = (e)=>{
+        testsAddState.files = Array.from(e.target.files||[]);
+        paintThumbs();
+      };
+      panel.appendChild(fileInput);
+      const thumbs = document.createElement('div'); thumbs.className='test-thumbs';
+      panel.appendChild(thumbs);
+      function paintThumbs(){
+        thumbs.innerHTML = '';
+        testsAddState.files.forEach((f,i)=>{
+          const t = document.createElement('div'); t.className='thumb';
+          const img = document.createElement('img'); img.src = URL.createObjectURL(f);
+          t.appendChild(img);
+          const del = document.createElement('button'); del.type='button'; del.textContent='✕';
+          del.onclick = ()=>{ testsAddState.files.splice(i,1); paintThumbs(); };
+          t.appendChild(del);
+          thumbs.appendChild(t);
+        });
       }
-    };
-    btnRow.appendChild(transcribeBtn);
-    const manualBtn = document.createElement('button'); manualBtn.type='button'; manualBtn.className='btn small ghost';
-    manualBtn.textContent = 'Escribir manualmente (sin IA)';
-    manualBtn.onclick = ()=>{ if(!testsAddState.enunciado) testsAddState.opciones = ['','']; renderTests(); document.getElementById('testReviewAnchor')?.scrollIntoView({behavior:'smooth'}); };
-    btnRow.appendChild(manualBtn);
-    panel.appendChild(btnRow);
-    body.appendChild(panel);
-    paintThumbs();
+      const btnRow = document.createElement('div'); btnRow.style.marginTop='10px'; btnRow.style.display='flex'; btnRow.style.gap='8px'; btnRow.style.flexWrap='wrap';
+      const transcribeBtn = document.createElement('button'); transcribeBtn.type='button'; transcribeBtn.className='btn small';
+      transcribeBtn.textContent='Transcribir con IA';
+      transcribeBtn.onclick = async ()=>{
+        if(!testsAddState.files.length){ showToast('Selecciona al menos una foto.'); return; }
+        transcribeBtn.disabled = true; transcribeBtn.textContent = 'Transcribiendo…';
+        try{
+          const parsed = await callClaudeVisionTranscribe(testsAddState.files);
+          testsAddState.enunciado = parsed.enunciado || '';
+          testsAddState.opciones = (Array.isArray(parsed.opciones) && parsed.opciones.length) ? parsed.opciones : ['',''];
+          testsAddState.correcta = (typeof parsed.correcta === 'number') ? parsed.correcta : 0;
+          testsAddState.explicacion = parsed.explicacion || '';
+          if(parsed.categoria_sugerida && TEST_CATEGORIAS.some(c=>c.key===parsed.categoria_sugerida) && testTipoForCategoria(parsed.categoria_sugerida)==='multiple') testsAddState.categoria = parsed.categoria_sugerida;
+          testsAddState.tema = (typeof parsed.tema_sugerido === 'number') ? parsed.tema_sugerido : null;
+          testsAddState.subtema = null;
+          showToast('Transcripción lista, revísala abajo ✓');
+          renderTests();
+        }catch(err){
+          console.error(err);
+          showToast(err.message || 'No se pudo transcribir la imagen.');
+        }finally{
+          transcribeBtn.disabled = false; transcribeBtn.textContent = 'Transcribir con IA';
+        }
+      };
+      btnRow.appendChild(transcribeBtn);
+      panel.appendChild(btnRow);
+      body.appendChild(panel);
+      paintThumbs();
+    }
   }
 
   const reviewPanel = document.createElement('div'); reviewPanel.className='test-panel'; reviewPanel.id='testReviewAnchor';
-  reviewPanel.innerHTML = tipoActual==='multiple' ? `<h4>2. Revisa y corrige antes de guardar</h4>` : `<h4>Nueva pregunta de ${testCatLabel(testsAddState.categoria)}</h4>`;
+  reviewPanel.innerHTML = (testsAddState.metodo==='foto' && tipoActual==='multiple') ? `<h4>Revisa y corrige antes de guardar</h4>` : `<h4>Nueva pregunta de ${testCatLabel(testsAddState.categoria)}</h4>`;
 
   const catRow = document.createElement('div'); catRow.className='test-row';
   const catField = document.createElement('div'); catField.className='test-field';
@@ -2485,9 +2534,8 @@ async function ejecutarGeneracionIA(){
 
 function renderTestsGenerarIA(body){
   tryRestoreGenDraft();
-  const infoPanel = document.createElement('div'); infoPanel.className='test-panel';
-  infoPanel.innerHTML = `<h4>Generar preguntas desde uno o dos PDF</h4>
-    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
+  const infoBody = createCollapsible(body, 'ℹ️ Cómo funciona', testsGenState, 'uiInfoOpen', false);
+  infoBody.innerHTML = `<p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;margin:0;">
       Sube un PDF (temario oficial, un examen ya corregido o un simulacro de test) y la IA propondrá varias
       preguntas de golpe para la categoría que elijas. Si el examen o simulacro NO trae la solución incluida,
       puedes subir aparte, abajo, la plantilla de respuestas/corrección en un segundo PDF: la IA transcribirá
@@ -2495,32 +2543,11 @@ function renderTestsGenerarIA(body){
       guarda automáticamente: primero las revisas abajo (puedes editarlas, cambiarles el tema/subtema, o
       descartarlas) y solo se añaden al banco cuando pulses guardar.
     </p>`;
-  body.appendChild(infoPanel);
 
-  const apiPanel = document.createElement('div'); apiPanel.className='test-panel';
-  apiPanel.innerHTML = `<h4>Clave API (Google Gemini)</h4>
-    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
-      La misma clave que usas para transcribir fotos. Se guarda solo en este dispositivo.
-      La puedes crear gratis en <span style="color:var(--amber);">aistudio.google.com/apikey</span> (Google AI Studio).
-    </p>`;
-  const keyRow = document.createElement('div'); keyRow.className='test-row';
-  const keyField = document.createElement('div'); keyField.className='test-field'; keyField.style.flex='2';
-  keyField.innerHTML = '<label>Clave API</label>';
-  const keyInput = document.createElement('input'); keyInput.type='password'; keyInput.placeholder='AIzaSy...'; keyInput.value = getGeminiKey();
-  keyInput.onchange = ()=> setGeminiKey(keyInput.value.trim());
-  keyField.appendChild(keyInput);
-  keyRow.appendChild(keyField);
-  const modelField = document.createElement('div'); modelField.className='test-field';
-  modelField.innerHTML = '<label>Modelo</label>';
-  const modelInput = document.createElement('input'); modelInput.type='text'; modelInput.value = getGeminiModel();
-  modelInput.onchange = ()=> setGeminiModel(modelInput.value.trim() || 'gemini-3.6-flash');
-  modelField.appendChild(modelInput);
-  keyRow.appendChild(modelField);
-  apiPanel.appendChild(keyRow);
-  body.appendChild(apiPanel);
+  renderGeminiKeyPanel(body, testsGenState);
 
   const genPanel = document.createElement('div'); genPanel.className='test-panel';
-  genPanel.innerHTML = '<h4>1. Configura la generación</h4>';
+  genPanel.innerHTML = '<h4>Configura la generación</h4>';
 
   const row1 = document.createElement('div'); row1.className='test-row';
   const catField = document.createElement('div'); catField.className='test-field';
@@ -2630,7 +2657,7 @@ function renderTestsGenerarIA(body){
   body.appendChild(genPanel);
 
   const resultsPanel = document.createElement('div'); resultsPanel.className='test-panel'; resultsPanel.id='genResultsAnchor';
-  resultsPanel.innerHTML = '<h4>2. Revisa antes de guardar</h4>';
+  resultsPanel.innerHTML = '<h4>Revisa antes de guardar</h4>';
   if(!testsGenState.candidatos.length){
     resultsPanel.innerHTML += '<div class="test-empty">Todavía no hay preguntas generadas pendientes de revisar.</div>';
   } else {
