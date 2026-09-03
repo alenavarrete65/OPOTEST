@@ -1681,15 +1681,16 @@ function renderTestsQuizUI(body){
 function renderBackupBox(){
   const host = document.getElementById('backupBox');
   if(!host) return;
-  // Importar sustituye el banco de preguntas, así que es una acción de gestión: solo
-  // para el admin. Exportar es solo lectura (descarga lo que se ve), así que se deja
-  // también para no-admin por si quieren guardarse una copia de con qué practican.
+  // Tanto exportar como importar son acciones reservadas al admin: importar sustituye
+  // el banco de preguntas (gestión), y exportar descarga el banco completo, no solo lo
+  // que un usuario en modo lectura ve practicar. Los usuarios no-admin no ven este bloque.
+  if(!isAdmin){ host.innerHTML=''; return; }
   host.innerHTML = `
     <div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Copia de seguridad</div>
     <div style="font-size:12px;color:var(--cream-dim);margin-bottom:10px;">Independiente de Firebase: te sirve si algún día pierdes el acceso, se borra el proyecto, o quieres un respaldo local de tu banco de preguntas.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn ghost small" id="exportBackupBtn">Exportar copia (JSON)</button>
-      ${isAdmin ? '<label class="btn ghost small" style="cursor:pointer;">Importar copia (JSON)<input type="file" accept="application/json" id="importBackupInput" style="display:none;"></label>' : ''}
+      <label class="btn ghost small" style="cursor:pointer;">Importar copia (JSON)<input type="file" accept="application/json" id="importBackupInput" style="display:none;"></label>
     </div>
   `;
   document.getElementById('exportBackupBtn').onclick = exportBackup;
