@@ -1988,6 +1988,146 @@ function buscarPosibleDuplicado(enunciado, categoria, extra){
   });
   return mejor;
 }
+function jaccardSets(sa, sb){
+  if(!sa.size || !sb.size) return 0;
+  let inter = 0;
+  const small = sa.size<sb.size ? sa : sb;
+  const big = sa.size<sb.size ? sb : sa;
+  small.forEach(w=>{ if(big.has(w)) inter++; });
+  const union = sa.size + sb.size - inter;
+  return union ? inter/union : 0;
+}
+// ---- Buscar duplicados sobre TODO el banco (no solo al generar con IA) --------------------
+// Mismo umbral y misma comparación (Jaccard por palabras) que buscarPosibleDuplicado, pero
+// aplicada a todas las parejas de preguntas de una misma categoría, no solo a una pregunta nueva
+// contra el banco. Se recorre por categoría (como ya hacía buscarPosibleDuplicado) para no
+// comparar preguntas que nunca podrían considerarse la misma, y se cede el hilo cada cierto
+// número de preguntas para no congelar la interfaz con miles de preguntas acumuladas.
+function testBankDupIgnoreKey(){ return 'opotest_dupignore_'+currentUid; }
+function getDupIgnoreSet(){
+  try{ return new Set(JSON.parse(localStorage.getItem(testBankDupIgnoreKey())||'[]')); }
+  catch(e){ return new Set(); }
+}
+function addDupIgnore(id1, id2){
+  try{
+    const key = id1<id2 ? id1+'|'+id2 : id2+'|'+id1;
+    const set = getDupIgnoreSet();
+    set.add(key);
+    localStorage.setItem(testBankDupIgnoreKey(), JSON.stringify(Array.from(set)));
+  }catch(e){}
+}
+async function buscarDuplicadosEnBanco(onProgress){
+  const ignore = getDupIgnoreSet();
+  const porCategoria = {};
+  (state.testBank.questions||[]).forEach(q=>{ (porCategoria[q.categoria] = porCategoria[q.categoria] || []).push(q); });
+  const categorias = Object.keys(porCategoria);
+  const totalAprox = categorias.reduce((s,c)=>s+porCategoria[c].length, 0);
+  const resultados = [];
+  let procesadas = 0;
+  for(const cat of categorias){
+    const arr = porCategoria[cat];
+    const sets = arr.map(q=>wordSetForCompare(q.enunciado));
+    for(let i=0;i<arr.length;i++){
+      for(let j=i+1;j<arr.length;j++){
+        const key = arr[i].id < arr[j].id ? arr[i].id+'|'+arr[j].id : arr[j].id+'|'+arr[i].id;
+        if(!ignore.has(key)){
+          const score = jaccardSets(sets[i], sets[j]);
+          if(score>=0.45) resultados.push({a:arr[i], b:arr[j], score});
+        }
+      }
+      procesadas++;
+      if(procesadas % 150 === 0){
+        if(onProgress) onProgress(procesadas, totalAprox);
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+  }
+  resultados.sort((a,b)=>b.score-a.score);
+  return resultados;
+}
+function openDuplicatesModal(){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
+  overlay.onclick = (e)=>{ if(e.target===overlay) document.body.removeChild(overlay); };
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-panel);border:1px solid var(--line);border-radius:4px;padding:18px;max-width:680px;width:100%;';
+  overlay.appendChild(box);
+
+  const headRow = document.createElement('div'); headRow.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;';
+  headRow.innerHTML = `<h3 style="font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0;">Buscar duplicados</h3>`;
+  const closeBtn = document.createElement('button'); closeBtn.type='button'; closeBtn.className='btn small ghost'; closeBtn.textContent='Cerrar';
+  closeBtn.onclick = ()=> document.body.removeChild(overlay);
+  headRow.appendChild(closeBtn);
+  box.appendChild(headRow);
+
+  const info = document.createElement('p'); info.style.cssText='font-size:12px;color:var(--cream-dim);margin:0 0 12px;';
+  info.textContent = 'Compara todas las preguntas del banco, dentro de cada categoría, por parecido de enunciado. Con miles de preguntas puede tardar varios segundos.';
+  box.appendChild(info);
+
+  const statusEl = document.createElement('div'); statusEl.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-bottom:10px;';
+  box.appendChild(statusEl);
+  const resultsHost = document.createElement('div');
+  box.appendChild(resultsHost);
+  document.body.appendChild(overlay);
+
+  const cardsByQid = {}; // id -> [elementos de tarjeta] que mencionan esa pregunta, para poder
+                          // retirarlos todos si se elimina desde cualquiera de sus parejas.
+
+  function marcarEliminada(q, card){
+    (cardsByQid[q.id]||[]).forEach(c=>{ if(c!==card && c.parentNode) c.remove(); });
+    delete cardsByQid[q.id];
+    if(card.parentNode) card.remove();
+  }
+
+  function renderParCard(par){
+    const card = document.createElement('div');
+    card.style.cssText = 'border:1px solid var(--line);border-radius:4px;padding:10px;margin-bottom:10px;';
+    (cardsByQid[par.a.id] = cardsByQid[par.a.id]||[]).push(card);
+    (cardsByQid[par.b.id] = cardsByQid[par.b.id]||[]).push(card);
+    const scoreRow = document.createElement('div');
+    scoreRow.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:6px;';
+    scoreRow.textContent = '🔁 '+Math.round(par.score*100)+'% de parecido';
+    card.appendChild(scoreRow);
+    [par.a, par.b].forEach((q, idx)=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 0;'+(idx===0?'border-bottom:1px dashed var(--line);':'');
+      const txt = document.createElement('div'); txt.style.cssText='font-size:12px;cursor:pointer;flex:1;'; txt.title='Pulsa para ver la pregunta completa';
+      txt.textContent = (q.enunciado||'(sin enunciado)').slice(0,160);
+      txt.onclick = ()=> openTestPreviewModal(q);
+      row.appendChild(txt);
+      const delBtn = document.createElement('button'); delBtn.type='button'; delBtn.className='btn ghost small'; delBtn.textContent='Eliminar ésta';
+      delBtn.onclick = ()=>{
+        if(!confirm('¿Eliminar esta pregunta del banco? Podrás recuperarla desde la Papelera durante '+TESTBANK_TRASH_DIAS+' días.')) return;
+        const idx2 = state.testBank.questions.findIndex(x=>x.id===q.id);
+        if(idx2>=0){
+          addToTestBankTrash(q);
+          state.testBank.questions.splice(idx2,1);
+          deleteTestQuestionRemote(q.id);
+          showToast('Pregunta eliminada, puedes recuperarla desde la Papelera ✓');
+        }
+        marcarEliminada(q, card);
+        renderTests();
+      };
+      row.appendChild(delBtn);
+      card.appendChild(row);
+    });
+    const actionsRow = document.createElement('div'); actionsRow.style.cssText='margin-top:6px;';
+    const ignoreBtn = document.createElement('button'); ignoreBtn.type='button'; ignoreBtn.className='btn ghost small'; ignoreBtn.textContent='No es duplicado (no volver a avisar)';
+    ignoreBtn.onclick = ()=>{ addDupIgnore(par.a.id, par.b.id); if(card.parentNode) card.remove(); };
+    actionsRow.appendChild(ignoreBtn);
+    card.appendChild(actionsRow);
+    resultsHost.appendChild(card);
+  }
+
+  statusEl.textContent = 'Analizando el banco…';
+  buscarDuplicadosEnBanco((hecho, total)=>{ statusEl.textContent = 'Analizando el banco… ('+hecho+'/'+total+')'; })
+    .then(resultados=>{
+      statusEl.textContent = resultados.length
+        ? resultados.length+' posible(s) duplicado(s) encontrado(s), de más a menos parecidos.'
+        : 'No se han encontrado duplicados con este nivel de parecido ✓';
+      resultados.forEach(renderParCard);
+    });
+}
 // Intenta encajar el nombre de tema/subtema que sugiere la IA con el temario real ya guardado en
 // la app (coincidencia exacta primero, luego por inclusión de texto). Si no hay match claro, null.
 function matchTemaByName(categoria, nombre){
@@ -2955,10 +3095,18 @@ function renderTestsBanco(body){
     : `<h4>Banco de preguntas (${total})</h4>
        <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">${porCat.map(x=>x.c.label+': '+x.n).join(' · ')}</p>`;
   headWrap.appendChild(headInfo);
+  const btnGroup = document.createElement('div'); btnGroup.style.cssText='display:flex;gap:6px;flex-wrap:wrap;';
+  if(!testsBancoFiltro.papelera){
+    const dupBtn = document.createElement('button'); dupBtn.type='button'; dupBtn.className='btn ghost small';
+    dupBtn.textContent = '🔁 Buscar duplicados';
+    dupBtn.onclick = ()=> openDuplicatesModal();
+    btnGroup.appendChild(dupBtn);
+  }
   const trashBtn = document.createElement('button'); trashBtn.type='button'; trashBtn.className='btn ghost small';
   trashBtn.textContent = testsBancoFiltro.papelera ? '← Volver al banco' : `🗑 Papelera (${trash.length})`;
   trashBtn.onclick = ()=>{ testsBancoFiltro.papelera = !testsBancoFiltro.papelera; renderTests(); };
-  headWrap.appendChild(trashBtn);
+  btnGroup.appendChild(trashBtn);
+  headWrap.appendChild(btnGroup);
   panel.appendChild(headWrap);
   const row = document.createElement('div'); row.className='test-row';
   const catField = document.createElement('div'); catField.className='test-field';
