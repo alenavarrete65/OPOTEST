@@ -44,7 +44,7 @@ futuro hacia una plataforma de test multiusuario.
 8. Abre la URL de GitHub Pages, pulsa **"Crear cuenta nueva"**, mete tu correo y
    una contraseña: esa es ya tu cuenta para entrar desde cualquier dispositivo.
 
-## Autenticación (usuario/contraseña)
+## Autenticación (usuario/contraseña) y aprobación por administrador
 
 - La app usa Firebase Authentication con correo y contraseña. Cada persona que
   entra tiene su propio banco de preguntas, aislado del de cualquier otra
@@ -54,10 +54,29 @@ futuro hacia una plataforma de test multiusuario.
   hace falta ningún enlace ni código.
 - Si olvidas la contraseña, el botón "¿Olvidaste tu contraseña?" te envía un
   correo de recuperación (lo gestiona Firebase automáticamente).
-- Cuando llegue el momento de vender la app a terceros, cada comprador simplemente
-  crea su propia cuenta desde la pantalla de acceso — el modelo de datos
-  (`users/{uid}/testQuestions/...`) ya está pensado para eso, no haría falta
-  ningún cambio de estructura.
+- **Cuentas nuevas quedan pendientes de aprobación.** Cualquiera puede pulsar
+  "Crear cuenta nueva", pero hasta que el administrador (tú) la apruebe desde
+  el panel de administración dentro de la app, esa persona solo ve la pantalla
+  "Cuenta pendiente de aprobación" y no puede leer ni escribir ninguna
+  pregunta — esto lo garantizan las reglas de Firestore, no solo la interfaz.
+- **Conviértete en administrador (una sola vez, imprescindible):**
+  1. Entra en la app con tu propia cuenta (créala si no la tienes ya).
+  2. Ve a la consola de Firebase → **Firestore Database** → pestaña **Datos** →
+     colección `users` → abre el documento con tu `uid` (se crea solo la
+     primera vez que entras).
+  3. Cambia a mano los campos `aprobado` a `true` y `esAdmin` a `true`, y
+     guarda.
+  4. Recarga la app: ahora verás un bloque **"Panel de administración"** debajo
+     del banco de preguntas, con la lista de cuentas registradas.
+- **Aprobar gente nueva:** cuando alguien se registre, aparecerá en "Pendientes"
+  dentro del panel de administración; pulsa **Aprobar** y ya podrá entrar. Para
+  quitarle el acceso más adelante, pulsa **Revocar acceso** junto a su correo.
+- El rol de administrador (`esAdmin`) solo se puede cambiar a mano desde la
+  consola de Firebase, nunca desde la app — así nadie puede dárselo a sí mismo.
+- Cuando llegue el momento de vender la app a terceros, cada comprador crea su
+  propia cuenta desde la pantalla de acceso y tú la apruebas desde el panel —
+  el modelo de datos (`users/{uid}/testQuestions/...` + `users/{uid}.aprobado`)
+  ya está pensado para eso, no haría falta ningún cambio de estructura.
 
 ## Banco de Tests
 
@@ -165,8 +184,11 @@ tener una base fiable; a partir de ahí, las aperturas son incrementales.
 
 - [x] Sincronización incremental del banco de preguntas (implementada: ver
       apartado de arriba).
-- [ ] Panel de administración simple (ver cuántos usuarios hay, cuántas
-      preguntas tiene cada uno) si la app se abre a más gente.
+- [x] Cuenta de administrador que aprueba manualmente las cuentas nuevas que se
+      registren (implementada: ver apartado "Autenticación (usuario/contraseña)
+      y aprobación por administrador").
+- [ ] Panel de administración más completo (ver cuántas preguntas tiene cada
+      usuario) si la app se abre a más gente.
 - [ ] Cobro (Stripe u otra pasarela) si se decide vender el acceso.
 - [ ] Firebase Hosting como alternativa/respaldo a GitHub Pages (ya está
       preparado en `firebase.json`, solo faltaría ejecutar `firebase deploy`).
