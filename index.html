@@ -865,6 +865,10 @@
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+<!-- pdf-lib: solo se usa para trocear PDFs largos por rango de páginas antes de mandarlos a la IA
+     (ver "Generar con IA"). Si este script no carga (sin red, CDN caído…) la app sigue funcionando
+     con normalidad, simplemente no se podrá trocear y habrá que subir el PDF entero. -->
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -1699,7 +1703,11 @@ let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:nul
 // file: PDF con las preguntas (temario, examen o simulacro). file2: opcional, PDF aparte con
 // las respuestas/plantilla de corrección, para cuando el examen no trae la solución incluida.
 // draftChecked: si ya se intentó recuperar un borrador guardado de una sesión anterior.
-let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[], draftChecked:false };
+// trocear: si se debe trocear el PDF principal por páginas cuando es largo (ver más abajo).
+// paginasPorTrozo: nº de páginas de temario/examen por cada llamada a la IA cuando se trocea.
+// ultimoError: mensaje del último fallo, para poder mostrar "Reintentar" sin perder la configuración.
+// tiempoInicio / progreso: para el contador de tiempo y el aviso de "trozo X de Y" mientras genera.
+let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[], draftChecked:false, trocear:true, paginasPorTrozo:20, ultimoError:null, tiempoInicio:null, progreso:null };
 
 /* ---- Borrador local de "Generar con IA": para no perder preguntas ya generadas y aún sin
    guardar en el banco si se cierra la pestaña o falla algo. Se guarda solo en este dispositivo,
@@ -1926,6 +1934,39 @@ function jsonSchemaForTipoGen(tipo){
   if(tipo==='gramatica') return '{"enunciado":"frase completa a valorar","correcta":true,"explicacion":"breve razón gramatical","tema_sugerido":null,"subtema_sugerido":null}';
   return '{"enunciado":"texto de la pregunta","opciones":["opción A","opción B","opción C","opción D"],"correcta":0,"explicacion":"breve justificación de la respuesta correcta","tema_sugerido":null,"subtema_sugerido":null}';
 }
+/* ---- Troceado de PDFs largos por rango de páginas (usa pdf-lib, cargado en el <head>) ----
+   Objetivo: con simulacros de 80-100 preguntas, mandar el PDF entero en una sola llamada a Gemini
+   puede truncarse o fallar. Si el PDF tiene más páginas de las que quepan en un "trozo", se divide
+   en varios documentos más pequeños (por rango de páginas) y se hace una llamada encadenada por
+   cada uno, acumulando los resultados según van llegando (más lento, pero mucho más fiable). */
+function pdfLibDisponible(){ return typeof PDFLib !== 'undefined'; }
+async function getPdfPageCount(file){
+  const bytes = await file.arrayBuffer();
+  const doc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption:true });
+  return doc.getPageCount();
+}
+// Devuelve un Blob con solo las páginas [startPage, endPage] (1-indexado, ambos incluidos) del PDF
+// original. fileToBase64() acepta Blobs igual que Files (usa FileReader), así que este resultado
+// se puede pasar directamente a callGeminiGenerarPreguntas() como si fuera el archivo subido.
+async function extractPdfPageRange(file, startPage, endPage){
+  const bytes = await file.arrayBuffer();
+  const srcDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption:true });
+  const outDoc = await PDFLib.PDFDocument.create();
+  const indices = []; for(let p=startPage; p<=endPage; p++) indices.push(p-1);
+  const pages = await outDoc.copyPages(srcDoc, indices);
+  pages.forEach(p=>outDoc.addPage(p));
+  const outBytes = await outDoc.save();
+  return new Blob([outBytes], {type:'application/pdf'});
+}
+// Calcula los rangos de página [{start,end}, ...] en trozos de `porTrozo` páginas.
+function calcularRangosPaginas(totalPaginas, porTrozo){
+  const rangos = [];
+  for(let start=1; start<=totalPaginas; start+=porTrozo){
+    rangos.push({start, end: Math.min(start+porTrozo-1, totalPaginas)});
+  }
+  return rangos;
+}
+
 async function callGeminiGenerarPreguntas(file, file2, categoria, cantidad, instrucciones){
   const apiKey = getGeminiKey();
   if(!apiKey) throw new Error('Falta la clave API de Google Gemini (configúrala arriba).');
@@ -1980,13 +2021,13 @@ async function callGeminiGenerarPreguntas(file, file2, categoria, cantidad, inst
   if(!Array.isArray(parsed)) throw new Error('La IA no devolvió una lista de preguntas.');
   return parsed;
 }
-function buildCandidatosFromParsed(parsed, categoria){
+function buildCandidatosFromParsed(parsed, categoria, origenArchivo){
   const tipo = testTipoForCategoria(categoria);
   const nuevos = [];
   parsed.forEach((p,i)=>{
     const temaNum = p.tema_sugerido ? matchTemaByName(categoria, p.tema_sugerido) : null;
     const subtemaNum = (temaNum && p.subtema_sugerido) ? matchSubtemaByName(categoria, temaNum, p.subtema_sugerido) : null;
-    const c = { _uid:'gen_'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,6), incluir:true, categoria, tipo, tema:temaNum, subtema:subtemaNum, explicacion:(p.explicacion||'').trim() };
+    const c = { _uid:'gen_'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,6), incluir:true, categoria, tipo, tema:temaNum, subtema:subtemaNum, explicacion:(p.explicacion||'').trim(), origenArchivo: origenArchivo || null };
     if(tipo==='ortografia'){
       c.enunciado = (p.enunciado||'').trim();
       c.palabras = Array.isArray(p.palabras) ? p.palabras.slice(0,4).map(w=>({texto:(w&&w.texto||'').toString().trim(), incorrecta:!!(w&&w.incorrecta)})) : [];
@@ -2021,6 +2062,7 @@ function buildQuestionFromCandidato(c){
     subtema: c.subtema || null,
     tipo: c.tipo,
     origen: 'ia_pdf',
+    origenArchivo: c.origenArchivo || null,
     explicacion: (c.explicacion||'').trim(),
     creado: Date.now(),
     actualizado: Date.now(),
@@ -2370,6 +2412,77 @@ function renderTestsAnadir(body){
 }
 
 /* ---- Sub-vista: Generar con IA (desde PDF: temario, exámenes, simulacros...) ---- */
+/* ---- Contador de segundos transcurridos mientras genera (solo actualiza el <span>, sin volver a
+   pintar toda la vista cada segundo para no perder el foco de otros campos). ---- */
+let genTimerHandle = null;
+function startGenTimer(){
+  stopGenTimer();
+  testsGenState.tiempoInicio = Date.now();
+  genTimerHandle = setInterval(()=>{
+    const span = document.getElementById('genElapsedSpan');
+    if(span){ span.textContent = ' ('+Math.floor((Date.now()-testsGenState.tiempoInicio)/1000)+'s)'; }
+  }, 1000);
+}
+function stopGenTimer(){ if(genTimerHandle){ clearInterval(genTimerHandle); genTimerHandle=null; } }
+
+/* ---- Lanza (o relanza, con "Reintentar") la generación con la config actual de testsGenState.
+   Si el PDF principal es largo y el troceado está activado, lo divide en varias llamadas por rango
+   de páginas y va acumulando candidatos (y guardando el borrador) trozo a trozo, así que si un
+   trozo falla a mitad de camino no se pierde lo que ya se generó de los trozos anteriores. ---- */
+async function ejecutarGeneracionIA(){
+  if(!testsGenState.file){ showToast('Selecciona primero un PDF.'); return; }
+  testsGenState.generando = true;
+  testsGenState.ultimoError = null;
+  testsGenState.progreso = null;
+  renderTests();
+  startGenTimer();
+  const nombreArchivo = testsGenState.file.name;
+  let totalGeneradas = 0, totalDups = 0;
+  try{
+    // rango {start:null,end:null} = mandar el documento entero, sin trocear.
+    let rangos = [{start:null, end:null}];
+    if(testsGenState.trocear && pdfLibDisponible()){
+      try{
+        const totalPaginas = await getPdfPageCount(testsGenState.file);
+        if(totalPaginas > testsGenState.paginasPorTrozo) rangos = calcularRangosPaginas(totalPaginas, testsGenState.paginasPorTrozo);
+      }catch(e){ console.error('No se pudo contar las páginas del PDF, se sube entero:', e); }
+    }
+    const numTrozos = rangos.length;
+    const cantidadPorTrozo = Math.max(1, Math.ceil(testsGenState.cantidad / numTrozos));
+    for(let i=0;i<numTrozos;i++){
+      const {start,end} = rangos[i];
+      testsGenState.progreso = numTrozos>1 ? {actual:i+1, total:numTrozos, paginas: start!=null?(start+'–'+end):null} : null;
+      renderTests();
+      const filePart = (start!=null) ? await extractPdfPageRange(testsGenState.file, start, end) : testsGenState.file;
+      const parsed = await callGeminiGenerarPreguntas(filePart, testsGenState.file2, testsGenState.categoria, cantidadPorTrozo, testsGenState.instrucciones.trim());
+      const nuevos = buildCandidatosFromParsed(parsed, testsGenState.categoria, nombreArchivo);
+      if(nuevos.length){
+        testsGenState.candidatos = testsGenState.candidatos.concat(nuevos);
+        totalGeneradas += nuevos.length;
+        totalDups += nuevos.filter(c=>c.posibleDuplicado).length;
+        persistGenDraft();
+        renderTests();
+      }
+    }
+    if(!totalGeneradas){
+      showToast('La IA no devolvió ninguna pregunta válida. Prueba con otro PDF o revisa la clave API.');
+    } else {
+      showToast(totalGeneradas+' pregunta(s) generada(s)'+(totalDups?(', '+totalDups+' parecen duplicadas'):'')+(numTrozos>1?(' (en '+numTrozos+' trozos)'):'')+', revísalas abajo antes de guardar ✓');
+    }
+  }catch(err){
+    console.error(err);
+    const base = err.message || 'No se pudo generar preguntas desde el PDF.';
+    testsGenState.ultimoError = base + (totalGeneradas ? (' Se guardaron '+totalGeneradas+' pregunta(s) de los trozos anteriores (abajo, en la lista de revisión); puedes reintentar para completar el resto o guardarlas ya.') : '');
+    showToast(base);
+  }finally{
+    testsGenState.generando = false;
+    testsGenState.progreso = null;
+    stopGenTimer();
+    renderTests();
+    document.getElementById('genResultsAnchor')?.scrollIntoView({behavior:'smooth'});
+  }
+}
+
 function renderTestsGenerarIA(body){
   tryRestoreGenDraft();
   const infoPanel = document.createElement('div'); infoPanel.className='test-panel';
@@ -2460,31 +2573,60 @@ function renderTestsGenerarIA(body){
   file2Field.appendChild(file2NameSpan);
   genPanel.appendChild(file2Field);
 
+  if(pdfLibDisponible()){
+    const trocRow = document.createElement('div'); trocRow.className='test-row';
+    const trocField = document.createElement('div'); trocField.className='test-field';
+    const trocLabel = document.createElement('label'); trocLabel.style.cssText='display:flex;align-items:center;gap:6px;cursor:pointer;';
+    const trocCheck = document.createElement('input'); trocCheck.type='checkbox'; trocCheck.checked = testsGenState.trocear;
+    trocCheck.onchange = ()=>{ testsGenState.trocear = trocCheck.checked; };
+    trocLabel.appendChild(trocCheck);
+    trocLabel.appendChild(document.createTextNode('Trocear PDFs largos automáticamente'));
+    trocField.appendChild(trocLabel);
+    const trocHelp = document.createElement('p'); trocHelp.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--cream-dim);margin:4px 0 0;';
+    trocHelp.textContent = 'Si el PDF principal supera el nº de páginas de abajo, se divide en varias llamadas encadenadas a la IA (más lento, pero más fiable con simulacros largos).';
+    trocField.appendChild(trocHelp);
+    trocRow.appendChild(trocField);
+    const paginasField = document.createElement('div'); paginasField.className='test-field';
+    paginasField.innerHTML = '<label>Páginas por llamada</label>';
+    const paginasInput = document.createElement('input'); paginasInput.type='number'; paginasInput.min='3'; paginasInput.max='100'; paginasInput.value = testsGenState.paginasPorTrozo; paginasInput.disabled = !testsGenState.trocear;
+    paginasInput.onchange = ()=>{ const v = parseInt(paginasInput.value,10); testsGenState.paginasPorTrozo = (v>=3 && v<=100) ? v : 20; paginasInput.value = testsGenState.paginasPorTrozo; };
+    paginasField.appendChild(paginasInput);
+    trocRow.appendChild(paginasField);
+    genPanel.appendChild(trocRow);
+  }
+
+  const genBtnRow = document.createElement('div'); genBtnRow.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
   const genBtn = document.createElement('button'); genBtn.type='button'; genBtn.className='btn small';
   genBtn.textContent = testsGenState.generando ? 'Generando…' : 'Generar preguntas con IA';
   genBtn.disabled = testsGenState.generando;
-  genBtn.onclick = async ()=>{
-    if(!testsGenState.file){ showToast('Selecciona primero un PDF.'); return; }
-    testsGenState.generando = true; renderTests();
-    try{
-      const parsed = await callGeminiGenerarPreguntas(testsGenState.file, testsGenState.file2, testsGenState.categoria, testsGenState.cantidad, testsGenState.instrucciones.trim());
-      const nuevos = buildCandidatosFromParsed(parsed, testsGenState.categoria);
-      if(!nuevos.length){ showToast('La IA no devolvió ninguna pregunta válida. Prueba con otro PDF o revisa la clave API.'); }
-      else {
-        testsGenState.candidatos = testsGenState.candidatos.concat(nuevos);
-        persistGenDraft();
-        const dups = nuevos.filter(c=>c.posibleDuplicado).length;
-        showToast(nuevos.length+' pregunta(s) generada(s)'+(dups?(', '+dups+' parecen duplicadas'):'')+', revísalas abajo antes de guardar ✓');
-      }
-    }catch(err){
-      console.error(err);
-      showToast(err.message || 'No se pudo generar preguntas desde el PDF.');
-    }finally{
-      testsGenState.generando = false; renderTests();
-      document.getElementById('genResultsAnchor')?.scrollIntoView({behavior:'smooth'});
+  genBtn.onclick = ejecutarGeneracionIA;
+  genBtnRow.appendChild(genBtn);
+  if(testsGenState.generando){
+    const elapsed = document.createElement('span'); elapsed.id='genElapsedSpan';
+    elapsed.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);';
+    const segs = testsGenState.tiempoInicio ? Math.floor((Date.now()-testsGenState.tiempoInicio)/1000) : 0;
+    elapsed.textContent = ' ('+segs+'s)';
+    genBtnRow.appendChild(elapsed);
+    if(testsGenState.progreso){
+      const prog = document.createElement('span'); prog.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--amber);';
+      prog.textContent = 'Trozo '+testsGenState.progreso.actual+'/'+testsGenState.progreso.total+(testsGenState.progreso.paginas?(' (páginas '+testsGenState.progreso.paginas+')'):'');
+      genBtnRow.appendChild(prog);
     }
-  };
-  genPanel.appendChild(genBtn);
+  }
+  genPanel.appendChild(genBtnRow);
+
+  if(testsGenState.ultimoError){
+    const errBox = document.createElement('div'); errBox.style.cssText='margin-top:10px;padding:10px;border:1px solid var(--amber);border-radius:4px;';
+    const errTxt = document.createElement('div'); errTxt.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:8px;';
+    errTxt.textContent = '⚠ '+testsGenState.ultimoError;
+    errBox.appendChild(errTxt);
+    const retryBtn = document.createElement('button'); retryBtn.type='button'; retryBtn.className='btn small';
+    retryBtn.textContent = 'Reintentar';
+    retryBtn.disabled = testsGenState.generando;
+    retryBtn.onclick = ejecutarGeneracionIA;
+    errBox.appendChild(retryBtn);
+    genPanel.appendChild(errBox);
+  }
   body.appendChild(genPanel);
 
   const resultsPanel = document.createElement('div'); resultsPanel.className='test-panel'; resultsPanel.id='genResultsAnchor';
@@ -2550,6 +2692,11 @@ function renderTestsGenerarIA(body){
         const dupNote = document.createElement('div'); dupNote.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--amber);padding:0 14px 6px;';
         dupNote.textContent = 'Se parece un '+Math.round(c.posibleDuplicado.score*100)+'% a otra pregunta ('+c.posibleDuplicado.origen+'): "'+c.posibleDuplicado.enunciado.slice(0,90)+'"';
         card.appendChild(dupNote);
+      }
+      if(c.origenArchivo){
+        const origNote = document.createElement('div'); origNote.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--cream-dim);padding:0 14px 6px;';
+        origNote.textContent = '📄 '+c.origenArchivo;
+        card.appendChild(origNote);
       }
       const actions = document.createElement('div'); actions.className='tc-actions';
       const editBtn = document.createElement('button'); editBtn.type='button'; editBtn.textContent='Revisar / editar';
@@ -2766,7 +2913,7 @@ function renderTestsBanco(body){
   }
   const searchField = document.createElement('div'); searchField.className='test-field'; searchField.style.flex='2';
   searchField.innerHTML = '<label>Buscar</label>';
-  const searchInp = document.createElement('input'); searchInp.type='text'; searchInp.value = testsBancoFiltro.q; searchInp.placeholder='Buscar en el enunciado…';
+  const searchInp = document.createElement('input'); searchInp.type='text'; searchInp.value = testsBancoFiltro.q; searchInp.placeholder='Buscar en el enunciado o el PDF de origen…';
   searchInp.oninput = ()=>{ testsBancoFiltro.q = searchInp.value; paintList(); };
   searchField.appendChild(searchInp);
   row.appendChild(searchField);
@@ -2780,7 +2927,11 @@ function renderTestsBanco(body){
       if(testsBancoFiltro.categoria && q.categoria!==testsBancoFiltro.categoria) return false;
       if(testsBancoFiltro.tema && q.tema!==Number(testsBancoFiltro.tema)) return false;
       if(testsBancoFiltro.subtema && q.subtema!==Number(testsBancoFiltro.subtema)) return false;
-      if(testsBancoFiltro.q && !q.enunciado.toLowerCase().includes(testsBancoFiltro.q.toLowerCase())) return false;
+      if(testsBancoFiltro.q){
+        const needle = testsBancoFiltro.q.toLowerCase();
+        const enOrigen = q.origenArchivo && q.origenArchivo.toLowerCase().includes(needle);
+        if(!q.enunciado.toLowerCase().includes(needle) && !enOrigen) return false;
+      }
       return true;
     }).sort((a,b)=>b.creado-a.creado);
     list.innerHTML = '';
@@ -2795,7 +2946,9 @@ function renderTestsBanco(body){
         <span class="tc-tag">${questionTemaTag(q)}</span>`;
       card.appendChild(head);
       const stat = document.createElement('div'); stat.className='tc-stat';
-      stat.textContent = q.stats.veces ? `Practicada ${q.stats.veces} vez(es) · ${q.stats.aciertos} acierto(s)` : 'Sin practicar todavía';
+      let statTxt = q.stats.veces ? `Practicada ${q.stats.veces} vez(es) · ${q.stats.aciertos} acierto(s)` : 'Sin practicar todavía';
+      if(q.origenArchivo) statTxt += ' · 📄 '+q.origenArchivo;
+      stat.textContent = statTxt;
       card.appendChild(stat);
       const actions = document.createElement('div'); actions.className='tc-actions';
       const editBtn = document.createElement('button'); editBtn.type='button'; editBtn.textContent='Editar';

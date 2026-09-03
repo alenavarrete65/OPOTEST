@@ -96,8 +96,28 @@ futuro hacia una plataforma de test multiusuario.
   ese contenido; si el PDF ya trae preguntas de examen con su corrección, las transcribe tal cual.
   En ambos casos puede generar menos de las pedidas si el documento no da para tantas — mejor eso
   que preguntas inventadas.
-- Los PDF muy largos o escaneados como imagen (sin texto seleccionable) pueden fallar o dar peor
-  resultado; si eso pasa, prueba a subir el PDF por partes más cortas.
+- Los PDF escaneados como imagen (sin texto seleccionable) pueden fallar o dar peor resultado; si
+  eso pasa, prueba con una versión con texto seleccionable, o pasa antes el PDF por un OCR.
+- **Troceado automático de PDFs largos**: para simulacros de 80-100 preguntas, mandar el PDF entero
+  en una sola llamada puede truncarse o fallar. Con la casilla "Trocear PDFs largos automáticamente"
+  activada (por defecto), si el PDF principal supera el nº de páginas que indiques en "Páginas por
+  llamada" (20 por defecto), se divide en varios documentos más pequeños por rango de páginas y se
+  hace una llamada encadenada a la IA por cada trozo, acumulando los candidatos según van llegando
+  (verás un aviso "Trozo X/Y" y cada trozo se va guardando ya en el borrador local, así que si un
+  trozo falla a mitad de camino no se pierde lo generado en los anteriores). El PDF de respuestas/
+  corrección (segundo archivo, opcional) se manda entero en cada llamada, sin trocear. Esta función
+  depende de la librería `pdf-lib`, cargada desde un CDN externo (`cdn.jsdelivr.net`): si no hay
+  conexión a ese CDN, la casilla se oculta y el PDF se manda entero como antes.
+- **Contador de tiempo**: mientras genera, junto al botón aparece cuántos segundos lleva la llamada
+  en curso (y, si está troceando, qué trozo está procesando), para que se note que sigue viva en
+  PDFs largos que tardan más.
+- **Reintentar sin perder la configuración**: si la llamada falla (sin red, JSON mal formado por el
+  modelo, error de la API…), aparece un aviso con el motivo y un botón "Reintentar" que vuelve a
+  lanzar la generación con el mismo PDF, categoría, cantidad e instrucciones que ya tenías puestos,
+  sin tener que rellenar nada de nuevo. Si el fallo fue a mitad de un troceado, el reintento vuelve
+  a empezar desde el primer trozo (las preguntas ya generadas de trozos anteriores no se pierden —
+  quedan en la lista de revisión —, pero podrían volver a generarse y quedar marcadas como posible
+  duplicado 🔁, lo cual está pensado para eso: revísalas y descarta la copia de más si es el caso).
 - Igual que con la transcripción por foto, la clave API se guarda solo en el navegador de cada
   dispositivo.
 - **Examen y respuestas en documentos separados**: si el simulacro no trae ya la solución
@@ -118,6 +138,11 @@ futuro hacia una plataforma de test multiusuario.
   en este dispositivo (no en Firebase) mientras las revisas, así que si cierras la pestaña o se
   va la conexión a medio revisar, al volver a abrir "Generar con IA" las recuperas tal cual las
   dejaste. El borrador desaparece en cuanto guardas o descartas todas las preguntas pendientes.
+- **Nombre del PDF de origen**: cada pregunta generada guarda el nombre del archivo del que salió
+  (campo `origenArchivo`). Se ve en la tarjeta de revisión, y también en el Banco de preguntas (bajo
+  las estadísticas de cada pregunta) una vez guardada; el buscador del Banco también busca por ese
+  nombre de archivo, así que si detectas que un examen concreto tenía errores puedes escribir su
+  nombre (o parte de él) en "Buscar" para localizar y limpiar solo esas preguntas.
 
 ## Temario (temas y subtemas)
 
@@ -266,10 +291,13 @@ tener una base fiable; a partir de ahí, las aperturas son incrementales.
       ver apartado "Generar preguntas desde un PDF" de arriba).
 - [x] Detección de posibles duplicados y borrador local al generar con IA
       (implementado: ver apartado de arriba).
-- [ ] Trocear PDFs muy largos en varias llamadas a la IA para simulacros
-      grandes (pendiente, de momento todo va en una sola llamada).
-- [ ] Guardar el nombre del PDF de origen en cada pregunta generada, para
-      poder filtrar/limpiar el banco por examen más adelante (pendiente).
+- [x] Trocear PDFs muy largos en varias llamadas a la IA para simulacros
+      grandes, con contador de tiempo/trozo y botón de reintento sin perder
+      la configuración (implementado: ver apartado "Generar preguntas desde
+      un PDF" de arriba).
+- [x] Guardar el nombre del PDF de origen en cada pregunta generada, para
+      poder filtrar/limpiar el banco por examen (implementado: ver apartado
+      de arriba, buscable desde el Banco de preguntas).
 - [ ] Ajustar el nº de preguntas de cada tema de Teoría al peso real que le da
       Jefatura de Enseñanza en el examen oficial (pendiente: Alejandro tiene
       que pasar esos porcentajes por tema).
