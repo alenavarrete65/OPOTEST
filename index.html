@@ -1150,6 +1150,49 @@ async function deleteTestQuestionRemote(id){
     showToast('Sin conexión: se borró en este dispositivo y se sincronizará después.');
   }
 }
+// ---- Papelera de preguntas borradas ----------------------------------------------------
+// loadTestBank() ya purga del estado local (y del cache) cualquier pregunta que llegue marcada
+// como borrado:true (ver el `map.delete` de más arriba), así que el soft-delete de Firestore no
+// sirve por sí solo para poder recuperarla desde este dispositivo. Mantenemos aquí, en un
+// localStorage aparte, una copia de las últimas preguntas eliminadas a mano desde el Banco
+// (con fecha de borrado) para poder listarlas y restaurarlas sin tocar Firestore para nada.
+const TESTBANK_TRASH_DIAS = 30;
+function testBankTrashKey(){ return 'opotest_trash_'+currentUid; }
+function getTestBankTrashRaw(){ try{ return JSON.parse(localStorage.getItem(testBankTrashKey())||'[]'); }catch(e){ return []; } }
+function setTestBankTrash(arr){ try{ localStorage.setItem(testBankTrashKey(), JSON.stringify(arr)); }catch(e){} }
+// Devuelve la papelera ya filtrada a los últimos TESTBANK_TRASH_DIAS días (y aprovecha para
+// limpiar del almacenamiento local lo que ya haya caducado), ordenada de más a menos reciente.
+function getTestBankTrash(){
+  const cutoff = Date.now() - TESTBANK_TRASH_DIAS*24*60*60*1000;
+  const raw = getTestBankTrashRaw();
+  const kept = raw.filter(t=>t.deletedAt >= cutoff);
+  if(kept.length !== raw.length) setTestBankTrash(kept);
+  return kept.sort((a,b)=>b.deletedAt-a.deletedAt);
+}
+function addToTestBankTrash(q){
+  try{
+    const clone = JSON.parse(JSON.stringify(q));
+    clone.borrado = false;
+    const arr = getTestBankTrashRaw().filter(t=>!t.q || t.q.id!==q.id);
+    arr.unshift({q:clone, deletedAt: Date.now()});
+    setTestBankTrash(arr);
+  }catch(e){ console.error(e); }
+}
+async function restoreTestBankTrashItem(id){
+  const arr = getTestBankTrashRaw();
+  const idx = arr.findIndex(t=>t.q && t.q.id===id);
+  if(idx<0) return;
+  const entry = arr[idx];
+  arr.splice(idx,1);
+  setTestBankTrash(arr);
+  const q = entry.q;
+  q.borrado = false;
+  if(!state.testBank.questions.some(x=>x.id===q.id)) state.testBank.questions.push(q);
+  cacheTestBankLocally();
+  await saveTestQuestionRemote(q);
+  showToast('Pregunta restaurada ✓');
+  renderTests();
+}
 async function trySyncTestBankPending(){
   if(!isAdmin || !firebaseOk || !currentUid || !navigator.onLine) return;
   const arr = getTestBankPending();
@@ -1784,7 +1827,7 @@ function tryRestoreGenDraft(){
 window.addEventListener('beforeunload', persistGenDraft);
 let testsQuiz = null; // {items:[...], corregido:false, instantaneo:bool, temporizador:{segundosPorPregunta,totalSegundos,restante}|null}
 let testsQuizTimerHandle = null; // id del setInterval del temporizador de test en curso
-let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:''};
+let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:'', papelera:false};
 // Selección de temas/subtemas para el test que se está configurando en "Practicar":
 // parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
 let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio' }; // orden: 'aleatorio' | 'ordenado'
@@ -2900,13 +2943,23 @@ function openGenCandidatoModal(c){
 /* ---- Sub-vista: Banco de preguntas ---- */
 function renderTestsBanco(body){
   const questions = state.testBank.questions;
+  const trash = getTestBankTrash();
   const panel = document.createElement('div'); panel.className='test-panel';
   const total = questions.length;
   const porCat = TEST_CATEGORIAS.map(c=>({c, n:questions.filter(q=>q.categoria===c.key).length}));
-  panel.innerHTML = `<h4>Banco de preguntas (${total})</h4>
-    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">
-      ${porCat.map(x=>x.c.label+': '+x.n).join(' · ')}
-    </p>`;
+  const headWrap = document.createElement('div'); headWrap.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;';
+  const headInfo = document.createElement('div');
+  headInfo.innerHTML = testsBancoFiltro.papelera
+    ? `<h4>Papelera (${trash.length})</h4>
+       <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">Preguntas eliminadas del Banco en los últimos ${TESTBANK_TRASH_DIAS} días. Pasado ese plazo desaparecen de aquí.</p>`
+    : `<h4>Banco de preguntas (${total})</h4>
+       <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">${porCat.map(x=>x.c.label+': '+x.n).join(' · ')}</p>`;
+  headWrap.appendChild(headInfo);
+  const trashBtn = document.createElement('button'); trashBtn.type='button'; trashBtn.className='btn ghost small';
+  trashBtn.textContent = testsBancoFiltro.papelera ? '← Volver al banco' : `🗑 Papelera (${trash.length})`;
+  trashBtn.onclick = ()=>{ testsBancoFiltro.papelera = !testsBancoFiltro.papelera; renderTests(); };
+  headWrap.appendChild(trashBtn);
+  panel.appendChild(headWrap);
   const row = document.createElement('div'); row.className='test-row';
   const catField = document.createElement('div'); catField.className='test-field';
   catField.innerHTML = '<label>Categoría</label>';
@@ -2949,19 +3002,45 @@ function renderTestsBanco(body){
   panel.appendChild(list);
   body.appendChild(panel);
 
+  function matchesFiltro(q){
+    if(testsBancoFiltro.categoria && q.categoria!==testsBancoFiltro.categoria) return false;
+    if(testsBancoFiltro.tema && q.tema!==Number(testsBancoFiltro.tema)) return false;
+    if(testsBancoFiltro.subtema && q.subtema!==Number(testsBancoFiltro.subtema)) return false;
+    if(testsBancoFiltro.q){
+      const needle = testsBancoFiltro.q.toLowerCase();
+      const enOrigen = q.origenArchivo && q.origenArchivo.toLowerCase().includes(needle);
+      if(!q.enunciado.toLowerCase().includes(needle) && !enOrigen) return false;
+    }
+    return true;
+  }
   function paintList(){
-    let filtered = questions.filter(q=>{
-      if(testsBancoFiltro.categoria && q.categoria!==testsBancoFiltro.categoria) return false;
-      if(testsBancoFiltro.tema && q.tema!==Number(testsBancoFiltro.tema)) return false;
-      if(testsBancoFiltro.subtema && q.subtema!==Number(testsBancoFiltro.subtema)) return false;
-      if(testsBancoFiltro.q){
-        const needle = testsBancoFiltro.q.toLowerCase();
-        const enOrigen = q.origenArchivo && q.origenArchivo.toLowerCase().includes(needle);
-        if(!q.enunciado.toLowerCase().includes(needle) && !enOrigen) return false;
-      }
-      return true;
-    }).sort((a,b)=>b.creado-a.creado);
     list.innerHTML = '';
+    if(testsBancoFiltro.papelera){
+      const filtered = getTestBankTrash().filter(t=>t.q && matchesFiltro(t.q));
+      if(!filtered.length){ list.innerHTML = '<div class="test-empty">La papelera está vacía (o no hay nada con este filtro).</div>'; return; }
+      filtered.forEach(t=>{
+        const q = t.q;
+        const card = document.createElement('div'); card.className='test-card'; card.style.cursor='pointer';
+        card.title = 'Pulsa para ver la pregunta completa';
+        card.onclick = ()=> openTestPreviewModal(q);
+        const head = document.createElement('div'); head.className='tc-head';
+        const imgTag = (q.imagenes && q.imagenes.length) ? ' 🖼' : '';
+        head.innerHTML = `<span>${(q.enunciado||'(sin enunciado)').slice(0,140)}${imgTag}</span>
+          <span class="tc-tag">${questionTemaTag(q)}</span>`;
+        card.appendChild(head);
+        const stat = document.createElement('div'); stat.className='tc-stat';
+        stat.textContent = 'Eliminada el '+new Date(t.deletedAt).toLocaleString();
+        card.appendChild(stat);
+        const actions = document.createElement('div'); actions.className='tc-actions';
+        const restoreBtn = document.createElement('button'); restoreBtn.type='button'; restoreBtn.textContent='Restaurar';
+        restoreBtn.onclick = (e)=>{ e.stopPropagation(); restoreTestBankTrashItem(q.id); };
+        actions.appendChild(restoreBtn);
+        card.appendChild(actions);
+        list.appendChild(card);
+      });
+      return;
+    }
+    const filtered = questions.filter(matchesFiltro).sort((a,b)=>b.creado-a.creado);
     if(!filtered.length){ list.innerHTML = '<div class="test-empty">No hay preguntas guardadas con este filtro todavía.</div>'; return; }
     filtered.forEach(q=>{
       const card = document.createElement('div'); card.className='test-card'; card.style.cursor='pointer';
@@ -2984,9 +3063,14 @@ function renderTestsBanco(body){
       const delBtn = document.createElement('button'); delBtn.type='button'; delBtn.textContent='Eliminar';
       delBtn.onclick = (e)=>{
         e.stopPropagation();
-        if(!confirm('¿Eliminar esta pregunta del banco?')) return;
+        if(!confirm('¿Eliminar esta pregunta del banco? Podrás recuperarla desde la Papelera durante '+TESTBANK_TRASH_DIAS+' días.')) return;
         const idx = state.testBank.questions.findIndex(x=>x.id===q.id);
-        if(idx>=0){ state.testBank.questions.splice(idx,1); deleteTestQuestionRemote(q.id); renderTests(); }
+        if(idx>=0){
+          addToTestBankTrash(q);
+          state.testBank.questions.splice(idx,1);
+          deleteTestQuestionRemote(q.id);
+          renderTests();
+        }
       };
       actions.appendChild(delBtn);
       card.appendChild(actions);
@@ -3832,20 +3916,25 @@ function renderBackupBox(){
       <label class="btn ghost small" style="cursor:pointer;">Importar copia (JSON)<input type="file" accept="application/json" id="importBackupInput" style="display:none;"></label>
     </div>
   `;
-  document.getElementById('exportBackupBtn').onclick = exportBackup;
+  document.getElementById('exportBackupBtn').onclick = ()=> exportBackup(false);
   const importInput = document.getElementById('importBackupInput');
   if(importInput) importInput.onchange = importBackup;
 }
-function exportBackup(){
+// auto=true: se usa como red de seguridad justo antes de "Importar copia" (que sustituye TODO
+// el banco), así que no descarga con el mismo nombre que una exportación manual (para no
+// confundirlas) ni lanza su propio toast (el de importBackup ya informa de las dos cosas).
+function exportBackup(auto){
   const payload = {app:'opotest', version:1, exportedAt:new Date().toISOString(), questions: state.testBank.questions};
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const today = new Date().toISOString().slice(0,10);
-  a.href = url; a.download = 'opotest-backup-'+today+'.json';
+  const marcaHora = new Date().toISOString().replace(/[:.]/g,'-');
+  a.href = url;
+  a.download = auto ? ('opotest-backup-antes-de-importar-'+marcaHora+'.json') : ('opotest-backup-'+today+'.json');
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  showToast('Copia exportada ✓');
+  if(!auto) showToast('Copia exportada ✓');
 }
 function importBackup(e){
   const file = e.target.files && e.target.files[0];
@@ -3856,7 +3945,10 @@ function importBackup(e){
       const data = JSON.parse(reader.result);
       const qs = Array.isArray(data.questions) ? data.questions : [];
       if(!qs.length){ showToast('El archivo no contiene preguntas.'); return; }
-      if(!confirm('Esto SUSTITUIRÁ todas las preguntas guardadas por las del archivo. ¿Continuar?')) return;
+      if(!confirm('Esto SUSTITUIRÁ todas las preguntas guardadas por las del archivo. Antes de nada se descargará automáticamente una copia de seguridad del banco actual, por si acaso. ¿Continuar?')) return;
+      // Red de seguridad: si el archivo importado es el equivocado (o uno viejo), el banco
+      // actual queda descargado en el propio dispositivo antes de sustituirlo por nada.
+      exportBackup(true);
       const newIds = new Set(qs.map(q=>q.id));
       const toRemove = (state.testBank.questions||[]).filter(q=>!newIds.has(q.id));
       state.testBank.questions = qs;
@@ -3864,7 +3956,7 @@ function importBackup(e){
       for(const q of toRemove){ await deleteTestQuestionRemote(q.id); }
       for(const q of qs){ await saveTestQuestionRemote(q); }
       setTestBankLastSync(Date.now());
-      showToast('Copia importada ✓');
+      showToast('Copia importada ✓ (se descargó antes una copia de seguridad del banco anterior)');
       renderTests();
     }catch(err){
       console.error(err);
