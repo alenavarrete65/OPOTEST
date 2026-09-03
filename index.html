@@ -1828,6 +1828,7 @@ window.addEventListener('beforeunload', persistGenDraft);
 let testsQuiz = null; // {items:[...], corregido:false, instantaneo:bool, temporizador:{segundosPorPregunta,totalSegundos,restante}|null}
 let testsQuizTimerHandle = null; // id del setInterval del temporizador de test en curso
 let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:'', papelera:false};
+const TESTBANCO_PAGE_SIZE = 50; // cuántas tarjetas se pintan de golpe en el Banco antes de pedir "mostrar más"
 // Selección de temas/subtemas para el test que se está configurando en "Practicar":
 // parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
 let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio' }; // orden: 'aleatorio' | 'ordenado'
@@ -3084,6 +3085,7 @@ function openGenCandidatoModal(c){
 function renderTestsBanco(body){
   const questions = state.testBank.questions;
   const trash = getTestBankTrash();
+  let bancoVisibleCount = TESTBANCO_PAGE_SIZE; // paginación simple: se resetea al cambiar de filtro
   const panel = document.createElement('div'); panel.className='test-panel';
   const total = questions.length;
   const porCat = TEST_CATEGORIAS.map(c=>({c, n:questions.filter(q=>q.categoria===c.key).length}));
@@ -3142,7 +3144,7 @@ function renderTestsBanco(body){
   const searchField = document.createElement('div'); searchField.className='test-field'; searchField.style.flex='2';
   searchField.innerHTML = '<label>Buscar</label>';
   const searchInp = document.createElement('input'); searchInp.type='text'; searchInp.value = testsBancoFiltro.q; searchInp.placeholder='Buscar en el enunciado o el PDF de origen…';
-  searchInp.oninput = ()=>{ testsBancoFiltro.q = searchInp.value; paintList(); };
+  searchInp.oninput = ()=>{ testsBancoFiltro.q = searchInp.value; bancoVisibleCount = TESTBANCO_PAGE_SIZE; paintList(); };
   searchField.appendChild(searchInp);
   row.appendChild(searchField);
   panel.appendChild(row);
@@ -3166,7 +3168,8 @@ function renderTestsBanco(body){
     if(testsBancoFiltro.papelera){
       const filtered = getTestBankTrash().filter(t=>t.q && matchesFiltro(t.q));
       if(!filtered.length){ list.innerHTML = '<div class="test-empty">La papelera está vacía (o no hay nada con este filtro).</div>'; return; }
-      filtered.forEach(t=>{
+      const visibles = filtered.slice(0, bancoVisibleCount);
+      visibles.forEach(t=>{
         const q = t.q;
         const card = document.createElement('div'); card.className='test-card'; card.style.cursor='pointer';
         card.title = 'Pulsa para ver la pregunta completa';
@@ -3186,11 +3189,13 @@ function renderTestsBanco(body){
         card.appendChild(actions);
         list.appendChild(card);
       });
+      pintarMostrarMas(filtered.length);
       return;
     }
     const filtered = questions.filter(matchesFiltro).sort((a,b)=>b.creado-a.creado);
     if(!filtered.length){ list.innerHTML = '<div class="test-empty">No hay preguntas guardadas con este filtro todavía.</div>'; return; }
-    filtered.forEach(q=>{
+    const visibles = filtered.slice(0, bancoVisibleCount);
+    visibles.forEach(q=>{
       const card = document.createElement('div'); card.className='test-card'; card.style.cursor='pointer';
       card.title = 'Pulsa para ver la pregunta completa';
       card.onclick = ()=> openTestPreviewModal(q);
@@ -3224,6 +3229,19 @@ function renderTestsBanco(body){
       card.appendChild(actions);
       list.appendChild(card);
     });
+    pintarMostrarMas(filtered.length);
+  }
+  // Botón "mostrar N más" al final de la lista, en vez de pintar de golpe las 3.000-4.000
+  // tarjetas que puede llegar a tener el banco: solo se construyen en el DOM las que se han
+  // pedido ver, lo que evita que el filtro/búsqueda se note lento con el banco completo cargado.
+  function pintarMostrarMas(totalFiltrado){
+    if(totalFiltrado <= bancoVisibleCount) return;
+    const restantes = totalFiltrado - bancoVisibleCount;
+    const moreBtn = document.createElement('button'); moreBtn.type='button'; moreBtn.className='btn ghost small';
+    moreBtn.style.cssText = 'display:block;margin:10px auto 0;';
+    moreBtn.textContent = 'Mostrar '+Math.min(TESTBANCO_PAGE_SIZE, restantes)+' más (quedan '+restantes+')';
+    moreBtn.onclick = ()=>{ bancoVisibleCount += TESTBANCO_PAGE_SIZE; paintList(); };
+    list.appendChild(moreBtn);
   }
   paintList();
 }
