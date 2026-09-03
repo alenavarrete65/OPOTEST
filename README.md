@@ -118,35 +118,53 @@ funcionando en vez de bloquearse, y lo que pases de más cuesta céntimos.
 - Firestore regala 50 000 lecturas, 20 000 escrituras y 1 GiB de almacenamiento
   gratis **al día**. Con 3 000-4 000 preguntas guardadas (unos pocos MB en
   total), estás muy por debajo del límite de almacenamiento.
-- Ahora mismo, cada vez que abres la app se descarga el banco completo. Si lo
-  abres muchas veces al día en varios dispositivos, es fácil acercarte o superar
-  las 50 000 lecturas/día solo tú — pero en Blaze eso no es un problema: lo que
-  pase del tope gratis cuesta **$0,06 por cada 100 000 lecturas** de más, así que
-  aunque algún día dobles el límite gratuito el coste sería de céntimos al mes.
+- Desde la versión con **sincronización incremental** (ver más abajo), abrir la
+  app ya NO descarga el banco completo cada vez: solo trae las preguntas nuevas
+  o modificadas desde la última vez. Aunque abras la app muchas veces al día en
+  varios dispositivos, prácticamente nunca vas a acercarte a las 50 000
+  lecturas/día — y aunque algún día las superases, en Blaze no pasa nada: lo
+  que pase del tope gratis cuesta **$0,06 por cada 100 000 lecturas** de más.
 - Authentication (usuario/contraseña) es gratis hasta 50 000 usuarios activos al
   mes, así que para ti solo no tiene coste.
 - **Estimación realista para tu uso personal: $0/mes**, con margen de sobra.
 
 **En el futuro (si la vendes a terceros):**
 - El coste escala con el número de usuarios × veces que abren la app × preguntas
-  que se leen cada vez. Como referencia: 100 usuarios con 2 000 preguntas cada
-  uno, abriendo la app 5 veces al día, con el diseño actual (recarga el banco
-  entero cada vez) rondaría 1 millón de lecturas/día — unos $18/mes solo de
-  Firestore. Sigue siendo barato, pero es la partida que crecerá si el número de
-  usuarios crece.
-- Ese coste se puede reducir bastante el día que haga falta, cambiando el
-  "recargar todo el banco al abrir" por una sincronización incremental (traer
-  solo las preguntas nuevas o modificadas desde la última vez). No es necesario
-  hacerlo ahora, pero conviene tenerlo en cuenta como la primera optimización
-  cuando pases de "solo yo" a tener usuarios reales.
+  nuevas/modificadas que traen cada vez (gracias a la sincronización incremental,
+  ya NO es "preguntas totales del banco" en cada apertura, solo lo que haya
+  cambiado). Con 5 000-6 000 preguntas por usuario, esto es mucho más barato que
+  con el diseño anterior: la primera apertura en cada dispositivo sí trae el
+  banco completo una vez, pero las siguientes aperturas normalmente son de
+  pocas lecturas (o ninguna, si no ha habido cambios).
 - Vender la app con cobros (suscripción, pago único) necesitaría además una
   pasarela de pago (Stripe es la opción más habitual), que no viene incluida en
   Firebase.
 
+## Sincronización incremental (cómo funciona)
+
+Para que abrir la app muchas veces al día no gaste lecturas de Firestore de
+más, cada pregunta guarda un campo `actualizado` (fecha de la última vez que
+se creó/editó/practicó) y este dispositivo recuerda en qué momento sincronizó
+por última vez (`localStorage`). En cada apertura:
+
+1. Se carga primero la copia local (instantáneo, funciona incluso sin
+   internet).
+2. Se pide a Firestore solo lo que tenga `actualizado` posterior a la última
+   sincronización de este dispositivo — no el banco entero.
+3. Lo nuevo se combina con la copia local y se vuelve a guardar.
+
+Los borrados son "blandos" (la pregunta se marca con `borrado:true` en vez de
+eliminarse de verdad) para que también se recojan como una actualización más
+en el siguiente paso 2; el dispositivo los quita de su copia local al verlos.
+
+La primera vez que abras la app en un dispositivo nuevo (o la primera vez tras
+instalar esta mejora) sí se descarga el banco completo una única vez, para
+tener una base fiable; a partir de ahí, las aperturas son incrementales.
+
 ## Cosas pendientes / ideas para más adelante
 
-- [ ] Sincronización incremental del banco de preguntas (en vez de recargarlo
-      entero en cada apertura), para cuando el número de usuarios crezca.
+- [x] Sincronización incremental del banco de preguntas (implementada: ver
+      apartado de arriba).
 - [ ] Panel de administración simple (ver cuántos usuarios hay, cuántas
       preguntas tiene cada uno) si la app se abre a más gente.
 - [ ] Cobro (Stripe u otra pasarela) si se decide vender el acceso.

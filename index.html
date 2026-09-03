@@ -936,8 +936,18 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) trySync
 /* ===================== BANCO DE TESTS (Firestore: users/{uid}/testQuestions) ===================== */
 // Cada pregunta es su propio documento (igual que en Operación Baeza), así el banco puede
 // crecer a miles de preguntas sin tocar el límite de 1 MB por documento de Firestore.
+//
+// SINCRONIZACIÓN INCREMENTAL: en vez de descargar el banco entero cada vez que se abre la
+// app (lo que dispara una lectura de Firestore por cada pregunta guardada), guardamos en este
+// dispositivo la última vez que sincronizamos ("lastSync") y, en cada apertura, solo pedimos a
+// Firestore las preguntas cuyo campo `actualizado` sea posterior a esa marca. El resto del
+// banco sale de la copia local (localStorage), que se combina con lo nuevo/modificado.
+// Los borrados se hacen "blandos" (campo `borrado:true`) para que también viajen como una
+// actualización normal y el dispositivo los recoja en la siguiente sincronización; no hace
+// falta guardar una lista aparte de "preguntas borradas".
 function testBankCacheKey(){ return 'opotest_cache_'+currentUid; }
 function testBankPendingKey(){ return 'opotest_pending_'+currentUid; }
+function testBankLastSyncKey(){ return 'opotest_lastsync_'+currentUid; }
 function getTestBankPending(){ try{ return JSON.parse(localStorage.getItem(testBankPendingKey())||'[]'); }catch(e){ return []; } }
 function setTestBankPending(arr){ try{ localStorage.setItem(testBankPendingKey(), JSON.stringify(arr)); }catch(e){} }
 function queueTestBankPending(op){
@@ -946,24 +956,61 @@ function queueTestBankPending(op){
   setTestBankPending(arr);
 }
 function cacheTestBankLocally(){ try{ localStorage.setItem(testBankCacheKey(), JSON.stringify(state.testBank.questions)); }catch(e){} }
+function getTestBankLastSync(){ try{ const v = localStorage.getItem(testBankLastSyncKey()); return v ? Number(v) : 0; }catch(e){ return 0; } }
+function setTestBankLastSync(ms){ try{ localStorage.setItem(testBankLastSyncKey(), String(ms)); }catch(e){} }
+function loadTestBankFromCache(){
+  try{
+    const cached = localStorage.getItem(testBankCacheKey());
+    if(cached){ state.testBank.questions = JSON.parse(cached); return true; }
+  }catch(e){}
+  return false;
+}
 
 async function loadTestBank(){
   if(!firebaseOk || !currentUid) return;
+  const hasCache = loadTestBankFromCache();
+  const lastSync = getTestBankLastSync();
+  // Margen de seguridad para no perder ninguna pregunta por pequeños desfases de reloj entre
+  // dispositivos: en vez de fijar la nueva marca justo en el instante de la consulta, la
+  // retrasamos unos segundos. En el peor caso se vuelve a pedir alguna pregunta ya conocida
+  // (no pasa nada, se sobrescribe con el mismo dato), pero nunca nos dejamos ninguna sin traer.
+  const SAFETY_MARGIN_MS = 5000;
+  const syncStart = Date.now();
   try{
-    const snap = await db.collection('users').doc(currentUid).collection('testQuestions').get();
-    const qs = [];
-    snap.forEach(doc=> qs.push(doc.data()));
-    state.testBank.questions = qs;
-    cacheTestBankLocally();
+    let snap;
+    if(hasCache && lastSync>0){
+      // Sincronización incremental: solo lo nuevo/modificado/borrado desde la última vez.
+      snap = await db.collection('users').doc(currentUid).collection('testQuestions')
+        .where('actualizado', '>', lastSync).get();
+    } else {
+      // Primera vez en este dispositivo (o venimos de una versión sin sincronización
+      // incremental): traemos el banco completo una única vez para tener una base fiable.
+      snap = await db.collection('users').doc(currentUid).collection('testQuestions').get();
+    }
+    if(!hasCache || lastSync===0 || !snap.empty){
+      const map = new Map((state.testBank.questions||[]).map(q=>[q.id, q]));
+      snap.forEach(doc=>{
+        const data = doc.data();
+        if(data.borrado){ map.delete(data.id || doc.id); }
+        else { map.set(data.id || doc.id, data); }
+      });
+      state.testBank.questions = Array.from(map.values());
+      cacheTestBankLocally();
+    }
+    setTestBankLastSync(syncStart - SAFETY_MARGIN_MS);
   }catch(e){
     console.error(e);
-    try{
-      const cached = localStorage.getItem(testBankCacheKey());
-      if(cached) state.testBank.questions = JSON.parse(cached);
-    }catch(e2){}
+    if(!hasCache){
+      try{
+        const cached = localStorage.getItem(testBankCacheKey());
+        if(cached) state.testBank.questions = JSON.parse(cached);
+      }catch(e2){}
+    }
   }
 }
 async function saveTestQuestionRemote(q){
+  q.actualizado = Date.now();
+  if(typeof q.borrado === 'undefined') q.borrado = false;
   cacheTestBankLocally();
   if(!firebaseOk || !currentUid) return;
   setSaveStatus('saving');
@@ -983,12 +1030,13 @@ async function saveTestQuestionRemote(q){
 }
 async function deleteTestQuestionRemote(id){
   cacheTestBankLocally();
+  const patch = {borrado:true, actualizado:Date.now()};
   if(!firebaseOk || !currentUid) return;
   try{
-    await db.collection('users').doc(currentUid).collection('testQuestions').doc(id).delete();
+    await db.collection('users').doc(currentUid).collection('testQuestions').doc(id).set(patch, {merge:true});
   }catch(e){
     console.error(e);
-    queueTestBankPending({type:'delete', id});
+    queueTestBankPending({type:'delete', id, data:patch});
     showToast('Sin conexión: se borró en este dispositivo y se sincronizará después.');
   }
 }
@@ -1000,7 +1048,7 @@ async function trySyncTestBankPending(){
   for(const op of arr){
     try{
       const ref = db.collection('users').doc(currentUid).collection('testQuestions').doc(op.id);
-      if(op.type==='delete') await ref.delete();
+      if(op.type==='delete') await ref.set(op.data || {borrado:true, actualizado:Date.now()}, {merge:true});
       else await ref.set(op.data);
     }catch(e){ remaining.push(op); }
   }
@@ -1086,6 +1134,8 @@ function newTestQuestionFromState(){
     explicacion: (testsAddState.explicacion||'').trim(),
     origen: testsAddState.origen || null,
     creado: Date.now(),
+    actualizado: Date.now(),
+    borrado: false,
     stats: {veces:0, aciertos:0}
   };
 }
@@ -1637,9 +1687,13 @@ function importBackup(e){
       const qs = Array.isArray(data.questions) ? data.questions : [];
       if(!qs.length){ showToast('El archivo no contiene preguntas.'); return; }
       if(!confirm('Esto SUSTITUIRÁ todas las preguntas guardadas por las del archivo. ¿Continuar?')) return;
+      const newIds = new Set(qs.map(q=>q.id));
+      const toRemove = (state.testBank.questions||[]).filter(q=>!newIds.has(q.id));
       state.testBank.questions = qs;
       cacheTestBankLocally();
+      for(const q of toRemove){ await deleteTestQuestionRemote(q.id); }
       for(const q of qs){ await saveTestQuestionRemote(q); }
+      setTestBankLastSync(Date.now());
       showToast('Copia importada ✓');
       renderTests();
     }catch(err){
