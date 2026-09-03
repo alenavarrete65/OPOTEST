@@ -108,6 +108,16 @@ futuro hacia una plataforma de test multiusuario.
   documento de respuestas, la marca con ⚠ como "sin respuesta correcta detectada" en vez de
   adivinar — esas quedan bloqueadas para el guardado rápido y solo se pueden guardar entrando a
   "Revisar / editar" y marcando tú la opción correcta a mano.
+- **Detección de posibles duplicados**: cada pregunta generada se compara automáticamente contra
+  las que ya tienes en el banco (de esa misma categoría) y contra las demás del propio lote
+  recién generado. Si el parecido es muy alto (mismo examen subido dos veces, preguntas
+  repetidas dentro del propio simulacro…) se marca con 🔁, se muestra con qué pregunta existente
+  coincide y el porcentaje de parecido, y se desmarca por defecto para que no se cuele sola con
+  el botón de guardado rápido. Puedes revisarla y guardarla igualmente si el parecido es casual.
+- **Borrador automático**: las preguntas generadas y aún sin guardar en el banco se guardan solo
+  en este dispositivo (no en Firebase) mientras las revisas, así que si cierras la pestaña o se
+  va la conexión a medio revisar, al volver a abrir "Generar con IA" las recuperas tal cual las
+  dejaste. El borrador desaparece en cuanto guardas o descartas todas las preguntas pendientes.
 
 ## Temario (temas y subtemas)
 
@@ -254,6 +264,12 @@ tener una base fiable; a partir de ahí, las aperturas son incrementales.
 - [x] Generación masiva de preguntas desde un PDF (temario, exámenes,
       simulacros) con pantalla de revisión antes de guardar (implementado:
       ver apartado "Generar preguntas desde un PDF" de arriba).
+- [x] Detección de posibles duplicados y borrador local al generar con IA
+      (implementado: ver apartado de arriba).
+- [ ] Trocear PDFs muy largos en varias llamadas a la IA para simulacros
+      grandes (pendiente, de momento todo va en una sola llamada).
+- [ ] Guardar el nombre del PDF de origen en cada pregunta generada, para
+      poder filtrar/limpiar el banco por examen más adelante (pendiente).
 - [ ] Ajustar el nº de preguntas de cada tema de Teoría al peso real que le da
       Jefatura de Enseñanza en el examen oficial (pendiente: Alejandro tiene
       que pasar esos porcentajes por tema).

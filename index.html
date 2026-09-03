@@ -1698,7 +1698,37 @@ let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:nul
 // candidatos: preguntas ya devueltas por la IA, pendientes de revisar/guardar (no están en el banco todavía).
 // file: PDF con las preguntas (temario, examen o simulacro). file2: opcional, PDF aparte con
 // las respuestas/plantilla de corrección, para cuando el examen no trae la solución incluida.
-let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[] };
+// draftChecked: si ya se intentó recuperar un borrador guardado de una sesión anterior.
+let testsGenState = { categoria:'conocimientos', cantidad:10, instrucciones:'', file:null, file2:null, generando:false, candidatos:[], draftChecked:false };
+
+/* ---- Borrador local de "Generar con IA": para no perder preguntas ya generadas y aún sin
+   guardar en el banco si se cierra la pestaña o falla algo. Se guarda solo en este dispositivo,
+   nunca en Firestore (son datos de trabajo, no del banco todavía). ---- */
+function genDraftKey(){ return 'opotest_gendraft_'+currentUid; }
+function persistGenDraft(){
+  try{
+    if(testsGenState.candidatos.length) localStorage.setItem(genDraftKey(), JSON.stringify(testsGenState.candidatos));
+    else localStorage.removeItem(genDraftKey());
+  }catch(e){}
+}
+function tryRestoreGenDraft(){
+  if(testsGenState.draftChecked) return;
+  testsGenState.draftChecked = true;
+  if(testsGenState.candidatos.length) return; // ya hay algo en memoria, no pisarlo
+  try{
+    const raw = localStorage.getItem(genDraftKey());
+    if(raw){
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length){
+        testsGenState.candidatos = arr;
+        showToast('Se recuperó un borrador con '+arr.length+' pregunta(s) generada(s) sin guardar ✓');
+      }
+    }
+  }catch(e){}
+}
+// Se guarda también al salir/cerrar, por si hay ediciones en curso (p. ej. un modal abierto)
+// que todavía no han provocado un renderTests().
+window.addEventListener('beforeunload', persistGenDraft);
 let testsQuiz = null; // {items:[...], corregido:false, instantaneo:bool, temporizador:{segundosPorPregunta,totalSegundos,restante}|null}
 let testsQuizTimerHandle = null; // id del setInterval del temporizador de test en curso
 let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:''};
@@ -1831,6 +1861,37 @@ Reglas: "correcta" es el índice (empezando en 0) de la opción correcta, dedúc
 // partir de una imagen, se sube un PDF (temario, examen ya corregido, simulacro…) y se le pide a
 // la IA que devuelva VARIAS preguntas a la vez, en el formato que corresponda según la categoría.
 function normTxt(s){ return (s||'').toString().trim().toLowerCase(); }
+// Similitud simple entre dos enunciados (Jaccard sobre palabras de 3+ letras, sin acentos ni
+// puntuación). No es perfecto, pero basta para avisar de duplicados casi literales o muy
+// parecidos, que es el caso típico al generar desde exámenes/simulacros repetidos.
+function wordSetForCompare(s){
+  const sinAcentos = normTxt(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const palabras = sinAcentos.replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>=3);
+  return new Set(palabras);
+}
+function similitudEnunciados(a, b){
+  const sa = wordSetForCompare(a), sb = wordSetForCompare(b);
+  if(!sa.size || !sb.size) return 0;
+  let interseccion = 0;
+  sa.forEach(w=>{ if(sb.has(w)) interseccion++; });
+  const union = sa.size + sb.size - interseccion;
+  return union ? interseccion/union : 0;
+}
+// Busca la pregunta más parecida ya guardada en el banco (misma categoría, no borrada).
+// Devuelve {score, enunciado} del mejor match, o null si nada supera el umbral mínimo.
+function buscarPosibleDuplicado(enunciado, categoria, extra){
+  let mejor = null;
+  const candidatas = (state.testBank.questions||[]).filter(q=>q.categoria===categoria && !q.borrado);
+  candidatas.forEach(q=>{
+    const score = similitudEnunciados(enunciado, q.enunciado);
+    if(score>=0.45 && (!mejor || score>mejor.score)) mejor = {score, enunciado:q.enunciado, origen:'banco'};
+  });
+  (extra||[]).forEach(otro=>{
+    const score = similitudEnunciados(enunciado, otro.enunciado);
+    if(score>=0.45 && (!mejor || score>mejor.score)) mejor = {score, enunciado:otro.enunciado, origen:'mismo lote'};
+  });
+  return mejor;
+}
 // Intenta encajar el nombre de tema/subtema que sugiere la IA con el temario real ya guardado en
 // la app (coincidencia exacta primero, luego por inclusión de texto). Si no hay match claro, null.
 function matchTemaByName(categoria, nombre){
@@ -1921,7 +1982,8 @@ async function callGeminiGenerarPreguntas(file, file2, categoria, cantidad, inst
 }
 function buildCandidatosFromParsed(parsed, categoria){
   const tipo = testTipoForCategoria(categoria);
-  return parsed.map((p,i)=>{
+  const nuevos = [];
+  parsed.forEach((p,i)=>{
     const temaNum = p.tema_sugerido ? matchTemaByName(categoria, p.tema_sugerido) : null;
     const subtemaNum = (temaNum && p.subtema_sugerido) ? matchSubtemaByName(categoria, temaNum, p.subtema_sugerido) : null;
     const c = { _uid:'gen_'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,6), incluir:true, categoria, tipo, tema:temaNum, subtema:subtemaNum, explicacion:(p.explicacion||'').trim() };
@@ -1938,8 +2000,18 @@ function buildCandidatosFromParsed(parsed, categoria){
       // corrección); se deja sin marcar a propósito, mejor que adivinar, y hay que revisarla a mano.
       c.correcta = (typeof p.correcta==='number') ? p.correcta : null;
     }
-    return c;
-  }).filter(c=>c.enunciado);
+    if(c.enunciado){
+      // Comprueba contra el banco YA guardado y contra las preguntas que llevamos procesadas de
+      // este mismo lote (dos preguntas repetidas dentro del propio PDF, algo que también pasa).
+      const dup = buscarPosibleDuplicado(c.enunciado, categoria, testsGenState.candidatos.concat(nuevos));
+      c.posibleDuplicado = dup;
+      // Si el parecido es muy alto, se desmarca por defecto para que el guardado rápido no la
+      // cuele sin que el admin la vea; si es solo "sospechoso", se deja marcada pero avisada.
+      if(dup && dup.score>=0.7) c.incluir = false;
+      nuevos.push(c);
+    }
+  });
+  return nuevos;
 }
 function buildQuestionFromCandidato(c){
   const q = {
@@ -2299,6 +2371,7 @@ function renderTestsAnadir(body){
 
 /* ---- Sub-vista: Generar con IA (desde PDF: temario, exámenes, simulacros...) ---- */
 function renderTestsGenerarIA(body){
+  tryRestoreGenDraft();
   const infoPanel = document.createElement('div'); infoPanel.className='test-panel';
   infoPanel.innerHTML = `<h4>Generar preguntas desde uno o dos PDF</h4>
     <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">
@@ -2397,7 +2470,12 @@ function renderTestsGenerarIA(body){
       const parsed = await callGeminiGenerarPreguntas(testsGenState.file, testsGenState.file2, testsGenState.categoria, testsGenState.cantidad, testsGenState.instrucciones.trim());
       const nuevos = buildCandidatosFromParsed(parsed, testsGenState.categoria);
       if(!nuevos.length){ showToast('La IA no devolvió ninguna pregunta válida. Prueba con otro PDF o revisa la clave API.'); }
-      else { testsGenState.candidatos = testsGenState.candidatos.concat(nuevos); showToast(nuevos.length+' pregunta(s) generada(s), revísalas abajo antes de guardar ✓'); }
+      else {
+        testsGenState.candidatos = testsGenState.candidatos.concat(nuevos);
+        persistGenDraft();
+        const dups = nuevos.filter(c=>c.posibleDuplicado).length;
+        showToast(nuevos.length+' pregunta(s) generada(s)'+(dups?(', '+dups+' parecen duplicadas'):'')+', revísalas abajo antes de guardar ✓');
+      }
     }catch(err){
       console.error(err);
       showToast(err.message || 'No se pudo generar preguntas desde el PDF.');
@@ -2430,6 +2508,7 @@ function renderTestsGenerarIA(body){
       });
       const idsGuardados = new Set(aGuardar.map(c=>c._uid));
       testsGenState.candidatos = testsGenState.candidatos.filter(c=>!idsGuardados.has(c._uid));
+      persistGenDraft();
       showToast(aGuardar.length+' pregunta(s) guardada(s) en el banco ✓');
       renderTests();
     };
@@ -2444,6 +2523,7 @@ function renderTestsGenerarIA(body){
     discardAllBtn.onclick = ()=>{
       if(!confirm('¿Descartar todas las preguntas generadas pendientes de revisar? No se guardará ninguna.')) return;
       testsGenState.candidatos = [];
+      persistGenDraft();
       renderTests();
     };
     bulkRow.appendChild(discardAllBtn);
@@ -2454,14 +2534,23 @@ function renderTestsGenerarIA(body){
       const card = document.createElement('div'); card.className='test-card';
       const head = document.createElement('div'); head.className='tc-head'; head.style.cursor='default';
       const check = document.createElement('input'); check.type='checkbox'; check.className='t-check'; check.checked = c.incluir; check.style.marginRight='8px';
-      check.onchange = ()=>{ c.incluir = check.checked; renderTests(); };
+      check.onchange = ()=>{ c.incluir = check.checked; persistGenDraft(); renderTests(); };
       const tag = questionTemaTag(c);
       const sinCorregirCard = c.tipo==='multiple' && (typeof c.correcta!=='number');
-      const span = document.createElement('span'); span.textContent = (sinCorregirCard ? '⚠ ' : '')+(c.enunciado||'(sin enunciado)').slice(0,140);
-      if(sinCorregirCard) span.style.color = 'var(--amber)';
+      const esDupCard = !!c.posibleDuplicado;
+      let prefijo = '';
+      if(sinCorregirCard) prefijo += '⚠ ';
+      if(esDupCard) prefijo += '🔁 ';
+      const span = document.createElement('span'); span.textContent = prefijo+(c.enunciado||'(sin enunciado)').slice(0,140);
+      if(sinCorregirCard || esDupCard) span.style.color = 'var(--amber)';
       const tagSpan = document.createElement('span'); tagSpan.className='tc-tag'; tagSpan.textContent = c.tema ? tag : (testCatLabel(c.categoria)+' · sin tema asignado');
       head.appendChild(check); head.appendChild(span); head.appendChild(tagSpan);
       card.appendChild(head);
+      if(esDupCard){
+        const dupNote = document.createElement('div'); dupNote.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--amber);padding:0 14px 6px;';
+        dupNote.textContent = 'Se parece un '+Math.round(c.posibleDuplicado.score*100)+'% a otra pregunta ('+c.posibleDuplicado.origen+'): "'+c.posibleDuplicado.enunciado.slice(0,90)+'"';
+        card.appendChild(dupNote);
+      }
       const actions = document.createElement('div'); actions.className='tc-actions';
       const editBtn = document.createElement('button'); editBtn.type='button'; editBtn.textContent='Revisar / editar';
       editBtn.onclick = ()=> openGenCandidatoModal(c);
@@ -2469,6 +2558,7 @@ function renderTestsGenerarIA(body){
       const delBtn = document.createElement('button'); delBtn.type='button'; delBtn.textContent='Descartar';
       delBtn.onclick = ()=>{
         testsGenState.candidatos = testsGenState.candidatos.filter(x=>x._uid!==c._uid);
+        persistGenDraft();
         renderTests();
       };
       actions.appendChild(delBtn);
@@ -2490,6 +2580,13 @@ function openGenCandidatoModal(c){
   const titleEl = document.createElement('h3'); titleEl.style.cssText='font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0 0 12px;';
   titleEl.textContent = 'Revisar pregunta generada — '+testCatLabel(c.categoria);
   box.appendChild(titleEl);
+
+  if(c.posibleDuplicado){
+    const dupBox = document.createElement('div');
+    dupBox.style.cssText = 'border:1px solid var(--amber-dim);background:var(--bg-panel-2);border-radius:2px;padding:8px 10px;margin-bottom:12px;font-family:var(--font-mono);font-size:11px;color:var(--amber);line-height:1.5;';
+    dupBox.textContent = '🔁 Se parece un '+Math.round(c.posibleDuplicado.score*100)+'% a una pregunta ya existente ('+c.posibleDuplicado.origen+'): "'+c.posibleDuplicado.enunciado+'"';
+    box.appendChild(dupBox);
+  }
 
   const temaField = document.createElement('div'); temaField.className='test-field';
   const temaMax = testCatTemas(c.categoria);
@@ -2602,6 +2699,7 @@ function openGenCandidatoModal(c){
     state.testBank.questions.push(q);
     saveTestQuestionRemote(q);
     testsGenState.candidatos = testsGenState.candidatos.filter(x=>x._uid!==c._uid);
+    persistGenDraft();
     showToast('Pregunta guardada ✓');
     document.body.removeChild(overlay);
     renderTests();
@@ -2611,13 +2709,14 @@ function openGenCandidatoModal(c){
   discardBtn.textContent = 'Descartar';
   discardBtn.onclick = ()=>{
     testsGenState.candidatos = testsGenState.candidatos.filter(x=>x._uid!==c._uid);
+    persistGenDraft();
     document.body.removeChild(overlay);
     renderTests();
   };
   btnRow.appendChild(discardBtn);
   const closeBtn = document.createElement('button'); closeBtn.type='button'; closeBtn.className='btn small ghost';
   closeBtn.textContent = 'Cerrar sin guardar cambios';
-  closeBtn.onclick = ()=> document.body.removeChild(overlay);
+  closeBtn.onclick = ()=>{ persistGenDraft(); document.body.removeChild(overlay); };
   btnRow.appendChild(closeBtn);
   box.appendChild(btnRow);
 
