@@ -839,22 +839,12 @@
     </div>
   </div>
 
-  <!-- ===================== PANTALLA DE ESPERA (cuenta creada, sin aprobar aún) ===================== -->
-  <div id="pendingScreen" style="display:none;">
-    <div class="test-panel" style="max-width:420px;margin:40px auto;text-align:center;">
-      <h4>Cuenta pendiente de aprobación</h4>
-      <p style="font-size:13px;color:var(--cream-dim);margin:0 0 14px;">Tu cuenta se ha creado correctamente, pero el administrador todavía no te ha dado acceso. En cuanto lo haga, podrás entrar con este mismo correo y contraseña.</p>
-      <button type="button" class="btn small ghost" id="pendingRefreshBtn">Comprobar de nuevo</button>
-    </div>
-  </div>
-
-  <!-- ===================== APP PRINCIPAL (solo visible autenticado y aprobado) ===================== -->
+  <!-- ===================== APP PRINCIPAL (solo visible autenticado) ===================== -->
   <div id="appMain" style="display:none;">
     <div class="view active" id="view-tests">
       <div id="testsHost"></div>
     </div>
 
-    <div class="empty-state" id="adminBox" style="display:none;text-align:left;margin-top:24px;"></div>
     <div class="empty-state" id="backupBox" style="text-align:left;margin-top:24px;"></div>
   </div>
 </div>
@@ -901,6 +891,12 @@ const FIREBASE_CONFIG = {
   appId: "1:579428029686:web:b7cd434eae7b71ee7808d7"
 };
 
+// UID (Firebase Authentication > pestaña Users > columna "User UID") de la cuenta
+// administradora. Esa cuenta es la única que puede añadir/editar/borrar preguntas;
+// cualquier otra cuenta que inicie sesión solo puede practicar con este banco, en
+// modo solo lectura. Debe coincidir EXACTAMENTE con el UID escrito en firestore.rules.
+const ADMIN_UID = "teAS34tRMVeWGi6qJ0EW59YVV1W2";
+
 let db = null;
 let auth = null;
 let firebaseOk = false;
@@ -916,6 +912,11 @@ try{
 /* ===================== ESTADO ===================== */
 let state = { testBank:{questions:[]} };
 let currentUid = null;
+let isAdmin = false;
+// El banco de preguntas vive siempre en users/{ADMIN_UID}/testQuestions: la cuenta
+// admin lee y escribe ahí (es su propio banco); el resto de cuentas solo lo leen
+// (para practicar), nunca escriben ahí ni tienen banco propio.
+function bankOwnerUid(){ return ADMIN_UID; }
 
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -990,12 +991,12 @@ async function loadTestBank(){
     let snap;
     if(hasCache && lastSync>0){
       // Sincronización incremental: solo lo nuevo/modificado/borrado desde la última vez.
-      snap = await db.collection('users').doc(currentUid).collection('testQuestions')
+      snap = await db.collection('users').doc(bankOwnerUid()).collection('testQuestions')
         .where('actualizado', '>', lastSync).get();
     } else {
       // Primera vez en este dispositivo (o venimos de una versión sin sincronización
       // incremental): traemos el banco completo una única vez para tener una base fiable.
-      snap = await db.collection('users').doc(currentUid).collection('testQuestions').get();
+      snap = await db.collection('users').doc(bankOwnerUid()).collection('testQuestions').get();
     }
     if(!hasCache || lastSync===0 || !snap.empty){
       const map = new Map((state.testBank.questions||[]).map(q=>[q.id, q]));
@@ -1019,13 +1020,14 @@ async function loadTestBank(){
   }
 }
 async function saveTestQuestionRemote(q){
+  if(!isAdmin) return; // los usuarios no-admin no pueden modificar el banco, solo practicar
   q.actualizado = Date.now();
   if(typeof q.borrado === 'undefined') q.borrado = false;
   cacheTestBankLocally();
   if(!firebaseOk || !currentUid) return;
   setSaveStatus('saving');
   try{
-    await db.collection('users').doc(currentUid).collection('testQuestions').doc(q.id).set(q);
+    await db.collection('users').doc(bankOwnerUid()).collection('testQuestions').doc(q.id).set(q);
     setSaveStatus('saved');
     setTimeout(()=>{
       const el = document.getElementById('saveIndicator');
@@ -1039,11 +1041,12 @@ async function saveTestQuestionRemote(q){
   }
 }
 async function deleteTestQuestionRemote(id){
+  if(!isAdmin) return; // los usuarios no-admin no pueden modificar el banco, solo practicar
   cacheTestBankLocally();
   const patch = {borrado:true, actualizado:Date.now()};
   if(!firebaseOk || !currentUid) return;
   try{
-    await db.collection('users').doc(currentUid).collection('testQuestions').doc(id).set(patch, {merge:true});
+    await db.collection('users').doc(bankOwnerUid()).collection('testQuestions').doc(id).set(patch, {merge:true});
   }catch(e){
     console.error(e);
     queueTestBankPending({type:'delete', id, data:patch});
@@ -1051,13 +1054,13 @@ async function deleteTestQuestionRemote(id){
   }
 }
 async function trySyncTestBankPending(){
-  if(!firebaseOk || !currentUid || !navigator.onLine) return;
+  if(!isAdmin || !firebaseOk || !currentUid || !navigator.onLine) return;
   const arr = getTestBankPending();
   if(!arr.length) return;
   const remaining = [];
   for(const op of arr){
     try{
-      const ref = db.collection('users').doc(currentUid).collection('testQuestions').doc(op.id);
+      const ref = db.collection('users').doc(bankOwnerUid()).collection('testQuestions').doc(op.id);
       if(op.type==='delete') await ref.set(op.data || {borrado:true, actualizado:Date.now()}, {merge:true});
       else await ref.set(op.data);
     }catch(e){ remaining.push(op); }
@@ -1157,8 +1160,14 @@ function renderTests(){
   const host = document.getElementById('testsHost');
   if(!host) return;
   host.innerHTML = '';
+  // Los usuarios no-admin solo pueden practicar: no ven el banco de preguntas (verlo,
+  // editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
+  if(!isAdmin) testsActiveSubtab = 'practicar';
+  const tabs = isAdmin
+    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir desde foto']]
+    : [['practicar','Practicar']];
   const nav = document.createElement('div'); nav.className='test-subnav';
-  [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir desde foto']].forEach(([key,label])=>{
+  tabs.forEach(([key,label])=>{
     const b = document.createElement('button'); b.type='button'; b.textContent=label;
     if(testsActiveSubtab===key) b.classList.add('active');
     b.onclick = ()=>{ testsActiveSubtab = key; if(key!=='practicar') testsQuiz=null; renderTests(); };
@@ -1665,16 +1674,20 @@ function renderTestsQuizUI(body){
 function renderBackupBox(){
   const host = document.getElementById('backupBox');
   if(!host) return;
+  // Importar sustituye el banco de preguntas, así que es una acción de gestión: solo
+  // para el admin. Exportar es solo lectura (descarga lo que se ve), así que se deja
+  // también para no-admin por si quieren guardarse una copia de con qué practican.
   host.innerHTML = `
     <div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Copia de seguridad</div>
     <div style="font-size:12px;color:var(--cream-dim);margin-bottom:10px;">Independiente de Firebase: te sirve si algún día pierdes el acceso, se borra el proyecto, o quieres un respaldo local de tu banco de preguntas.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn ghost small" id="exportBackupBtn">Exportar copia (JSON)</button>
-      <label class="btn ghost small" style="cursor:pointer;">Importar copia (JSON)<input type="file" accept="application/json" id="importBackupInput" style="display:none;"></label>
+      ${isAdmin ? '<label class="btn ghost small" style="cursor:pointer;">Importar copia (JSON)<input type="file" accept="application/json" id="importBackupInput" style="display:none;"></label>' : ''}
     </div>
   `;
   document.getElementById('exportBackupBtn').onclick = exportBackup;
-  document.getElementById('importBackupInput').onchange = importBackup;
+  const importInput = document.getElementById('importBackupInput');
+  if(importInput) importInput.onchange = importBackup;
 }
 function exportBackup(){
   const payload = {app:'opotest', version:1, exportedAt:new Date().toISOString(), questions: state.testBank.questions};
@@ -1717,10 +1730,7 @@ function importBackup(e){
 
 /* ===================== AUTENTICACIÓN (Firebase Auth: correo/contraseña) ===================== */
 let authMode = 'login'; // 'login' | 'register'
-let userProfile = null; // datos de users/{uid}: {email, aprobado, esAdmin, creadoEn}
-let isAdmin = false;
 const authScreenEl = document.getElementById('authScreen');
-const pendingScreenEl = document.getElementById('pendingScreen');
 const appMainEl = document.getElementById('appMain');
 const logoutBtnEl = document.getElementById('logoutBtn');
 const userEmailLabelEl = document.getElementById('userEmailLabel');
@@ -1731,7 +1741,6 @@ const authErrorEl = document.getElementById('authError');
 const authSubmitBtnEl = document.getElementById('authSubmitBtn');
 const authToggleModeBtnEl = document.getElementById('authToggleModeBtn');
 const authForgotBtnEl = document.getElementById('authForgotBtn');
-const pendingRefreshBtnEl = document.getElementById('pendingRefreshBtn');
 
 function showAuthError(msg){
   authErrorEl.textContent = msg;
@@ -1764,18 +1773,8 @@ authSubmitBtnEl.onclick = async ()=>{
   authSubmitBtnEl.disabled = true;
   showAuthError('');
   try{
-    if(authMode==='login'){
-      await auth.signInWithEmailAndPassword(email, password);
-    } else {
-      const cred = await auth.createUserWithEmailAndPassword(email, password);
-      // Perfil de acceso: se crea sin aprobar; el administrador debe darle acceso.
-      await db.collection('users').doc(cred.user.uid).set({
-        email: email,
-        aprobado: false,
-        esAdmin: false,
-        creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    }
+    if(authMode==='login') await auth.signInWithEmailAndPassword(email, password);
+    else await auth.createUserWithEmailAndPassword(email, password);
   }catch(e){
     console.error(e);
     showAuthError(traduceErrorAuth(e.code));
@@ -1795,67 +1794,23 @@ authForgotBtnEl.onclick = async ()=>{
   }
 };
 logoutBtnEl.onclick = ()=>{ auth.signOut(); };
-if(pendingRefreshBtnEl) pendingRefreshBtnEl.onclick = ()=>{ if(auth.currentUser) handleSignedInUser(auth.currentUser); };
-
-/* ---- Perfil de acceso (users/{uid}): aprobado / esAdmin ---- */
-async function fetchOrCreateUserProfile(user){
-  const ref = db.collection('users').doc(user.uid);
-  let snap;
-  try{
-    snap = await ref.get();
-  }catch(e){
-    console.error(e);
-    return null;
-  }
-  if(snap.exists) return snap.data();
-  // Perfil no existente todavía (p.ej. primera vez que entra tras instalar esta
-  // función, o cuenta creada antes de tenerla): se crea sin aprobar. Si esta es
-  // tu propia cuenta de administrador, ve a la consola de Firebase → Firestore →
-  // users/{tu uid} y cambia "aprobado" y "esAdmin" a true a mano (ver README.md).
-  try{
-    await ref.set({
-      email: user.email || '',
-      aprobado: false,
-      esAdmin: false,
-      creadoEn: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  }catch(e){ console.error(e); }
-  return { email: user.email || '', aprobado: false, esAdmin: false };
-}
-
-async function handleSignedInUser(user){
-  currentUid = user.uid;
-  userProfile = await fetchOrCreateUserProfile(user);
-  isAdmin = !!(userProfile && userProfile.esAdmin);
-  const aprobado = !!(userProfile && userProfile.aprobado);
-  logoutBtnEl.style.display = 'inline-block';
-  userEmailLabelEl.textContent = user.email || '';
-
-  if(!aprobado && !isAdmin){
-    authScreenEl.style.display = 'none';
-    appMainEl.style.display = 'none';
-    pendingScreenEl.style.display = 'block';
-    return;
-  }
-  pendingScreenEl.style.display = 'none';
-  authScreenEl.style.display = 'none';
-  appMainEl.style.display = 'block';
-  await loadTestBank();
-  renderTests();
-  renderBackupBox();
-  if(isAdmin) renderAdminPanel(); else { const box=document.getElementById('adminBox'); if(box){box.style.display='none'; box.innerHTML='';} }
-  trySyncTestBankPending();
-}
 
 if(firebaseOk){
   auth.onAuthStateChanged(async (user)=>{
     if(user){
-      await handleSignedInUser(user);
+      currentUid = user.uid;
+      isAdmin = (currentUid === ADMIN_UID);
+      authScreenEl.style.display = 'none';
+      appMainEl.style.display = 'block';
+      logoutBtnEl.style.display = 'inline-block';
+      userEmailLabelEl.textContent = user.email || '';
+      await loadTestBank();
+      renderTests();
+      renderBackupBox();
+      trySyncTestBankPending();
     } else {
       currentUid = null;
-      userProfile = null;
       isAdmin = false;
-      pendingScreenEl.style.display = 'none';
       authScreenEl.style.display = 'block';
       appMainEl.style.display = 'none';
       logoutBtnEl.style.display = 'none';
@@ -1864,90 +1819,6 @@ if(firebaseOk){
   });
 } else {
   showAuthError('Falta configurar Firebase: edita FIREBASE_CONFIG en index.html con los datos de tu proyecto (ver README.md).');
-}
-
-/* ===================== PANEL DE ADMINISTRACIÓN (aprobar cuentas nuevas) ===================== */
-async function renderAdminPanel(){
-  const host = document.getElementById('adminBox');
-  if(!host || !isAdmin) return;
-  host.style.display = 'block';
-  const titleHtml = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Panel de administración</div>';
-  host.innerHTML = titleHtml + '<div style="font-size:12px;color:var(--cream-dim);">Cargando cuentas…</div>';
-
-  let snap;
-  try{
-    snap = await db.collection('users').get();
-  }catch(e){
-    console.error(e);
-    host.innerHTML = titleHtml + '<div style="font-size:12px;color:var(--red-text);">No se pudieron cargar las cuentas.</div>';
-    return;
-  }
-  const cuentas = [];
-  snap.forEach((doc)=> cuentas.push(Object.assign({ uid: doc.id }, doc.data())));
-  cuentas.sort((a,b)=> (a.email||'').localeCompare(b.email||''));
-  const pendientes = cuentas.filter((c)=> !c.aprobado);
-  const aprobadas = cuentas.filter((c)=> c.aprobado);
-
-  host.innerHTML = titleHtml +
-    '<div style="font-size:12px;color:var(--cream-dim);margin-bottom:10px;">Aprueba aquí las cuentas nuevas que se registren para darles acceso a la app.</div>' +
-    '<div id="adminPendList"></div><div id="adminOkList"></div>';
-
-  function filaCuenta(c, esPendiente){
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);';
-    const info = document.createElement('div');
-    info.style.cssText = 'font-size:12px;word-break:break-all;';
-    info.textContent = c.email || '(sin correo)';
-    if(c.esAdmin){
-      const tag = document.createElement('span');
-      tag.textContent = 'ADMIN';
-      tag.style.cssText = 'margin-left:6px;font-family:var(--font-mono);font-size:9px;font-weight:700;background:var(--green);color:#12241a;border-radius:8px;padding:1px 5px;';
-      info.appendChild(tag);
-    }
-    row.appendChild(info);
-    if(c.uid !== currentUid){
-      const btn = document.createElement('button');
-      btn.className = esPendiente ? 'btn small' : 'btn small ghost';
-      btn.textContent = esPendiente ? 'Aprobar' : 'Revocar acceso';
-      btn.onclick = async ()=>{
-        btn.disabled = true;
-        try{
-          await db.collection('users').doc(c.uid).update({ aprobado: esPendiente });
-          showToast(esPendiente ? 'Cuenta aprobada ✓' : 'Acceso revocado');
-          renderAdminPanel();
-        }catch(err){
-          console.error(err);
-          showToast('No se pudo actualizar la cuenta.');
-          btn.disabled = false;
-        }
-      };
-      row.appendChild(btn);
-    }
-    return row;
-  }
-
-  const pendHost = document.getElementById('adminPendList');
-  if(pendientes.length){
-    const label = document.createElement('div');
-    label.textContent = 'Pendientes (' + pendientes.length + ')';
-    label.style.cssText = 'font-size:11px;color:var(--red-text);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px;';
-    pendHost.appendChild(label);
-    pendientes.forEach((c)=> pendHost.appendChild(filaCuenta(c, true)));
-  } else {
-    const none = document.createElement('div');
-    none.textContent = 'No hay cuentas pendientes.';
-    none.style.cssText = 'font-size:12px;color:var(--cream-dim);';
-    pendHost.appendChild(none);
-  }
-
-  const okHost = document.getElementById('adminOkList');
-  if(aprobadas.length){
-    const label = document.createElement('div');
-    label.textContent = 'Con acceso (' + aprobadas.length + ')';
-    label.style.cssText = 'font-size:11px;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px;';
-    okHost.appendChild(label);
-    aprobadas.forEach((c)=> okHost.appendChild(filaCuenta(c, false)));
-  }
 }
 
 /* ===================== PWA: registro del service worker ===================== */

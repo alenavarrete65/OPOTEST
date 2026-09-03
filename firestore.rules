@@ -2,43 +2,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Perfil de cada usuario (users/{uid}): guarda su correo, si ya ha sido
-    // aprobado por el administrador ("aprobado") y si es la cuenta admin
-    // ("esAdmin"). Se usa para controlar quién puede usar el resto de la app.
+    // UID de la cuenta admin (Authentication > Users > columna "User UID"). Debe ser
+    // EXACTAMENTE el mismo valor que ADMIN_UID en index.html.
     function esAdmin() {
-      return request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.esAdmin == true;
-    }
-    function estaAprobado(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid)) &&
-        get(/databases/$(database)/documents/users/$(uid)).data.aprobado == true;
+      return request.auth != null && request.auth.uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
     }
 
-    match /users/{uid} {
-      // Cada usuario puede leer su propio perfil (para saber si ya tiene acceso).
-      // El administrador puede leer y listar todos los perfiles, para ver quién
-      // se ha registrado y darle acceso.
-      allow read: if request.auth != null && (request.auth.uid == uid || esAdmin());
-
-      // Al registrarse, cada usuario crea su propio perfil, pero SIEMPRE con
-      // aprobado:false y esAdmin:false: nadie puede auto-aprobarse ni
-      // auto-nombrarse administrador desde la app.
-      allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.aprobado == false
-        && request.resource.data.esAdmin == false;
-
-      // Solo el administrador puede aprobar/revocar cuentas o dar el rol admin.
-      allow update, delete: if esAdmin();
-
-      // Banco de preguntas de cada usuario: solo su dueño, y solo si ya está
-      // aprobado por el administrador.
-      match /testQuestions/{questionId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid && estaAprobado(uid);
-      }
+    // Banco de preguntas único, guardado en users/{ADMIN_UID}/testQuestions/{idPregunta}.
+    // - La cuenta admin puede leer y escribir (crear, editar, borrar preguntas).
+    // - Cualquier otra cuenta autenticada solo puede LEER (practicar), nunca escribir.
+    match /users/{uid}/testQuestions/{questionId} {
+      allow read: if request.auth != null && uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
+      allow write: if esAdmin() && uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
     }
 
-    // Cualquier otra ruta queda bloqueada por defecto.
+    // Cualquier otra ruta (incluido el banco propio de cuentas no-admin, que ya no
+    // se usa) queda bloqueada por defecto.
     match /{document=**} {
       allow read, write: if false;
     }
