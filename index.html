@@ -725,6 +725,19 @@
   .test-quiz-q .tq-explic{font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
   .test-score-banner{text-align:center;padding:16px;background:var(--bg-panel-2);border:1px solid var(--amber-dim);border-radius:3px;margin-bottom:16px;}
   .test-score-banner .num{font-family:var(--font-display);font-size:32px;color:var(--amber);}
+  .tq-images{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+  .tq-images img{max-width:220px;max-height:220px;border:1px solid var(--line);border-radius:2px;object-fit:contain;background:#fff;}
+  .tq-word-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 4px;border-bottom:1px dashed var(--line);}
+  .tq-word-row:last-child{border-bottom:none;}
+  .tq-word-text{flex:1;min-width:80px;font-weight:600;}
+  .tq-word-btn{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.04em;background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream-dim);padding:6px 10px;border-radius:2px;cursor:pointer;}
+  .tq-word-btn.selected{border-color:var(--amber);color:var(--amber);}
+  .tq-word-btn.correcta{border-color:var(--green);color:var(--green);background:rgba(111,154,106,0.18);}
+  .tq-word-btn.incorrecta-elegida{border-color:var(--red);color:var(--red-text);background:rgba(182,84,63,0.18);}
+  .tq-word-btn:disabled{cursor:default;opacity:0.85;}
+  .tq-palabra{display:inline-block;font-family:var(--font-mono);font-size:12px;padding:4px 8px;border-radius:2px;margin:0 6px 6px 0;border:1px solid var(--line);}
+  .tq-palabra.bien{color:var(--green);border-color:var(--green);}
+  .tq-palabra.mal{color:var(--red-text);border-color:var(--red);}
   .test-empty{font-family:var(--font-mono);font-size:12px;color:var(--muted);padding:10px 0;}
 
   /* ---- Selector de temas/subtemas (checkboxes) para configurar un test ---- */
@@ -1538,13 +1551,84 @@ async function saveTemarioRemote(){
 
 
 let testsActiveSubtab = 'practicar';
-let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'' };
+function emptyOrtoPalabras(){ return [0,1,2,3].map(()=>({texto:'', incorrecta:false})); }
+let testsAddState = { files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoPalabras: emptyOrtoPalabras(), gramaticaCorrecta:true };
 let testsQuiz = null; // {items:[...], corregido:false, instantaneo:bool, temporizador:{segundosPorPregunta,totalSegundos,restante}|null}
 let testsQuizTimerHandle = null; // id del setInterval del temporizador de test en curso
 let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:''};
 // Selección de temas/subtemas para el test que se está configurando en "Practicar":
 // parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
-let testsPickState = { categoria:'', parciales:new Map() };
+let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio' }; // orden: 'aleatorio' | 'ordenado'
+
+/* ===================== TIPOS DE PREGUNTA ===================== */
+// El tipo de pregunta viene determinado por la categoría: ortografía y gramática usan un
+// formato de juicio bien/mal en vez de opción múltiple. qTipo() es tolerante con preguntas
+// antiguas guardadas antes de que existiera el campo "tipo".
+function testTipoForCategoria(cat){
+  if(cat==='ortografia') return 'ortografia';
+  if(cat==='gramatica') return 'gramatica';
+  return 'multiple';
+}
+function qTipo(q){ return q.tipo || testTipoForCategoria(q.categoria); }
+
+/* ===================== IMÁGENES DE ENUNCIADO (comprimidas a JPEG antes de guardarlas) ===================== */
+// Se usan sobre todo en Psicotécnicos, donde el enunciado es en sí mismo una imagen. Se
+// redimensionan/comprimen en el propio dispositivo para no disparar el tamaño de los
+// documentos de Firestore (límite de 1 MB por documento).
+function fileToCompressedDataURL(file, maxDim, quality){
+  maxDim = maxDim || 1000; quality = quality || 0.72;
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      let width = img.naturalWidth, height = img.naturalHeight;
+      if(width>maxDim || height>maxDim){
+        const ratio = Math.min(maxDim/width, maxDim/height);
+        width = Math.round(width*ratio); height = Math.round(height*ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('No se pudo procesar la imagen')); };
+    img.src = url;
+  });
+}
+// Widget reutilizable de subida de imágenes: muta imagesArr in-place y llama a repaint() al cambiar.
+function createImageUploaderField(imagesArr, repaint, labelText){
+  const wrap = document.createElement('div'); wrap.className='test-field';
+  wrap.innerHTML = '<label>'+(labelText||'Imágenes del enunciado (opcional)')+'</label>';
+  const fileInp = document.createElement('input'); fileInp.type='file'; fileInp.accept='image/*'; fileInp.multiple=true;
+  fileInp.onchange = async (e)=>{
+    const files = Array.from(e.target.files||[]);
+    fileInp.disabled = true;
+    for(const f of files){
+      try{ const durl = await fileToCompressedDataURL(f); imagesArr.push(durl); }
+      catch(err){ console.error(err); showToast('No se pudo procesar una de las imágenes.'); }
+    }
+    fileInp.disabled = false;
+    fileInp.value = '';
+    repaint();
+  };
+  wrap.appendChild(fileInp);
+  if(imagesArr.length){
+    const thumbs = document.createElement('div'); thumbs.className='test-thumbs'; thumbs.style.marginTop='8px';
+    imagesArr.forEach((durl,i)=>{
+      const t = document.createElement('div'); t.className='thumb';
+      const img = document.createElement('img'); img.src = durl;
+      t.appendChild(img);
+      const del = document.createElement('button'); del.type='button'; del.textContent='✕';
+      del.onclick = ()=>{ imagesArr.splice(i,1); repaint(); };
+      t.appendChild(del);
+      thumbs.appendChild(t);
+    });
+    wrap.appendChild(thumbs);
+  }
+  return wrap;
+}
 
 /* ===================== IA (Google Gemini) para transcribir fotos ===================== */
 function getGeminiKey(){ try{ return localStorage.getItem('opotest-gemini-key') || ''; }catch(e){ return ''; } }
@@ -1597,25 +1681,39 @@ Reglas: "correcta" es el índice (empezando en 0) de la opción correcta, dedúc
 }
 
 function newTestQuestionFromState(){
-  const opciones = testsAddState.opciones.map(o=>o.trim()).filter(o=>o.length);
-  return {
+  const tipo = testTipoForCategoria(testsAddState.categoria);
+  const base = {
     id: 'q_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
     categoria: testsAddState.categoria,
     tema: testsAddState.tema,
     subtema: testsAddState.subtema,
-    enunciado: testsAddState.enunciado.trim(),
-    opciones,
-    correcta: testsAddState.correcta,
-    explicacion: (testsAddState.explicacion||'').trim(),
+    tipo,
     origen: testsAddState.origen || null,
+    explicacion: (testsAddState.explicacion||'').trim(),
     creado: Date.now(),
     actualizado: Date.now(),
     borrado: false,
     stats: {veces:0, aciertos:0}
   };
+  if(tipo==='ortografia'){
+    base.enunciado = testsAddState.enunciado.trim();
+    base.palabras = testsAddState.ortoPalabras.map(p=>({texto:(p.texto||'').trim(), incorrecta:!!p.incorrecta}));
+    return base;
+  }
+  if(tipo==='gramatica'){
+    base.enunciado = testsAddState.enunciado.trim();
+    base.correcta = !!testsAddState.gramaticaCorrecta;
+    return base;
+  }
+  const opciones = testsAddState.opciones.map(o=>o.trim()).filter(o=>o.length);
+  base.enunciado = testsAddState.enunciado.trim();
+  base.opciones = opciones;
+  base.correcta = testsAddState.correcta;
+  base.imagenes = testsAddState.imagenes.slice();
+  return base;
 }
 function resetTestsAddState(){
-  testsAddState = { files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'' };
+  testsAddState = { files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoPalabras: emptyOrtoPalabras(), gramaticaCorrecta:true };
 }
 
 function renderTests(){
@@ -1666,68 +1764,71 @@ function renderTestsAnadir(body){
   modelField.appendChild(modelInput);
   row.appendChild(modelField);
   apiPanel.appendChild(row);
-  body.appendChild(apiPanel);
+  const tipoActual = testTipoForCategoria(testsAddState.categoria);
+  if(tipoActual==='multiple') body.appendChild(apiPanel);
 
-  const panel = document.createElement('div'); panel.className='test-panel';
-  panel.innerHTML = `<h4>1. Sube la(s) foto(s) de la pregunta</h4>
-    <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">
-      Puedes subir varias imágenes si la pregunta y su corrección/retroalimentación están en capturas distintas: todas se tratan como UNA sola pregunta.
-    </p>`;
-  const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*'; fileInput.multiple = true;
-  fileInput.onchange = (e)=>{
-    testsAddState.files = Array.from(e.target.files||[]);
-    paintThumbs();
-  };
-  panel.appendChild(fileInput);
-  const thumbs = document.createElement('div'); thumbs.className='test-thumbs';
-  panel.appendChild(thumbs);
-  function paintThumbs(){
-    thumbs.innerHTML = '';
-    testsAddState.files.forEach((f,i)=>{
-      const t = document.createElement('div'); t.className='thumb';
-      const img = document.createElement('img'); img.src = URL.createObjectURL(f);
-      t.appendChild(img);
-      const del = document.createElement('button'); del.type='button'; del.textContent='✕';
-      del.onclick = ()=>{ testsAddState.files.splice(i,1); paintThumbs(); };
-      t.appendChild(del);
-      thumbs.appendChild(t);
-    });
-  }
-  const btnRow = document.createElement('div'); btnRow.style.marginTop='10px'; btnRow.style.display='flex'; btnRow.style.gap='8px'; btnRow.style.flexWrap='wrap';
-  const transcribeBtn = document.createElement('button'); transcribeBtn.type='button'; transcribeBtn.className='btn small';
-  transcribeBtn.textContent='Transcribir con IA';
-  transcribeBtn.onclick = async ()=>{
-    if(!testsAddState.files.length){ showToast('Selecciona al menos una foto.'); return; }
-    transcribeBtn.disabled = true; transcribeBtn.textContent = 'Transcribiendo…';
-    try{
-      const parsed = await callClaudeVisionTranscribe(testsAddState.files);
-      testsAddState.enunciado = parsed.enunciado || '';
-      testsAddState.opciones = (Array.isArray(parsed.opciones) && parsed.opciones.length) ? parsed.opciones : ['',''];
-      testsAddState.correcta = (typeof parsed.correcta === 'number') ? parsed.correcta : 0;
-      testsAddState.explicacion = parsed.explicacion || '';
-      if(parsed.categoria_sugerida && TEST_CATEGORIAS.some(c=>c.key===parsed.categoria_sugerida)) testsAddState.categoria = parsed.categoria_sugerida;
-      testsAddState.tema = (typeof parsed.tema_sugerido === 'number') ? parsed.tema_sugerido : null;
-      testsAddState.subtema = null;
-      showToast('Transcripción lista, revísala abajo ✓');
-      renderTests();
-    }catch(err){
-      console.error(err);
-      showToast(err.message || 'No se pudo transcribir la imagen.');
-    }finally{
-      transcribeBtn.disabled = false; transcribeBtn.textContent = 'Transcribir con IA';
+  if(tipoActual==='multiple'){
+    const panel = document.createElement('div'); panel.className='test-panel';
+    panel.innerHTML = `<h4>1. Sube la(s) foto(s) de la pregunta</h4>
+      <p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">
+        Puedes subir varias imágenes si la pregunta y su corrección/retroalimentación están en capturas distintas: todas se tratan como UNA sola pregunta.
+      </p>`;
+    const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='image/*'; fileInput.multiple = true;
+    fileInput.onchange = (e)=>{
+      testsAddState.files = Array.from(e.target.files||[]);
+      paintThumbs();
+    };
+    panel.appendChild(fileInput);
+    const thumbs = document.createElement('div'); thumbs.className='test-thumbs';
+    panel.appendChild(thumbs);
+    function paintThumbs(){
+      thumbs.innerHTML = '';
+      testsAddState.files.forEach((f,i)=>{
+        const t = document.createElement('div'); t.className='thumb';
+        const img = document.createElement('img'); img.src = URL.createObjectURL(f);
+        t.appendChild(img);
+        const del = document.createElement('button'); del.type='button'; del.textContent='✕';
+        del.onclick = ()=>{ testsAddState.files.splice(i,1); paintThumbs(); };
+        t.appendChild(del);
+        thumbs.appendChild(t);
+      });
     }
-  };
-  btnRow.appendChild(transcribeBtn);
-  const manualBtn = document.createElement('button'); manualBtn.type='button'; manualBtn.className='btn small ghost';
-  manualBtn.textContent = 'Escribir manualmente (sin IA)';
-  manualBtn.onclick = ()=>{ if(!testsAddState.enunciado) testsAddState.opciones = ['','']; renderTests(); document.getElementById('testReviewAnchor')?.scrollIntoView({behavior:'smooth'}); };
-  btnRow.appendChild(manualBtn);
-  panel.appendChild(btnRow);
-  body.appendChild(panel);
-  paintThumbs();
+    const btnRow = document.createElement('div'); btnRow.style.marginTop='10px'; btnRow.style.display='flex'; btnRow.style.gap='8px'; btnRow.style.flexWrap='wrap';
+    const transcribeBtn = document.createElement('button'); transcribeBtn.type='button'; transcribeBtn.className='btn small';
+    transcribeBtn.textContent='Transcribir con IA';
+    transcribeBtn.onclick = async ()=>{
+      if(!testsAddState.files.length){ showToast('Selecciona al menos una foto.'); return; }
+      transcribeBtn.disabled = true; transcribeBtn.textContent = 'Transcribiendo…';
+      try{
+        const parsed = await callClaudeVisionTranscribe(testsAddState.files);
+        testsAddState.enunciado = parsed.enunciado || '';
+        testsAddState.opciones = (Array.isArray(parsed.opciones) && parsed.opciones.length) ? parsed.opciones : ['',''];
+        testsAddState.correcta = (typeof parsed.correcta === 'number') ? parsed.correcta : 0;
+        testsAddState.explicacion = parsed.explicacion || '';
+        if(parsed.categoria_sugerida && TEST_CATEGORIAS.some(c=>c.key===parsed.categoria_sugerida) && testTipoForCategoria(parsed.categoria_sugerida)==='multiple') testsAddState.categoria = parsed.categoria_sugerida;
+        testsAddState.tema = (typeof parsed.tema_sugerido === 'number') ? parsed.tema_sugerido : null;
+        testsAddState.subtema = null;
+        showToast('Transcripción lista, revísala abajo ✓');
+        renderTests();
+      }catch(err){
+        console.error(err);
+        showToast(err.message || 'No se pudo transcribir la imagen.');
+      }finally{
+        transcribeBtn.disabled = false; transcribeBtn.textContent = 'Transcribir con IA';
+      }
+    };
+    btnRow.appendChild(transcribeBtn);
+    const manualBtn = document.createElement('button'); manualBtn.type='button'; manualBtn.className='btn small ghost';
+    manualBtn.textContent = 'Escribir manualmente (sin IA)';
+    manualBtn.onclick = ()=>{ if(!testsAddState.enunciado) testsAddState.opciones = ['','']; renderTests(); document.getElementById('testReviewAnchor')?.scrollIntoView({behavior:'smooth'}); };
+    btnRow.appendChild(manualBtn);
+    panel.appendChild(btnRow);
+    body.appendChild(panel);
+    paintThumbs();
+  }
 
   const reviewPanel = document.createElement('div'); reviewPanel.className='test-panel'; reviewPanel.id='testReviewAnchor';
-  reviewPanel.innerHTML = `<h4>2. Revisa y corrige antes de guardar</h4>`;
+  reviewPanel.innerHTML = tipoActual==='multiple' ? `<h4>2. Revisa y corrige antes de guardar</h4>` : `<h4>Nueva pregunta de ${testCatLabel(testsAddState.categoria)}</h4>`;
 
   const catRow = document.createElement('div'); catRow.className='test-row';
   const catField = document.createElement('div'); catField.className='test-field';
@@ -1772,12 +1873,103 @@ function renderTestsAnadir(body){
   catRow.appendChild(origField);
   reviewPanel.appendChild(catRow);
 
+  if(tipoActual==='ortografia'){
+    const enunField = document.createElement('div'); enunField.className='test-field';
+    enunField.innerHTML = '<label>Frase completa (contexto, opcional)</label>';
+    const enunTa = document.createElement('textarea'); enunTa.value = testsAddState.enunciado; enunTa.placeholder='Ej: Los siguientes términos aparecen en el texto…';
+    enunTa.oninput = ()=>{ testsAddState.enunciado = enunTa.value; };
+    enunField.appendChild(enunTa);
+    reviewPanel.appendChild(enunField);
+
+    const palWrap = document.createElement('div'); palWrap.className='test-field';
+    palWrap.innerHTML = '<label>Las 4 palabras a valorar (marca las que están MAL escritas — pueden ser 0, alguna, o las 4)</label>';
+    testsAddState.ortoPalabras.forEach((p,i)=>{
+      const r = document.createElement('div'); r.className='test-opt-row';
+      const inp = document.createElement('input'); inp.type='text'; inp.value = p.texto; inp.placeholder='Palabra '+(i+1);
+      inp.oninput = ()=>{ p.texto = inp.value; };
+      r.appendChild(inp);
+      const chkLabel = document.createElement('label'); chkLabel.style.cssText='display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);white-space:nowrap;';
+      const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = !!p.incorrecta;
+      chk.onchange = ()=>{ p.incorrecta = chk.checked; };
+      chkLabel.appendChild(chk); chkLabel.appendChild(document.createTextNode('Incorrecta'));
+      r.appendChild(chkLabel);
+      palWrap.appendChild(r);
+    });
+    reviewPanel.appendChild(palWrap);
+
+    const explField = document.createElement('div'); explField.className='test-field';
+    explField.innerHTML = '<label>Explicación (opcional)</label>';
+    const explTa = document.createElement('textarea'); explTa.value = testsAddState.explicacion;
+    explTa.oninput = ()=>{ testsAddState.explicacion = explTa.value; };
+    explField.appendChild(explTa);
+    reviewPanel.appendChild(explField);
+
+    const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small';
+    saveBtn.textContent = 'Guardar pregunta en el banco';
+    saveBtn.onclick = ()=>{
+      if(testsAddState.ortoPalabras.some(p=>!p.texto.trim())){ showToast('Rellena las 4 palabras.'); return; }
+      const q = newTestQuestionFromState();
+      state.testBank.questions.push(q);
+      saveTestQuestionRemote(q);
+      showToast('Pregunta guardada ✓');
+      resetTestsAddState();
+      renderTests();
+    };
+    reviewPanel.appendChild(saveBtn);
+    body.appendChild(reviewPanel);
+    return;
+  }
+
+  if(tipoActual==='gramatica'){
+    const enunField = document.createElement('div'); enunField.className='test-field';
+    enunField.innerHTML = '<label>Frase</label>';
+    const enunTa = document.createElement('textarea'); enunTa.value = testsAddState.enunciado; enunTa.placeholder='Escribe la frase a valorar…';
+    enunTa.oninput = ()=>{ testsAddState.enunciado = enunTa.value; };
+    enunField.appendChild(enunTa);
+    reviewPanel.appendChild(enunField);
+
+    const correctField = document.createElement('div'); correctField.className='test-field';
+    correctField.innerHTML = '<label>¿La frase está bien escrita gramaticalmente?</label>';
+    [[true,'Sí, está bien'],[false,'No, está mal']].forEach(([val,txt])=>{
+      const r = document.createElement('label'); r.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+      const radio = document.createElement('input'); radio.type='radio'; radio.name='gramaticaCorrectaRadio'; radio.checked = testsAddState.gramaticaCorrecta===val;
+      radio.onchange = ()=>{ testsAddState.gramaticaCorrecta = val; };
+      r.appendChild(radio); r.appendChild(document.createTextNode(txt));
+      correctField.appendChild(r);
+    });
+    reviewPanel.appendChild(correctField);
+
+    const explField = document.createElement('div'); explField.className='test-field';
+    explField.innerHTML = '<label>Explicación (opcional)</label>';
+    const explTa = document.createElement('textarea'); explTa.value = testsAddState.explicacion;
+    explTa.oninput = ()=>{ testsAddState.explicacion = explTa.value; };
+    explField.appendChild(explTa);
+    reviewPanel.appendChild(explField);
+
+    const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small';
+    saveBtn.textContent = 'Guardar pregunta en el banco';
+    saveBtn.onclick = ()=>{
+      if(!testsAddState.enunciado.trim()){ showToast('Falta la frase.'); return; }
+      const q = newTestQuestionFromState();
+      state.testBank.questions.push(q);
+      saveTestQuestionRemote(q);
+      showToast('Pregunta guardada ✓');
+      resetTestsAddState();
+      renderTests();
+    };
+    reviewPanel.appendChild(saveBtn);
+    body.appendChild(reviewPanel);
+    return;
+  }
+
   const enunField = document.createElement('div'); enunField.className='test-field';
-  enunField.innerHTML = '<label>Enunciado</label>';
+  enunField.innerHTML = '<label>Enunciado'+(testsAddState.categoria==='psico' ? ' (opcional si el enunciado es la imagen)' : '')+'</label>';
   const enunTa = document.createElement('textarea'); enunTa.value = testsAddState.enunciado; enunTa.placeholder='Texto de la pregunta…';
   enunTa.oninput = ()=>{ testsAddState.enunciado = enunTa.value; };
   enunField.appendChild(enunTa);
   reviewPanel.appendChild(enunField);
+
+  reviewPanel.appendChild(createImageUploaderField(testsAddState.imagenes, renderTests, testsAddState.categoria==='psico' ? 'Imagen(es) del enunciado' : 'Imágenes del enunciado (opcional)'));
 
   const optsWrap = document.createElement('div'); optsWrap.className='test-field';
   optsWrap.innerHTML = '<label>Opciones (marca la correcta)</label>';
@@ -1816,7 +2008,7 @@ function renderTestsAnadir(body){
   saveBtn.textContent = 'Guardar pregunta en el banco';
   saveBtn.onclick = ()=>{
     const opciones = testsAddState.opciones.map(o=>o.trim()).filter(o=>o.length);
-    if(!testsAddState.enunciado.trim() || opciones.length<2){ showToast('Falta el enunciado o hay menos de 2 opciones.'); return; }
+    if((!testsAddState.enunciado.trim() && !testsAddState.imagenes.length) || opciones.length<2){ showToast('Falta el enunciado (texto o imagen) o hay menos de 2 opciones.'); return; }
     const q = newTestQuestionFromState();
     state.testBank.questions.push(q);
     saveTestQuestionRemote(q);
@@ -1895,7 +2087,8 @@ function renderTestsBanco(body){
       card.title = 'Pulsa para ver la pregunta completa';
       card.onclick = ()=> openTestPreviewModal(q);
       const head = document.createElement('div'); head.className='tc-head';
-      head.innerHTML = `<span>${(q.enunciado||'(sin enunciado)').slice(0,140)}</span>
+      const imgTag = (q.imagenes && q.imagenes.length) ? ' 🖼' : '';
+      head.innerHTML = `<span>${(q.enunciado||'(sin enunciado)').slice(0,140)}${imgTag}</span>
         <span class="tc-tag">${questionTemaTag(q)}</span>`;
       card.appendChild(head);
       const stat = document.createElement('div'); stat.className='tc-stat';
@@ -1934,17 +2127,36 @@ function openTestPreviewModal(q){
   box.appendChild(headRow);
 
   const card = document.createElement('div'); card.className='test-quiz-q corregida';
-  const enun = document.createElement('div'); enun.className='tq-enun'; enun.textContent = q.enunciado;
-  card.appendChild(enun);
-  q.opciones.forEach((op,oi)=>{
-    const optRow = document.createElement('div'); optRow.className='tq-opt'+(oi===q.correcta?' correcta':'');
-    const marker = document.createElement('span'); marker.style.cssText='flex-shrink:0;width:16px;';
-    marker.textContent = oi===q.correcta ? '✓' : '';
-    optRow.appendChild(marker);
-    const span = document.createElement('span'); span.textContent = op;
-    optRow.appendChild(span);
-    card.appendChild(optRow);
-  });
+  const tipo = qTipo(q);
+  if(q.enunciado){ const enun = document.createElement('div'); enun.className='tq-enun'; enun.textContent = q.enunciado; card.appendChild(enun); }
+  if(q.imagenes && q.imagenes.length){
+    const imgWrap = document.createElement('div'); imgWrap.className='tq-images';
+    q.imagenes.forEach(durl=>{ const img=document.createElement('img'); img.src=durl; imgWrap.appendChild(img); });
+    card.appendChild(imgWrap);
+  }
+  if(tipo==='ortografia'){
+    const palRow = document.createElement('div'); palRow.className='tq-palabras';
+    (q.palabras||[]).forEach(p=>{
+      const chip = document.createElement('span'); chip.className='tq-palabra'+(p.incorrecta?' mal':' bien');
+      chip.textContent = p.texto + (p.incorrecta ? ' ✕' : ' ✓');
+      palRow.appendChild(chip);
+    });
+    card.appendChild(palRow);
+  } else if(tipo==='gramatica'){
+    const badge = document.createElement('div'); badge.className='tq-opt correcta';
+    badge.textContent = q.correcta ? 'Frase correcta ✓' : 'Frase incorrecta ✕';
+    card.appendChild(badge);
+  } else {
+    q.opciones.forEach((op,oi)=>{
+      const optRow = document.createElement('div'); optRow.className='tq-opt'+(oi===q.correcta?' correcta':'');
+      const marker = document.createElement('span'); marker.style.cssText='flex-shrink:0;width:16px;';
+      marker.textContent = oi===q.correcta ? '✓' : '';
+      optRow.appendChild(marker);
+      const span = document.createElement('span'); span.textContent = op;
+      optRow.appendChild(span);
+      card.appendChild(optRow);
+    });
+  }
   if(q.explicacion){
     const ex = document.createElement('div'); ex.className='tq-explic'; ex.textContent = q.explicacion;
     card.appendChild(ex);
@@ -1972,44 +2184,20 @@ function openTestEditModal(q){
   const box = document.createElement('div');
   box.style.cssText = 'background:var(--bg-panel);border:1px solid var(--line);border-radius:4px;padding:18px;max-width:560px;width:100%;';
   overlay.appendChild(box);
-  box.innerHTML = `<h3 style="font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0 0 12px;">Editar pregunta</h3>`;
+  const titleEl = document.createElement('h3'); titleEl.style.cssText='font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0 0 12px;'; titleEl.textContent='Editar pregunta';
+  box.appendChild(titleEl);
 
-  const enunField = document.createElement('div'); enunField.className='test-field';
-  enunField.innerHTML = '<label>Enunciado</label>';
-  const enunTa = document.createElement('textarea'); enunTa.value = q.enunciado;
-  enunField.appendChild(enunTa);
-  box.appendChild(enunField);
-
-  const optsWrap = document.createElement('div'); optsWrap.className='test-field';
-  optsWrap.innerHTML = '<label>Opciones (marca la correcta)</label>';
-  const optsList = document.createElement('div');
-  let localOpts = q.opciones.slice();
-  let localCorrecta = q.correcta;
-  function paintOpts(){
-    optsList.innerHTML = '';
-    localOpts.forEach((op,i)=>{
-      const r = document.createElement('div'); r.className='test-opt-row';
-      const radio = document.createElement('input'); radio.type='radio'; radio.name='editCorrectaRadio'; radio.checked = localCorrecta===i;
-      radio.onchange = ()=>{ localCorrecta = i; };
-      r.appendChild(radio);
-      const inp = document.createElement('input'); inp.type='text'; inp.value = op;
-      inp.oninput = ()=>{ localOpts[i] = inp.value; };
-      r.appendChild(inp);
-      const del = document.createElement('button'); del.type='button'; del.className='test-opt-del'; del.textContent='✕';
-      del.onclick = ()=>{ localOpts.splice(i,1); if(localCorrecta>=localOpts.length) localCorrecta=0; paintOpts(); };
-      r.appendChild(del);
-      optsList.appendChild(r);
-    });
-  }
-  paintOpts();
-  optsWrap.appendChild(optsList);
-  const addOptBtn = document.createElement('button'); addOptBtn.type='button'; addOptBtn.className='tick-add'; addOptBtn.textContent='+ Añadir opción';
-  addOptBtn.onclick = ()=>{ localOpts.push(''); paintOpts(); };
-  optsWrap.appendChild(addOptBtn);
-  box.appendChild(optsWrap);
+  let editCategoria = q.categoria, editTema = q.tema || null, editSubtema = q.subtema || null;
+  // Estado local editable, tolerante con preguntas creadas antes de que existieran estos campos.
+  let localOpts = (q.opciones||['','']).slice();
+  let localCorrecta = q.correcta || 0;
+  let localImagenes = (q.imagenes||[]).slice();
+  let localPalabras = (q.palabras||emptyOrtoPalabras()).map(p=>({texto:p.texto||'', incorrecta:!!p.incorrecta}));
+  let localGramaticaCorrecta = (typeof q.correcta==='boolean') ? q.correcta : true;
+  let localEnunciado = q.enunciado || '';
+  let localExplicacion = q.explicacion || '';
 
   const row = document.createElement('div'); row.className='test-row';
-  let editCategoria = q.categoria, editTema = q.tema || null, editSubtema = q.subtema || null;
   const catField = document.createElement('div'); catField.className='test-field';
   catField.innerHTML = '<label>Categoría</label>';
   const catSel = document.createElement('select');
@@ -2042,28 +2230,131 @@ function openTestEditModal(q){
       temaSubWrap.appendChild(subField);
     }
   }
-  catSel.onchange = ()=>{ editCategoria = catSel.value; editTema=null; editSubtema=null; paintTemaSub(); };
   paintTemaSub();
   box.appendChild(row);
 
-  const explField = document.createElement('div'); explField.className='test-field';
-  explField.innerHTML = '<label>Explicación</label>';
-  const explTa = document.createElement('textarea'); explTa.value = q.explicacion || '';
-  explField.appendChild(explTa);
-  box.appendChild(explField);
+  const typeHost = document.createElement('div');
+  box.appendChild(typeHost);
+
+  function paintTypeFields(){
+    typeHost.innerHTML = '';
+    const tipo = testTipoForCategoria(editCategoria);
+    if(tipo==='ortografia'){
+      const enunField = document.createElement('div'); enunField.className='test-field';
+      enunField.innerHTML = '<label>Frase completa (contexto, opcional)</label>';
+      const enunTa = document.createElement('textarea'); enunTa.value = localEnunciado;
+      enunTa.oninput = ()=>{ localEnunciado = enunTa.value; };
+      enunField.appendChild(enunTa);
+      typeHost.appendChild(enunField);
+
+      const palWrap = document.createElement('div'); palWrap.className='test-field';
+      palWrap.innerHTML = '<label>Las 4 palabras (marca las que están MAL escritas)</label>';
+      localPalabras.forEach((p,i)=>{
+        const r = document.createElement('div'); r.className='test-opt-row';
+        const inp = document.createElement('input'); inp.type='text'; inp.value = p.texto; inp.placeholder='Palabra '+(i+1);
+        inp.oninput = ()=>{ p.texto = inp.value; };
+        r.appendChild(inp);
+        const chkLabel = document.createElement('label'); chkLabel.style.cssText='display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);white-space:nowrap;';
+        const chk = document.createElement('input'); chk.type='checkbox'; chk.checked = !!p.incorrecta;
+        chk.onchange = ()=>{ p.incorrecta = chk.checked; };
+        chkLabel.appendChild(chk); chkLabel.appendChild(document.createTextNode('Incorrecta'));
+        r.appendChild(chkLabel);
+        palWrap.appendChild(r);
+      });
+      typeHost.appendChild(palWrap);
+    } else if(tipo==='gramatica'){
+      const enunField = document.createElement('div'); enunField.className='test-field';
+      enunField.innerHTML = '<label>Frase</label>';
+      const enunTa = document.createElement('textarea'); enunTa.value = localEnunciado;
+      enunTa.oninput = ()=>{ localEnunciado = enunTa.value; };
+      enunField.appendChild(enunTa);
+      typeHost.appendChild(enunField);
+
+      const correctField = document.createElement('div'); correctField.className='test-field';
+      correctField.innerHTML = '<label>¿La frase está bien escrita gramaticalmente?</label>';
+      [[true,'Sí, está bien'],[false,'No, está mal']].forEach(([val,txt])=>{
+        const r = document.createElement('label'); r.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+        const radio = document.createElement('input'); radio.type='radio'; radio.name='editGramaticaCorrectaRadio'; radio.checked = localGramaticaCorrecta===val;
+        radio.onchange = ()=>{ localGramaticaCorrecta = val; };
+        r.appendChild(radio); r.appendChild(document.createTextNode(txt));
+        correctField.appendChild(r);
+      });
+      typeHost.appendChild(correctField);
+    } else {
+      const enunField = document.createElement('div'); enunField.className='test-field';
+      enunField.innerHTML = '<label>Enunciado</label>';
+      const enunTa = document.createElement('textarea'); enunTa.value = localEnunciado;
+      enunTa.oninput = ()=>{ localEnunciado = enunTa.value; };
+      enunField.appendChild(enunTa);
+      typeHost.appendChild(enunField);
+
+      typeHost.appendChild(createImageUploaderField(localImagenes, paintTypeFields, 'Imágenes del enunciado (opcional)'));
+
+      const optsWrap = document.createElement('div'); optsWrap.className='test-field';
+      optsWrap.innerHTML = '<label>Opciones (marca la correcta)</label>';
+      const optsList = document.createElement('div');
+      function paintOpts(){
+        optsList.innerHTML = '';
+        localOpts.forEach((op,i)=>{
+          const r = document.createElement('div'); r.className='test-opt-row';
+          const radio = document.createElement('input'); radio.type='radio'; radio.name='editCorrectaRadio'; radio.checked = localCorrecta===i;
+          radio.onchange = ()=>{ localCorrecta = i; };
+          r.appendChild(radio);
+          const inp = document.createElement('input'); inp.type='text'; inp.value = op;
+          inp.oninput = ()=>{ localOpts[i] = inp.value; };
+          r.appendChild(inp);
+          const del = document.createElement('button'); del.type='button'; del.className='test-opt-del'; del.textContent='✕';
+          del.onclick = ()=>{ localOpts.splice(i,1); if(localCorrecta>=localOpts.length) localCorrecta=0; paintOpts(); };
+          r.appendChild(del);
+          optsList.appendChild(r);
+        });
+      }
+      paintOpts();
+      optsWrap.appendChild(optsList);
+      const addOptBtn = document.createElement('button'); addOptBtn.type='button'; addOptBtn.className='tick-add'; addOptBtn.textContent='+ Añadir opción';
+      addOptBtn.onclick = ()=>{ localOpts.push(''); paintOpts(); };
+      optsWrap.appendChild(addOptBtn);
+      typeHost.appendChild(optsWrap);
+    }
+    const explField = document.createElement('div'); explField.className='test-field';
+    explField.innerHTML = '<label>Explicación (opcional)</label>';
+    const explTa = document.createElement('textarea'); explTa.value = localExplicacion;
+    explTa.oninput = ()=>{ localExplicacion = explTa.value; };
+    explField.appendChild(explTa);
+    typeHost.appendChild(explField);
+  }
+  catSel.onchange = ()=>{ editCategoria = catSel.value; editTema=null; editSubtema=null; paintTemaSub(); paintTypeFields(); };
+  paintTypeFields();
 
   const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:10px;';
   const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small'; saveBtn.textContent='Guardar cambios';
   saveBtn.onclick = ()=>{
-    const opciones = localOpts.map(o=>o.trim()).filter(o=>o.length);
-    if(!enunTa.value.trim() || opciones.length<2){ showToast('Falta el enunciado o hay menos de 2 opciones.'); return; }
-    q.enunciado = enunTa.value.trim();
-    q.opciones = opciones;
-    q.correcta = localCorrecta;
+    const tipo = testTipoForCategoria(editCategoria);
     q.categoria = editCategoria;
     q.tema = editTema;
     q.subtema = editSubtema;
-    q.explicacion = explTa.value.trim();
+    q.tipo = tipo;
+    q.explicacion = localExplicacion.trim();
+    if(tipo==='ortografia'){
+      if(localPalabras.some(p=>!p.texto.trim())){ showToast('Rellena las 4 palabras.'); return; }
+      q.enunciado = localEnunciado.trim();
+      q.palabras = localPalabras.map(p=>({texto:p.texto.trim(), incorrecta:!!p.incorrecta}));
+      delete q.opciones; delete q.imagenes; delete q.correcta;
+    } else if(tipo==='gramatica'){
+      if(!localEnunciado.trim()){ showToast('Falta la frase.'); return; }
+      q.enunciado = localEnunciado.trim();
+      q.correcta = localGramaticaCorrecta;
+      delete q.opciones; delete q.imagenes; delete q.palabras;
+    } else {
+      const opciones = localOpts.map(o=>o.trim()).filter(o=>o.length);
+      if((!localEnunciado.trim() && !localImagenes.length) || opciones.length<2){ showToast('Falta el enunciado (texto o imagen) o hay menos de 2 opciones.'); return; }
+      q.enunciado = localEnunciado.trim();
+      q.opciones = opciones;
+      q.correcta = localCorrecta;
+      q.imagenes = localImagenes.slice();
+      delete q.palabras;
+    }
+    q.actualizado = Date.now();
     saveTestQuestionRemote(q);
     document.body.removeChild(overlay);
     renderTests();
@@ -2329,19 +2620,42 @@ function renderTestsPracticar(body){
   instField.appendChild(instCheckRow);
   optsRow.appendChild(instField);
   panel.appendChild(optsRow);
+  const ordenField = document.createElement('div'); ordenField.className='test-field'; ordenField.style.marginTop='6px';
+  ordenField.innerHTML = '<label>Orden de las preguntas</label>';
+  const ordenSel = document.createElement('select');
+  [['aleatorio','Desordenado (aleatorio)'],['ordenado','En orden (del 1º tema al último)']].forEach(([val,txt])=>{
+    const o=document.createElement('option'); o.value=val; o.textContent=txt; if(testsPickState.orden===val) o.selected=true; ordenSel.appendChild(o);
+  });
+  ordenSel.onchange = ()=>{ testsPickState.orden = ordenSel.value; };
+  ordenField.appendChild(ordenSel);
+  panel.appendChild(ordenField);
   const startBtn = document.createElement('button'); startBtn.type='button'; startBtn.className='btn small'; startBtn.style.marginTop='10px';
   startBtn.textContent = 'Empezar test';
   startBtn.onclick = ()=>{
     const filtered = questions.filter(q=> questionMatchesPick(q, testsPickState));
     if(!filtered.length){ showToast('No hay preguntas guardadas con ese filtro todavía.'); return; }
     const n = Math.max(1, Math.min(Number(nInput.value)||10, filtered.length));
-    const chosen = shuffleArr(filtered).slice(0,n);
+    let chosen;
+    if(testsPickState.orden==='ordenado'){
+      // Orden 1º tema → último (y dentro de cada tema, por subtema y fecha de alta), tal
+      // cual el temario, para repasar sistemáticamente todos los casos antes del examen.
+      const ordenados = filtered.slice().sort((a,b)=>{
+        const ta = a.tema||0, tb = b.tema||0;
+        if(ta!==tb) return ta-tb;
+        const sa = a.subtema||0, sb = b.subtema||0;
+        if(sa!==sb) return sa-sb;
+        return (a.creado||0)-(b.creado||0);
+      });
+      chosen = ordenados.slice(0,n);
+    } else {
+      chosen = shuffleArr(filtered).slice(0,n);
+    }
     clearQuizTimer();
     const temporizadorActivo = timerCheck.checked;
     const minPorPregunta = Math.max(0.1, Number(timerMinInput.value)||1);
     const totalSegundos = Math.round(minPorPregunta*60*n);
     testsQuiz = {
-      items: chosen.map(q=>({q, respuesta:null, revelado:false})),
+      items: chosen.map(q=>({ q, respuesta: qTipo(q)==='ortografia' ? [null,null,null,null] : null, revelado:false })),
       corregido:false,
       instantaneo: instCheck.checked,
       temporizador: temporizadorActivo ? { totalSegundos, restante: totalSegundos } : null
@@ -2360,28 +2674,80 @@ function formatQuizTime(segTotales){
   const r = s%60;
   return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
 }
+// Nº de fallos (a nivel de palabra) de un ítem de ortografía ya respondido por completo.
+function ortografiaFallosCount(it){
+  return it.q.palabras.reduce((acc,p,i)=> acc + (it.respuesta[i]===p.incorrecta ? 0 : 1), 0);
+}
+function testItemFullyAnswered(it){
+  const tipo = qTipo(it.q);
+  if(tipo==='ortografia') return it.respuesta.every(v=>v!==null);
+  if(tipo==='gramatica') return it.respuesta!==null;
+  return true; // en opción múltiple sí se admite dejar en blanco
+}
 function corregirQuizActual(){
   if(!testsQuiz || testsQuiz.corregido) return;
+  const pendientes = testsQuiz.items.some(it=>!testItemFullyAnswered(it));
+  if(pendientes){ showToast('En ortografía y gramática hay que responder todo: no se admite dejarlo en blanco.'); return; }
   clearQuizTimer();
   testsQuiz.corregido = true;
   testsQuiz.items.forEach(it=>{
     // Las preguntas ya reveladas en modo instantáneo ya sumaron sus estadísticas al responder.
     if(it.revelado) return;
+    const tipo = qTipo(it.q);
     it.q.stats.veces = (it.q.stats.veces||0)+1;
-    if(it.respuesta===it.q.correcta) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
+    let acierto;
+    if(tipo==='ortografia') acierto = ortografiaFallosCount(it)===0;
+    else acierto = it.respuesta===it.q.correcta;
+    if(acierto) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
     saveTestQuestionRemote(it.q);
   });
   renderTests();
+}
+// Agrupa los resultados por categoría y aplica la fórmula de puntuación de cada una
+// (teoría/inglés: +1/-0,33/0; psicotécnicos: fórmula sobre 30; ortografía/gramática: apto/no apto).
+function buildScoreBanner(){
+  const wrap = document.createElement('div');
+  const byCat = new Map();
+  testsQuiz.items.forEach(it=>{
+    const cat = it.q.categoria;
+    if(!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(it);
+  });
+  TEST_CATEGORIAS.forEach(c=>{
+    if(!byCat.has(c.key)) return;
+    const items = byCat.get(c.key);
+    const banner = document.createElement('div'); banner.className='test-score-banner';
+    if(c.key==='ortografia' || c.key==='gramatica'){
+      let fallos = 0, totalJuicios = 0;
+      items.forEach(it=>{
+        if(c.key==='ortografia'){ fallos += ortografiaFallosCount(it); totalJuicios += it.q.palabras.length; }
+        else { totalJuicios += 1; if(it.respuesta!==it.q.correcta) fallos += 1; }
+      });
+      const apto = fallos<=5;
+      banner.innerHTML = `<div class="num" style="color:${apto?'var(--green)':'var(--red-text)'};">${apto?'APTO':'NO APTO'}</div>
+        <div style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);">${c.label}: ${fallos} fallo(s) de ${totalJuicios} valorados (máx. 5 permitidos, 6+ es no apto)</div>`;
+    } else if(c.key==='psico'){
+      let aciertos=0, fallos=0, blancos=0;
+      items.forEach(it=>{ if(it.respuesta===null) blancos++; else if(it.respuesta===it.q.correcta) aciertos++; else fallos++; });
+      const puntos = Math.max(0, (aciertos - fallos*0.33) * 0.375);
+      banner.innerHTML = `<div class="num">${puntos.toFixed(2)} pt</div>
+        <div style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);">${c.label}: ${aciertos} acierto(s) · ${fallos} fallo(s) · ${blancos} en blanco (fórmula sobre 30 sobre 80 preg.)</div>`;
+    } else {
+      let aciertos=0, fallos=0, blancos=0;
+      items.forEach(it=>{ if(it.respuesta===null) blancos++; else if(it.respuesta===it.q.correcta) aciertos++; else fallos++; });
+      const puntos = aciertos*1 - fallos*0.33;
+      banner.innerHTML = `<div class="num">${puntos.toFixed(2)} pt</div>
+        <div style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);">${c.label}: ${aciertos} acierto(s) · ${fallos} fallo(s) · ${blancos} en blanco (de ${items.length})</div>`;
+    }
+    wrap.appendChild(banner);
+  });
+  return wrap;
 }
 function renderTestsQuizUI(body){
   const panel = document.createElement('div');
   if(testsQuiz.corregido){
     clearQuizTimer();
-    const correctas = testsQuiz.items.filter(it=>it.respuesta===it.q.correcta).length;
-    const totalN = testsQuiz.items.length;
-    const banner = document.createElement('div'); banner.className='test-score-banner';
-    banner.innerHTML = `<div class="num">${correctas}/${totalN}</div><div style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);">${Math.round(100*correctas/totalN)}% correctas</div>`;
-    panel.appendChild(banner);
+    panel.appendChild(buildScoreBanner());
   } else if(testsQuiz.temporizador){
     const badge = document.createElement('div'); badge.className='quiz-timer-badge'; badge.id='quizTimerBadge';
     badge.textContent = '⏱ '+formatQuizTime(testsQuiz.temporizador.restante);
@@ -2389,33 +2755,101 @@ function renderTestsQuizUI(body){
   }
   testsQuiz.items.forEach((it,i)=>{
     const q = it.q;
+    const tipo = qTipo(q);
     const revelada = testsQuiz.corregido || (testsQuiz.instantaneo && it.revelado);
     const card = document.createElement('div'); card.className='test-quiz-q'+(revelada?' corregida':'');
-    const enun = document.createElement('div'); enun.className='tq-enun'; enun.textContent = (i+1)+'. '+q.enunciado;
+    const enun = document.createElement('div'); enun.className='tq-enun';
+    enun.textContent = (i+1)+'. '+(q.enunciado || (tipo==='multiple' && q.imagenes && q.imagenes.length ? '(ver imagen)' : ''));
     card.appendChild(enun);
-    q.opciones.forEach((op,oi)=>{
-      const optRow = document.createElement('label'); optRow.className='tq-opt';
-      if(revelada){
-        if(oi===q.correcta) optRow.classList.add('correcta');
-        else if(oi===it.respuesta) optRow.classList.add('incorrecta-elegida');
-      }
-      const radio = document.createElement('input'); radio.type='radio'; radio.name='quiz-q-'+i; radio.disabled = revelada;
-      radio.checked = it.respuesta===oi;
-      radio.onchange = ()=>{
-        it.respuesta = oi;
-        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){
-          it.revelado = true;
-          it.q.stats.veces = (it.q.stats.veces||0)+1;
-          if(it.respuesta===it.q.correcta) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
-          saveTestQuestionRemote(it.q);
-          renderTests();
+    if(q.imagenes && q.imagenes.length){
+      const imgWrap = document.createElement('div'); imgWrap.className='tq-images';
+      q.imagenes.forEach(durl=>{ const img=document.createElement('img'); img.src=durl; imgWrap.appendChild(img); });
+      card.appendChild(imgWrap);
+    }
+    if(tipo==='ortografia'){
+      q.palabras.forEach((p,wi)=>{
+        const wrow = document.createElement('div'); wrow.className='tq-word-row';
+        const label = document.createElement('span'); label.className='tq-word-text'; label.textContent = p.texto;
+        wrow.appendChild(label);
+        const btnBien = document.createElement('button'); btnBien.type='button'; btnBien.className='tq-word-btn';
+        btnBien.textContent = 'Bien escrita';
+        const btnMal = document.createElement('button'); btnMal.type='button'; btnMal.className='tq-word-btn';
+        btnMal.textContent = 'Mal escrita';
+        function paintWordBtns(){
+          btnBien.classList.toggle('selected', it.respuesta[wi]===false);
+          btnMal.classList.toggle('selected', it.respuesta[wi]===true);
+          btnBien.disabled = revelada; btnMal.disabled = revelada;
+          if(revelada){
+            (p.incorrecta ? btnMal : btnBien).classList.add('correcta');
+            if(it.respuesta[wi]!==null && it.respuesta[wi]!==p.incorrecta) (it.respuesta[wi] ? btnMal : btnBien).classList.add('incorrecta-elegida');
+          }
         }
+        function checkOrtoInstant(){
+          if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado && it.respuesta.every(v=>v!==null)){
+            it.revelado = true;
+            it.q.stats.veces = (it.q.stats.veces||0)+1;
+            if(ortografiaFallosCount(it)===0) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
+            saveTestQuestionRemote(it.q);
+            renderTests();
+          }
+        }
+        btnBien.onclick = ()=>{ if(revelada) return; it.respuesta[wi]=false; checkOrtoInstant(); paintWordBtns(); };
+        btnMal.onclick = ()=>{ if(revelada) return; it.respuesta[wi]=true; checkOrtoInstant(); paintWordBtns(); };
+        paintWordBtns();
+        wrow.appendChild(btnBien); wrow.appendChild(btnMal);
+        card.appendChild(wrow);
+      });
+    } else if(tipo==='gramatica'){
+      const wrow = document.createElement('div'); wrow.className='tq-word-row';
+      const btnBien = document.createElement('button'); btnBien.type='button'; btnBien.className='tq-word-btn'; btnBien.textContent='Está bien';
+      const btnMal = document.createElement('button'); btnMal.type='button'; btnMal.className='tq-word-btn'; btnMal.textContent='Está mal';
+      function paintGramBtns(){
+        btnBien.classList.toggle('selected', it.respuesta===true);
+        btnMal.classList.toggle('selected', it.respuesta===false);
+        btnBien.disabled = revelada; btnMal.disabled = revelada;
+        if(revelada){
+          (q.correcta ? btnBien : btnMal).classList.add('correcta');
+          if(it.respuesta!==null && it.respuesta!==q.correcta) (it.respuesta ? btnBien : btnMal).classList.add('incorrecta-elegida');
+        }
+      }
+      btnBien.onclick = ()=>{
+        if(revelada) return; it.respuesta = true;
+        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; it.q.stats.veces=(it.q.stats.veces||0)+1; if(it.respuesta===it.q.correcta) it.q.stats.aciertos=(it.q.stats.aciertos||0)+1; saveTestQuestionRemote(it.q); renderTests(); return; }
+        paintGramBtns();
       };
-      optRow.appendChild(radio);
-      const span = document.createElement('span'); span.textContent = op;
-      optRow.appendChild(span);
-      card.appendChild(optRow);
-    });
+      btnMal.onclick = ()=>{
+        if(revelada) return; it.respuesta = false;
+        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; it.q.stats.veces=(it.q.stats.veces||0)+1; if(it.respuesta===it.q.correcta) it.q.stats.aciertos=(it.q.stats.aciertos||0)+1; saveTestQuestionRemote(it.q); renderTests(); return; }
+        paintGramBtns();
+      };
+      paintGramBtns();
+      wrow.appendChild(btnBien); wrow.appendChild(btnMal);
+      card.appendChild(wrow);
+    } else {
+      q.opciones.forEach((op,oi)=>{
+        const optRow = document.createElement('label'); optRow.className='tq-opt';
+        if(revelada){
+          if(oi===q.correcta) optRow.classList.add('correcta');
+          else if(oi===it.respuesta) optRow.classList.add('incorrecta-elegida');
+        }
+        const radio = document.createElement('input'); radio.type='radio'; radio.name='quiz-q-'+i; radio.disabled = revelada;
+        radio.checked = it.respuesta===oi;
+        radio.onchange = ()=>{
+          it.respuesta = oi;
+          if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){
+            it.revelado = true;
+            it.q.stats.veces = (it.q.stats.veces||0)+1;
+            if(it.respuesta===it.q.correcta) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
+            saveTestQuestionRemote(it.q);
+            renderTests();
+          }
+        };
+        optRow.appendChild(radio);
+        const span = document.createElement('span'); span.textContent = op;
+        optRow.appendChild(span);
+        card.appendChild(optRow);
+      });
+    }
     if(revelada && q.explicacion){
       const ex = document.createElement('div'); ex.className='tq-explic'; ex.textContent = q.explicacion;
       card.appendChild(ex);

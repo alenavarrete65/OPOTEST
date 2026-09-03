@@ -184,12 +184,44 @@ La primera vez que abras la app en un dispositivo nuevo (o la primera vez tras
 instalar esta mejora) sí se descarga el banco completo una única vez, para
 tener una base fiable; a partir de ahí, las aperturas son incrementales.
 
+## Tipos de pregunta y corrección (añadido)
+
+- **Orden al practicar**: en "Practicar" hay un selector "Orden de las preguntas":
+  *Desordenado (aleatorio)* (como antes) o *En orden (del 1º tema al último)*,
+  que recorre las preguntas seleccionadas por tema → subtema → fecha de alta,
+  útil para repasar sistemáticamente todos los casos antes del examen.
+- **Psicotécnicos con imagen**: al añadir una pregunta de Psicotécnicos (o de
+  cualquier categoría de opción múltiple) puedes subir una o varias imágenes
+  como enunciado; se comprimen a JPEG en el propio dispositivo antes de
+  guardarse (ojo: Firestore limita cada documento a 1 MB, así que no subas
+  fotos ni demasiado grandes ni en gran número por pregunta).
+- **Ortografía**: la pregunta son 4 palabras sueltas; al crearla marcas cuáles
+  están mal escritas (pueden ser 0, algunas o las 4). Al practicar, hay que
+  marcar "Bien escrita"/"Mal escrita" en las 4 (no se admite dejarlo en blanco).
+- **Gramática**: la pregunta es una frase; al crearla marcas si está bien o
+  mal. Al practicar, hay que marcar "Está bien"/"Está mal" (tampoco blanco).
+- **Puntuación al corregir un test** (se calcula por categoría, incluso si el
+  test mezcla varias):
+  - *Teoría* e *Inglés*: acierto +1, fallo −0,33, blanco 0.
+  - *Psicotécnicos*: acierto +1, fallo −0,33, blanco 0, y se aplica la fórmula
+    `(aciertos − fallos×0,33) × 0,375` (pensada para 80 preguntas = 30 puntos).
+  - *Ortografía* y *Gramática*: no hay nota numérica ni opción en blanco; cada
+    palabra (ortografía) o frase (gramática) marcada al revés cuenta como
+    fallo, y el resultado es **Apto** (0–5 fallos) o **No apto** (6 o más
+    fallos) — el límite se cuenta por separado en cada una de las dos.
+
 ## Cosas pendientes / ideas para más adelante
 
 - [x] Sincronización incremental del banco de preguntas (implementada: ver
       apartado de arriba).
 - [x] Clasificación de preguntas por tema y subtema + panel de administración
       del temario (implementado: ver apartado "Temario" de arriba).
+- [x] Orden/desorden de las preguntas al practicar, preguntas de Psicotécnicos
+      con imagen, y tipos de pregunta de Ortografía/Gramática con su propia
+      corrección (implementado: ver apartado de arriba).
+- [ ] Ajustar el nº de preguntas de cada tema de Teoría al peso real que le da
+      Jefatura de Enseñanza en el examen oficial (pendiente: Alejandro tiene
+      que pasar esos porcentajes por tema).
 - [ ] Panel de administración simple (ver cuántos usuarios hay, cuántas
       preguntas tiene cada uno) si la app se abre a más gente.
 - [ ] Cobro (Stripe u otra pasarela) si se decide vender el acceso.
