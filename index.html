@@ -1823,6 +1823,20 @@ function renderIAKeyPanel(container, stateObj, opts){
   intro.innerHTML = 'Todas se guardan solo en este dispositivo (no viajan a Firebase). Basta con rellenar UNA. Si rellenas varias, la app las prueba en este orden y salta a la siguiente en cuanto una falla o se le agota la cuota gratuita del día: <b>Gemini → OpenRouter'+(opts.conExtra?' → proveedor extra':'')+'</b>.';
   bodyDiv.appendChild(intro);
 
+  const modoField = document.createElement('div'); modoField.className='test-field'; modoField.style.margin='0 0 14px';
+  modoField.innerHTML = '<label>¿Cuál usar?</label>';
+  const modoSel = document.createElement('select');
+  const modoOpts = [['auto','Automático (recomendado): Gemini → OpenRouter'+(opts.conExtra?' → extra':'')],['gemini','Forzar solo Gemini'],['openrouter','Forzar solo OpenRouter']];
+  if(opts.conExtra) modoOpts.push(['extra','Forzar solo el proveedor extra']);
+  modoOpts.forEach(([val,label])=>{ const o=document.createElement('option'); o.value=val; o.textContent=label; modoSel.appendChild(o); });
+  modoSel.value = getIAModo();
+  modoSel.onchange = ()=> setIAModo(modoSel.value);
+  modoField.appendChild(modoSel);
+  bodyDiv.appendChild(modoField);
+  const modoNota = document.createElement('p'); modoNota.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;';
+  modoNota.innerHTML = 'Este ajuste es el mismo en "Desde foto" y "Desde PDF". "Automático" es lo que quieres normalmente; usa "Forzar" solo para comprobar que un proveedor concreto responde.';
+  bodyDiv.appendChild(modoNota);
+
   function seccion(titulo){
     const t = document.createElement('div'); t.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--amber);font-weight:600;margin:12px 0 4px;'; t.textContent = titulo;
     bodyDiv.appendChild(t);
@@ -2030,6 +2044,11 @@ function getExtraBaseUrl(){ try{ return localStorage.getItem('opotest-extra-base
 function setExtraBaseUrl(v){ try{ localStorage.setItem('opotest-extra-baseurl', v); }catch(e){} }
 function getExtraModel(){ try{ return localStorage.getItem('opotest-extra-model') || ''; }catch(e){ return ''; } }
 function setExtraModel(v){ try{ localStorage.setItem('opotest-extra-model', v); }catch(e){} }
+// Modo de selección: 'auto' (por defecto) prueba en orden Gemini → OpenRouter → extra, saltando al
+// siguiente si uno falla. Si el usuario elige uno concreto ('gemini'|'openrouter'|'extra'), se usa
+// SOLO ese, sin fallback (útil para forzar un proveedor y comprobar que responde).
+function getIAModo(){ try{ return localStorage.getItem('opotest-ia-modo') || 'auto'; }catch(e){ return 'auto'; } }
+function setIAModo(v){ try{ localStorage.setItem('opotest-ia-modo', v); }catch(e){} }
 
 // Limpia el texto que devuelve cualquier IA (a veces envuelto en ```json ... ```) antes de JSON.parse().
 function limpiarJsonIA(texto){ return (texto||'').trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim(); }
@@ -2125,11 +2144,18 @@ let ultimoProveedorIA = '';
 // probar también el proveedor extra (solo tiene sentido para fotos, no para PDFs).
 async function llamarIAConFallback(contenido, opts, incluirExtra){
   const intentos = [
-    { nombre:'Google Gemini', activo: !!getGeminiKey(), fn: ()=> llamarGemini(contenido, opts) },
-    { nombre:'OpenRouter', activo: !!getOpenRouterKey(), fn: ()=> llamarOpenRouter(contenido, opts) }
+    { id:'gemini', nombre:'Google Gemini', activo: !!getGeminiKey(), fn: ()=> llamarGemini(contenido, opts) },
+    { id:'openrouter', nombre:'OpenRouter', activo: !!getOpenRouterKey(), fn: ()=> llamarOpenRouter(contenido, opts) }
   ];
-  if(incluirExtra) intentos.push({ nombre: getExtraModel() ? ('proveedor extra ('+getExtraModel()+')') : 'proveedor extra', activo: !!(getExtraKey() && getExtraBaseUrl() && getExtraModel()), fn: ()=> llamarProveedorExtra(contenido, opts) });
-  const activos = intentos.filter(i=>i.activo);
+  if(incluirExtra) intentos.push({ id:'extra', nombre: getExtraModel() ? ('proveedor extra ('+getExtraModel()+')') : 'proveedor extra', activo: !!(getExtraKey() && getExtraBaseUrl() && getExtraModel()), fn: ()=> llamarProveedorExtra(contenido, opts) });
+  const modo = getIAModo();
+  let activos = intentos.filter(i=>i.activo);
+  if(modo !== 'auto'){
+    const forzado = intentos.find(i=>i.id===modo);
+    if(!forzado) throw new Error('El modo forzado "'+modo+'" no está disponible aquí (esta pantalla no lo soporta). Cambia el selector "¿Cuál usar?" a Automático.');
+    if(!forzado.activo) throw new Error('Has forzado "'+forzado.nombre+'" pero no tiene clave configurada. Cambia a Automático o rellena su clave arriba.');
+    activos = [forzado];
+  }
   if(!activos.length) throw new Error('No has configurado ninguna clave de IA (Gemini, OpenRouter'+(incluirExtra?' u otro proveedor':'')+'). Configúrala arriba.');
   const errores = [];
   for(const intento of activos){
