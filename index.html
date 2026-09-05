@@ -1812,25 +1812,80 @@ function createCollapsible(container, titleHtml, stateObj, key, defaultOpen){
 }
 // Panel de clave/modelo de Gemini, reutilizado tanto en "Desde foto" como en "Desde PDF". Se pliega
 // por defecto una vez que ya tienes la clave puesta, para no repetir el mismo bloque siempre visible.
-function renderGeminiKeyPanel(container, stateObj){
-  const bodyDiv = createCollapsible(container, 'Clave API (Google Gemini)', stateObj, 'uiKeyOpen', !getGeminiKey());
-  const p = document.createElement('p'); p.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;margin:0 0 10px;';
-  p.innerHTML = 'Se guarda solo en este dispositivo (no viaja a Firebase). La puedes crear gratis en <span style="color:var(--amber);">aistudio.google.com/apikey</span> (Google AI Studio).';
-  bodyDiv.appendChild(p);
-  const row = document.createElement('div'); row.className='test-row';
-  const keyField = document.createElement('div'); keyField.className='test-field'; keyField.style.flex='2';
-  keyField.innerHTML = '<label>Clave API</label>';
-  const keyInput = document.createElement('input'); keyInput.type='password'; keyInput.placeholder='AIzaSy...'; keyInput.value = getGeminiKey();
-  keyInput.onchange = ()=> setGeminiKey(keyInput.value.trim());
-  keyField.appendChild(keyInput);
-  row.appendChild(keyField);
-  const modelField = document.createElement('div'); modelField.className='test-field';
-  modelField.innerHTML = '<label>Modelo</label>';
-  const modelInput = document.createElement('input'); modelInput.type='text'; modelInput.value = getGeminiModel();
-  modelInput.onchange = ()=> setGeminiModel(modelInput.value.trim() || 'gemini-3.6-flash');
-  modelField.appendChild(modelInput);
-  row.appendChild(modelField);
-  bodyDiv.appendChild(row);
+// Panel de claves de IA, reutilizado tanto en "Desde foto" como en "Desde PDF". Muestra Gemini y
+// OpenRouter siempre; el tercer proveedor "extra" (compatible OpenAI: Groq, Mistral, etc.) solo se
+// muestra cuando opts.conExtra es true, porque ese solo se usa para transcribir fotos, no PDFs.
+function renderIAKeyPanel(container, stateObj, opts){
+  opts = opts || {};
+  const hayAlguna = !!(getGeminiKey() || getOpenRouterKey());
+  const bodyDiv = createCollapsible(container, 'Claves de IA (Gemini + OpenRouter'+(opts.conExtra?' + otro':'')+')', stateObj, 'uiKeyOpen', !hayAlguna);
+  const intro = document.createElement('p'); intro.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;';
+  intro.innerHTML = 'Todas se guardan solo en este dispositivo (no viajan a Firebase). Basta con rellenar UNA. Si rellenas varias, la app las prueba en este orden y salta a la siguiente en cuanto una falla o se le agota la cuota gratuita del día: <b>Gemini → OpenRouter'+(opts.conExtra?' → proveedor extra':'')+'</b>.';
+  bodyDiv.appendChild(intro);
+
+  function seccion(titulo){
+    const t = document.createElement('div'); t.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--amber);font-weight:600;margin:12px 0 4px;'; t.textContent = titulo;
+    bodyDiv.appendChild(t);
+  }
+  function nota(html){
+    const p = document.createElement('p'); p.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;margin:0 0 8px;';
+    p.innerHTML = html; bodyDiv.appendChild(p);
+  }
+
+  // --- Google Gemini ---
+  seccion('Google Gemini');
+  nota('Gratis en <span style="color:var(--amber);">aistudio.google.com/apikey</span> (Google AI Studio).');
+  const gemRow = document.createElement('div'); gemRow.className='test-row';
+  const gemKeyField = document.createElement('div'); gemKeyField.className='test-field'; gemKeyField.style.flex='2';
+  gemKeyField.innerHTML = '<label>Clave API</label>';
+  const gemKeyInput = document.createElement('input'); gemKeyInput.type='password'; gemKeyInput.placeholder='AIzaSy...'; gemKeyInput.value = getGeminiKey();
+  gemKeyInput.onchange = ()=> setGeminiKey(gemKeyInput.value.trim());
+  gemKeyField.appendChild(gemKeyInput); gemRow.appendChild(gemKeyField);
+  const gemModelField = document.createElement('div'); gemModelField.className='test-field';
+  gemModelField.innerHTML = '<label>Modelo</label>';
+  const gemModelInput = document.createElement('input'); gemModelInput.type='text'; gemModelInput.value = getGeminiModel();
+  gemModelInput.onchange = ()=> setGeminiModel(gemModelInput.value.trim() || 'gemini-3.6-flash');
+  gemModelField.appendChild(gemModelInput); gemRow.appendChild(gemModelField);
+  bodyDiv.appendChild(gemRow);
+
+  // --- OpenRouter ---
+  seccion('OpenRouter (respaldo — agrupa varios modelos gratis con visión)');
+  nota('Gratis en <span style="color:var(--amber);">openrouter.ai/keys</span>. Deja el modelo como <b>openrouter/free</b> para que elija solo entre varios modelos gratuitos con visión, o pon uno en concreto (ej. <span style="color:var(--amber);">qwen/qwen2.5-vl-72b-instruct:free</span>). Límite gratis aproximado: 20 peticiones/min y 50/día (sube a 1000/día si compras alguna vez 10$ de saldo; no caduca).');
+  const orRow = document.createElement('div'); orRow.className='test-row';
+  const orKeyField = document.createElement('div'); orKeyField.className='test-field'; orKeyField.style.flex='2';
+  orKeyField.innerHTML = '<label>Clave API</label>';
+  const orKeyInput = document.createElement('input'); orKeyInput.type='password'; orKeyInput.placeholder='sk-or-v1-...'; orKeyInput.value = getOpenRouterKey();
+  orKeyInput.onchange = ()=> setOpenRouterKey(orKeyInput.value.trim());
+  orKeyField.appendChild(orKeyInput); orRow.appendChild(orKeyField);
+  const orModelField = document.createElement('div'); orModelField.className='test-field';
+  orModelField.innerHTML = '<label>Modelo</label>';
+  const orModelInput = document.createElement('input'); orModelInput.type='text'; orModelInput.value = getOpenRouterModel();
+  orModelInput.onchange = ()=> setOpenRouterModel(orModelInput.value.trim() || 'openrouter/free');
+  orModelField.appendChild(orModelInput); orRow.appendChild(orModelField);
+  bodyDiv.appendChild(orRow);
+
+  // --- Proveedor extra (solo fotos) ---
+  if(opts.conExtra){
+    seccion('Otro proveedor compatible con OpenAI (opcional, solo para fotos)');
+    nota('Para un tercer respaldo, por ejemplo <span style="color:var(--amber);">Groq</span> (console.groq.com — URL <code>https://api.groq.com/openai/v1</code>, modelo <code>meta-llama/llama-4-scout-17b-16e-instruct</code>) o <span style="color:var(--amber);">Mistral</span> (URL <code>https://api.mistral.ai/v1</code>, modelo <code>pixtral-12b-2409</code>). Solo se usa para transcribir fotos, no para generar desde PDF. Algún proveedor puede bloquear las llamadas directas desde el navegador; si falla, la app sigue probando con los demás configurados.');
+    const exRow = document.createElement('div'); exRow.className='test-row';
+    const exUrlField = document.createElement('div'); exUrlField.className='test-field';
+    exUrlField.innerHTML = '<label>URL base</label>';
+    const exUrlInput = document.createElement('input'); exUrlInput.type='text'; exUrlInput.placeholder='https://api.groq.com/openai/v1'; exUrlInput.value = getExtraBaseUrl();
+    exUrlInput.onchange = ()=> setExtraBaseUrl(exUrlInput.value.trim());
+    exUrlField.appendChild(exUrlInput); exRow.appendChild(exUrlField);
+    const exKeyField = document.createElement('div'); exKeyField.className='test-field';
+    exKeyField.innerHTML = '<label>Clave API</label>';
+    const exKeyInput = document.createElement('input'); exKeyInput.type='password'; exKeyInput.value = getExtraKey();
+    exKeyInput.onchange = ()=> setExtraKey(exKeyInput.value.trim());
+    exKeyField.appendChild(exKeyInput); exRow.appendChild(exKeyField);
+    const exModelField = document.createElement('div'); exModelField.className='test-field';
+    exModelField.innerHTML = '<label>Modelo</label>';
+    const exModelInput = document.createElement('input'); exModelInput.type='text'; exModelInput.placeholder='meta-llama/llama-4-scout-17b-16e-instruct'; exModelInput.value = getExtraModel();
+    exModelInput.onchange = ()=> setExtraModel(exModelInput.value.trim());
+    exModelField.appendChild(exModelInput); exRow.appendChild(exModelField);
+    bodyDiv.appendChild(exRow);
+  }
 }
 // Estado de la pestaña "Generar con IA" (preguntas masivas a partir de un PDF: temario, examen, simulacro…).
 // candidatos: preguntas ya devueltas por la IA, pendientes de revisar/guardar (no están en el banco todavía).
@@ -1949,11 +2004,146 @@ function createImageUploaderField(imagesArr, repaint, labelText){
   return wrap;
 }
 
-/* ===================== IA (Google Gemini) para transcribir fotos ===================== */
+/* ===================== IA multi-proveedor (Gemini + OpenRouter + proveedor extra) =====================
+   Todo lo que antes hablaba solo con Gemini ahora pasa por llamarIAConFallback(), que va probando
+   proveedores EN ORDEN (Gemini → OpenRouter → proveedor extra) y solo pasa al siguiente si el actual
+   falla (clave vacía, cuota agotada con error 429, CORS bloqueado, etc.). Así, si a uno se le acaba
+   la cuota gratuita del día, la app sigue funcionando sola con el siguiente que tengas configurado.
+   Basta con rellenar UNA clave para que la app funcione igual que antes; las demás son opcionales. */
 function getGeminiKey(){ try{ return localStorage.getItem('opotest-gemini-key') || ''; }catch(e){ return ''; } }
 function setGeminiKey(v){ try{ localStorage.setItem('opotest-gemini-key', v); }catch(e){} }
 function getGeminiModel(){ try{ return localStorage.getItem('opotest-gemini-model') || 'gemini-3.6-flash'; }catch(e){ return 'gemini-3.6-flash'; } }
 function setGeminiModel(v){ try{ localStorage.setItem('opotest-gemini-model', v); }catch(e){} }
+// OpenRouter (openrouter.ai): agrega decenas de modelos de varias empresas bajo una sola clave, y
+// varios de ellos (marcados ":free" o el router "openrouter/free") no cuestan nada, con su propia
+// cuota gratuita independiente de la de Gemini. Soporta tanto imágenes como PDFs.
+function getOpenRouterKey(){ try{ return localStorage.getItem('opotest-openrouter-key') || ''; }catch(e){ return ''; } }
+function setOpenRouterKey(v){ try{ localStorage.setItem('opotest-openrouter-key', v); }catch(e){} }
+function getOpenRouterModel(){ try{ return localStorage.getItem('opotest-openrouter-model') || 'openrouter/free'; }catch(e){ return 'openrouter/free'; } }
+function setOpenRouterModel(v){ try{ localStorage.setItem('opotest-openrouter-model', v); }catch(e){} }
+// Proveedor extra opcional, compatible con el formato de OpenAI (Groq, Mistral, Together, el router
+// de Hugging Face, etc.). Solo se usa para transcribir FOTOS (no PDFs), porque la mayoría de estos
+// servicios no aceptan archivos PDF directamente en el chat, solo imágenes.
+function getExtraKey(){ try{ return localStorage.getItem('opotest-extra-key') || ''; }catch(e){ return ''; } }
+function setExtraKey(v){ try{ localStorage.setItem('opotest-extra-key', v); }catch(e){} }
+function getExtraBaseUrl(){ try{ return localStorage.getItem('opotest-extra-baseurl') || ''; }catch(e){ return ''; } }
+function setExtraBaseUrl(v){ try{ localStorage.setItem('opotest-extra-baseurl', v); }catch(e){} }
+function getExtraModel(){ try{ return localStorage.getItem('opotest-extra-model') || ''; }catch(e){ return ''; } }
+function setExtraModel(v){ try{ localStorage.setItem('opotest-extra-model', v); }catch(e){} }
+
+// Limpia el texto que devuelve cualquier IA (a veces envuelto en ```json ... ```) antes de JSON.parse().
+function limpiarJsonIA(texto){ return (texto||'').trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim(); }
+
+/* ---- "Contenido" en formato neutro, independiente del proveedor: una lista de
+   {tipo:'texto', texto} | {tipo:'imagen', mime, b64} | {tipo:'pdf', b64, nombre}
+   Cada función llamarXxx() de abajo la traduce al formato concreto de su API y devuelve el texto
+   de la respuesta (sin parsear todavía: eso lo hace quien llama a llamarIAConFallback). ---- */
+async function llamarGemini(contenido, opts){
+  const apiKey = getGeminiKey();
+  if(!apiKey) throw new Error('Gemini: no hay clave configurada.');
+  const model = getGeminiModel();
+  const parts = contenido.map(c=>{
+    if(c.tipo==='texto') return {text:c.texto};
+    return {inline_data:{ mime_type: c.tipo==='pdf' ? 'application/pdf' : (c.mime||'image/jpeg'), data:c.b64 }};
+  });
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(apiKey), {
+    method:'POST',
+    headers:{ 'content-type':'application/json' },
+    body: JSON.stringify({
+      contents:[{ parts }],
+      generationConfig:{ temperature: opts.temperature, maxOutputTokens: opts.maxTokens }
+    })
+  });
+  if(!resp.ok){
+    const errTxt = await resp.text().catch(()=> '');
+    throw new Error('Gemini ('+resp.status+'): '+errTxt.slice(0,200));
+  }
+  const data = await resp.json();
+  const cand = (data.candidates||[])[0];
+  const textPart = cand && cand.content && (cand.content.parts||[]).find(p=>typeof p.text==='string');
+  if(!textPart) throw new Error('Gemini no devolvió texto (posible bloqueo de seguridad o cuota agotada).');
+  return textPart.text;
+}
+async function llamarOpenRouter(contenido, opts){
+  const apiKey = getOpenRouterKey();
+  if(!apiKey) throw new Error('OpenRouter: no hay clave configurada.');
+  const model = getOpenRouterModel() || 'openrouter/free';
+  const contentArr = []; const plugins = [];
+  contenido.forEach(c=>{
+    if(c.tipo==='texto') contentArr.push({type:'text', text:c.texto});
+    else if(c.tipo==='imagen') contentArr.push({type:'image_url', image_url:{ url:'data:'+(c.mime||'image/jpeg')+';base64,'+c.b64 }});
+    else if(c.tipo==='pdf'){
+      contentArr.push({type:'file', file:{ filename:c.nombre||'documento.pdf', file_data:'data:application/pdf;base64,'+c.b64 }});
+      // Motor gratuito de extracción de texto (evita el motor OCR de pago, ~2$/1000 páginas).
+      if(!plugins.length) plugins.push({id:'file-parser', pdf:{engine:'pdf-text'}});
+    }
+  });
+  const body = { model, messages:[{ role:'user', content:contentArr }], temperature: opts.temperature, max_tokens: opts.maxTokens };
+  if(plugins.length) body.plugins = plugins;
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+apiKey, 'X-Title':'OpoTest' },
+    body: JSON.stringify(body)
+  });
+  if(!resp.ok){
+    const errTxt = await resp.text().catch(()=> '');
+    throw new Error('OpenRouter ('+resp.status+'): '+errTxt.slice(0,200));
+  }
+  const data = await resp.json();
+  const msg = data.choices && data.choices[0] && data.choices[0].message;
+  const text = msg && (typeof msg.content==='string' ? msg.content : (Array.isArray(msg.content) ? msg.content.map(p=>p.text||'').join('') : ''));
+  if(!text) throw new Error('OpenRouter no devolvió texto (modelo gratuito saturado; prueba otro modelo).');
+  return text;
+}
+async function llamarProveedorExtra(contenido, opts){
+  const apiKey = getExtraKey(), baseUrl = (getExtraBaseUrl()||'').trim().replace(/\/+$/,''), model = getExtraModel();
+  if(!apiKey || !baseUrl || !model) throw new Error('Proveedor extra: falta URL, clave o modelo.');
+  const contentArr = [];
+  contenido.forEach(c=>{
+    if(c.tipo==='texto') contentArr.push({type:'text', text:c.texto});
+    else if(c.tipo==='imagen') contentArr.push({type:'image_url', image_url:{ url:'data:'+(c.mime||'image/jpeg')+';base64,'+c.b64 }});
+    // Los PDF no se mandan a este proveedor: casi ningún servidor compatible con OpenAI los acepta.
+  });
+  const resp = await fetch(baseUrl+'/chat/completions', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+apiKey },
+    body: JSON.stringify({ model, messages:[{ role:'user', content:contentArr }], temperature: opts.temperature, max_tokens: opts.maxTokens })
+  });
+  if(!resp.ok){
+    const errTxt = await resp.text().catch(()=> '');
+    throw new Error(model+' ('+resp.status+'): '+errTxt.slice(0,200));
+  }
+  const data = await resp.json();
+  const msg = data.choices && data.choices[0] && data.choices[0].message;
+  const text = msg && (typeof msg.content==='string' ? msg.content : '');
+  if(!text) throw new Error(model+' no devolvió texto.');
+  return text;
+}
+// Nombre del último proveedor que respondió con éxito, solo para poder mostrarlo en los avisos.
+let ultimoProveedorIA = '';
+// contenido: ver formato neutro de arriba. opts:{temperature,maxTokens}. incluirExtra: si se debe
+// probar también el proveedor extra (solo tiene sentido para fotos, no para PDFs).
+async function llamarIAConFallback(contenido, opts, incluirExtra){
+  const intentos = [
+    { nombre:'Google Gemini', activo: !!getGeminiKey(), fn: ()=> llamarGemini(contenido, opts) },
+    { nombre:'OpenRouter', activo: !!getOpenRouterKey(), fn: ()=> llamarOpenRouter(contenido, opts) }
+  ];
+  if(incluirExtra) intentos.push({ nombre: getExtraModel() ? ('proveedor extra ('+getExtraModel()+')') : 'proveedor extra', activo: !!(getExtraKey() && getExtraBaseUrl() && getExtraModel()), fn: ()=> llamarProveedorExtra(contenido, opts) });
+  const activos = intentos.filter(i=>i.activo);
+  if(!activos.length) throw new Error('No has configurado ninguna clave de IA (Gemini, OpenRouter'+(incluirExtra?' u otro proveedor':'')+'). Configúrala arriba.');
+  const errores = [];
+  for(const intento of activos){
+    try{
+      const texto = await intento.fn();
+      ultimoProveedorIA = intento.nombre;
+      return texto;
+    }catch(err){
+      console.error('['+intento.nombre+']', err);
+      errores.push(intento.nombre+': '+(err.message||'error desconocido'));
+    }
+  }
+  throw new Error('Todas las IA configuradas fallaron → '+errores.join(' | '));
+}
 
 /* ===================== COMPARTIR PREGUNTA (PNG / Telegram) =====================
    Dos formas de compartir una pregunta con el grupo de Telegram, solo para el admin:
@@ -2188,44 +2378,29 @@ function fileToBase64(file){
 }
 
 async function callClaudeVisionTranscribe(files){
-  const apiKey = getGeminiKey();
-  if(!apiKey) throw new Error('Falta la clave API de Google Gemini (configúrala arriba).');
-  const model = getGeminiModel();
-  const imageParts = [];
+  const imagenes = [];
   for(const f of files){
     const b64 = await fileToBase64(f);
-    imageParts.push({ inline_data:{ mime_type: f.type || 'image/jpeg', data:b64 } });
+    imagenes.push({ tipo:'imagen', mime: f.type || 'image/jpeg', b64 });
   }
   const prompt = `Estas imágenes son capturas de pantalla de UNA pregunta de un test de oposición ya respondido (puede estar acertada, fallada o en blanco), a veces con la retroalimentación/corrección visible.
 Transcribe la pregunta y devuelve SOLO un objeto JSON válido, sin texto adicional, sin explicaciones, sin backticks, con esta forma exacta:
 {"enunciado":"texto literal de la pregunta","opciones":["opción A","opción B","opción C","opción D"],"correcta":0,"explicacion":"resumen breve de la retroalimentación si aparece, si no cadena vacía","categoria_sugerida":"conocimientos|ingles|psico|ortografia|gramatica","tema_sugerido":null}
 Reglas: "correcta" es el índice (empezando en 0) de la opción correcta, dedúcelo de la retroalimentación o marca de corrección aunque el usuario la haya fallado o dejado en blanco; si no puedes saber cuál es la correcta pon null. "tema_sugerido" es un número si se menciona o se puede inferir el tema, si no null.`;
-  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(apiKey), {
-    method:'POST',
-    headers:{ 'content-type':'application/json' },
-    body: JSON.stringify({
-      contents:[{ parts:[...imageParts, {text:prompt}] }],
-      generationConfig:{ temperature:0.1, maxOutputTokens:1500 }
-    })
-  });
-  if(!resp.ok){
-    const errTxt = await resp.text().catch(()=> '');
-    throw new Error('Error de la API ('+resp.status+'): '+errTxt.slice(0,200));
-  }
-  const data = await resp.json();
-  const cand = (data.candidates||[])[0];
-  const textPart = cand && cand.content && (cand.content.parts||[]).find(p=>typeof p.text==='string');
-  if(!textPart) throw new Error('La API no devolvió texto.');
-  let clean = textPart.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+  const contenido = [...imagenes, {tipo:'texto', texto:prompt}];
+  // Prueba Gemini → OpenRouter → proveedor extra (los tres saben leer imágenes), en ese orden.
+  const texto = await llamarIAConFallback(contenido, {temperature:0.1, maxTokens:1500}, true);
+  const clean = limpiarJsonIA(texto);
   let parsed;
-  try{ parsed = JSON.parse(clean); }catch(e){ throw new Error('No se pudo interpretar la respuesta de la IA. Revisa/rellena manualmente.'); }
+  try{ parsed = JSON.parse(clean); }catch(e){ throw new Error('No se pudo interpretar la respuesta de '+ultimoProveedorIA+'. Revisa/rellena manualmente.'); }
   return parsed;
 }
 
-/* ===================== IA (Google Gemini) para generar preguntas masivas desde un PDF ===================== */
-// Reutiliza la misma clave/modelo que la transcripción por foto. Aquí, en vez de UNA pregunta a
-// partir de una imagen, se sube un PDF (temario, examen ya corregido, simulacro…) y se le pide a
-// la IA que devuelva VARIAS preguntas a la vez, en el formato que corresponda según la categoría.
+/* ===================== IA para generar preguntas masivas desde un PDF ===================== */
+// Reutiliza las mismas claves que la transcripción por foto (Gemini y OpenRouter; el proveedor
+// extra queda fuera porque casi ninguno acepta PDFs). Aquí, en vez de UNA pregunta a partir de una
+// imagen, se sube un PDF (temario, examen ya corregido, simulacro…) y se le pide a la IA que
+// devuelva VARIAS preguntas a la vez, en el formato que corresponda según la categoría.
 function normTxt(s){ return (s||'').toString().trim().toLowerCase(); }
 // Similitud simple entre dos enunciados (Jaccard sobre palabras de 3+ letras, sin acentos ni
 // puntuación). No es perfecto, pero basta para avisar de duplicados casi literales o muy
@@ -2469,7 +2644,7 @@ async function getPdfPageCount(file){
 }
 // Devuelve un Blob con solo las páginas [startPage, endPage] (1-indexado, ambos incluidos) del PDF
 // original. fileToBase64() acepta Blobs igual que Files (usa FileReader), así que este resultado
-// se puede pasar directamente a callGeminiGenerarPreguntas() como si fuera el archivo subido.
+// se puede pasar directamente a callIAGenerarPreguntas() como si fuera el archivo subido.
 async function extractPdfPageRange(file, startPage, endPage){
   const bytes = await file.arrayBuffer();
   const srcDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption:true });
@@ -2489,11 +2664,10 @@ function calcularRangosPaginas(totalPaginas, porTrozo){
   return rangos;
 }
 
-async function callGeminiGenerarPreguntas(file, file2, categoria, cantidad, instrucciones){
-  const apiKey = getGeminiKey();
-  if(!apiKey) throw new Error('Falta la clave API de Google Gemini (configúrala arriba).');
-  const model = getGeminiModel();
+async function callIAGenerarPreguntas(file, file2, categoria, cantidad, instrucciones){
+  const nombre1 = file.name || 'documento.pdf';
   const b64 = await fileToBase64(file);
+  const nombre2 = file2 ? (file2.name || 'respuestas.pdf') : null;
   const b64_2 = file2 ? await fileToBase64(file2) : null;
   const tipo = testTipoForCategoria(categoria);
   const temarioCtx = buildTemarioPromptContext(categoria);
@@ -2515,32 +2689,18 @@ async function callGeminiGenerarPreguntas(file, file2, categoria, cantidad, inst
     + 'Devuelve SOLO un array JSON válido (sin texto adicional, sin backticks, sin comentarios), donde cada elemento tiene esta forma exacta:\n'
     + schema + '\n'
     + 'Reglas: "tema_sugerido" es el nombre EXACTO de uno de los temas listados arriba si la pregunta encaja claramente, o null si no. "subtema_sugerido" igual, con nombre exacto de subtema, o null.';
-  const parts = [];
-  if(b64_2) parts.push({text:'DOCUMENTO 1 (preguntas):'});
-  parts.push({inline_data:{mime_type:'application/pdf', data:b64}});
-  if(b64_2){ parts.push({text:'DOCUMENTO 2 (respuestas / corrección):'}); parts.push({inline_data:{mime_type:'application/pdf', data:b64_2}}); }
-  parts.push({text:prompt});
+  const contenido = [];
+  if(b64_2) contenido.push({tipo:'texto', texto:'DOCUMENTO 1 (preguntas):'});
+  contenido.push({tipo:'pdf', b64, nombre:nombre1});
+  if(b64_2){ contenido.push({tipo:'texto', texto:'DOCUMENTO 2 (respuestas / corrección):'}); contenido.push({tipo:'pdf', b64:b64_2, nombre:nombre2}); }
+  contenido.push({tipo:'texto', texto:prompt});
   const maxTokens = Math.min(32768, Math.max(4096, cantidad*220));
-  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(apiKey), {
-    method:'POST',
-    headers:{ 'content-type':'application/json' },
-    body: JSON.stringify({
-      contents:[{ parts }],
-      generationConfig:{ temperature:0.15, maxOutputTokens: maxTokens }
-    })
-  });
-  if(!resp.ok){
-    const errTxt = await resp.text().catch(()=> '');
-    throw new Error('Error de la API ('+resp.status+'): '+errTxt.slice(0,200));
-  }
-  const data = await resp.json();
-  const cand = (data.candidates||[])[0];
-  const textPart = cand && cand.content && (cand.content.parts||[]).find(p=>typeof p.text==='string');
-  if(!textPart) throw new Error('La IA no devolvió texto (puede que el PDF sea muy grande o esté escaneado sin texto reconocible).');
-  let clean = textPart.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+  // Solo Gemini y OpenRouter saben leer PDFs; el proveedor extra (incluirExtra=false) se salta aquí.
+  const texto = await llamarIAConFallback(contenido, {temperature:0.15, maxTokens}, false);
+  const clean = limpiarJsonIA(texto);
   let parsed;
-  try{ parsed = JSON.parse(clean); }catch(e){ throw new Error('No se pudo interpretar la respuesta de la IA como JSON. Prueba de nuevo o con un PDF más corto.'); }
-  if(!Array.isArray(parsed)) throw new Error('La IA no devolvió una lista de preguntas.');
+  try{ parsed = JSON.parse(clean); }catch(e){ throw new Error('No se pudo interpretar la respuesta de '+ultimoProveedorIA+' como JSON. Prueba de nuevo o con un PDF más corto.'); }
+  if(!Array.isArray(parsed)) throw new Error(ultimoProveedorIA+' no devolvió una lista de preguntas.');
   return parsed;
 }
 function buildCandidatosFromParsed(parsed, categoria, origenArchivo){
@@ -2701,7 +2861,7 @@ function renderTestsAnadir(body){
         + testCatLabel(testsAddState.categoria) + ' usa otro formato — cambia la categoría de abajo o escribe la pregunta a mano.</p>';
       body.appendChild(nota);
     } else {
-      renderGeminiKeyPanel(body, testsAddState);
+      renderIAKeyPanel(body, testsAddState, {conExtra:true});
 
       const panel = document.createElement('div'); panel.className='test-panel';
       panel.innerHTML = `<h4>Sube la(s) foto(s) de la pregunta</h4>
@@ -2743,7 +2903,7 @@ function renderTestsAnadir(body){
           if(parsed.categoria_sugerida && TEST_CATEGORIAS.some(c=>c.key===parsed.categoria_sugerida) && testTipoForCategoria(parsed.categoria_sugerida)==='multiple') testsAddState.categoria = parsed.categoria_sugerida;
           testsAddState.tema = (typeof parsed.tema_sugerido === 'number') ? parsed.tema_sugerido : null;
           testsAddState.subtema = null;
-          showToast('Transcripción lista, revísala abajo ✓');
+          showToast('Transcripción lista con '+(ultimoProveedorIA||'IA')+', revísala abajo ✓');
           renderTests();
         }catch(err){
           console.error(err);
@@ -2980,7 +3140,7 @@ async function ejecutarGeneracionIA(){
       testsGenState.progreso = numTrozos>1 ? {actual:i+1, total:numTrozos, paginas: start!=null?(start+'–'+end):null} : null;
       renderTests();
       const filePart = (start!=null) ? await extractPdfPageRange(testsGenState.file, start, end) : testsGenState.file;
-      const parsed = await callGeminiGenerarPreguntas(filePart, testsGenState.file2, testsGenState.categoria, cantidadPorTrozo, testsGenState.instrucciones.trim());
+      const parsed = await callIAGenerarPreguntas(filePart, testsGenState.file2, testsGenState.categoria, cantidadPorTrozo, testsGenState.instrucciones.trim());
       const nuevos = buildCandidatosFromParsed(parsed, testsGenState.categoria, nombreArchivo);
       if(nuevos.length){
         testsGenState.candidatos = testsGenState.candidatos.concat(nuevos);
@@ -2993,7 +3153,7 @@ async function ejecutarGeneracionIA(){
     if(!totalGeneradas){
       showToast('La IA no devolvió ninguna pregunta válida. Prueba con otro PDF o revisa la clave API.');
     } else {
-      showToast(totalGeneradas+' pregunta(s) generada(s)'+(totalDups?(', '+totalDups+' parecen duplicadas'):'')+(numTrozos>1?(' (en '+numTrozos+' trozos)'):'')+', revísalas abajo antes de guardar ✓');
+      showToast(totalGeneradas+' pregunta(s) generada(s) con '+(ultimoProveedorIA||'IA')+(totalDups?(', '+totalDups+' parecen duplicadas'):'')+(numTrozos>1?(' (en '+numTrozos+' trozos)'):'')+', revísalas abajo antes de guardar ✓');
     }
   }catch(err){
     console.error(err);
@@ -3021,7 +3181,7 @@ function renderTestsGenerarIA(body){
       descartarlas) y solo se añaden al banco cuando pulses guardar.
     </p>`;
 
-  renderGeminiKeyPanel(body, testsGenState);
+  renderIAKeyPanel(body, testsGenState, {conExtra:false});
 
   const genPanel = document.createElement('div'); genPanel.className='test-panel';
   genPanel.innerHTML = '<h4>Configura la generación</h4>';
