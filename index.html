@@ -2042,7 +2042,7 @@ function getExtraKey(){ try{ return localStorage.getItem('opotest-extra-key') ||
 function setExtraKey(v){ try{ localStorage.setItem('opotest-extra-key', v); }catch(e){} }
 function getExtraBaseUrl(){ try{ return localStorage.getItem('opotest-extra-baseurl') || ''; }catch(e){ return ''; } }
 function setExtraBaseUrl(v){ try{ localStorage.setItem('opotest-extra-baseurl', v); }catch(e){} }
-function getExtraModel(){ try{ return localStorage.getItem('opotest-extra-model') || ''; }catch(e){ return ''; } }
+function getExtraModel(){ try{ return localStorage.getItem('opotest-extra-model') || 'meta-llama/llama-4-scout-17b-16e-instruct'; }catch(e){ return 'meta-llama/llama-4-scout-17b-16e-instruct'; } }
 function setExtraModel(v){ try{ localStorage.setItem('opotest-extra-model', v); }catch(e){} }
 // Modo de selección: 'auto' (por defecto) prueba en orden Gemini → OpenRouter → extra, saltando al
 // siguiente si uno falla. Si el usuario elige uno concreto ('gemini'|'openrouter'|'extra'), se usa
