@@ -289,20 +289,21 @@
   }
   .icon-btn{
     background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream);
-    width:32px;height:32px;border-radius:2px;cursor:pointer;font-family:var(--font-mono);font-size:15px;
-    display:flex;align-items:center;justify-content:center;
+    width:32px;height:32px;border-radius:8px;cursor:pointer;font-family:var(--font-mono);font-size:15px;
+    display:flex;align-items:center;justify-content:center;transition:border-color .15s ease;
   }
   .icon-btn:hover{border-color:var(--amber);color:var(--amber);}
   .btn{
     background:var(--amber);color:#1b2b1f;border:none;font-family:var(--font-display);
     text-transform:uppercase;letter-spacing:.04em;font-weight:600;font-size:13px;
-    padding:8px 14px;border-radius:2px;cursor:pointer;
+    padding:9px 16px;border-radius:6px;cursor:pointer;transition:background .15s ease,transform .1s ease;
   }
+  .btn:active{transform:scale(0.98);}
   .btn:hover{background:#e5aa50;}
   .btn.ghost{background:transparent;border:1px solid var(--amber-dim);color:var(--amber);}
   .btn.ghost:hover{border-color:var(--amber);}
   .btn.danger{background:transparent;border:1px solid var(--red-text);color:var(--red-text);}
-  .btn.small{padding:5px 10px;font-size:11px;}
+  .btn.small{padding:6px 12px;font-size:11px;}
 
   .empty-state{
     border:1px dashed var(--line);padding:40px 20px;text-align:center;color:var(--cream-dim);
@@ -686,10 +687,17 @@
   .modal-add select{width:100%;background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream);padding:8px;border-radius:2px;font-family:var(--font-mono);}
 
   /* ---- TESTS (banco de preguntas) ---- */
-  .test-subnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
-  .test-subnav button{background:var(--bg-panel);border:1px solid var(--line);color:var(--cream-dim);padding:8px 14px;border-radius:2px;font-family:var(--font-mono);font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.02em;}
-  .test-subnav button.active{border-color:var(--amber);color:var(--amber);}
-  .test-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:3px;padding:16px;margin-bottom:16px;}
+  .test-subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+  .test-subnav button{display:flex;align-items:center;gap:6px;background:var(--bg-panel);border:1px solid var(--line);color:var(--cream-dim);padding:9px 16px;border-radius:20px;font-family:var(--font-mono);font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;transition:all .15s ease;box-shadow:var(--shadow-soft);}
+  .test-subnav button:hover{border-color:var(--amber-dim);color:var(--cream);}
+  .test-subnav button.active{border-color:var(--amber);color:#fff8ec;background:var(--amber);}
+  .test-subnav button .tab-ic{font-size:14px;line-height:1;}
+  html[data-theme="light"] .test-subnav button.active{color:#fff8ec;}
+  .test-panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow-soft);}
+  .stat-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  .stat-chip{flex:1 1 120px;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;box-shadow:var(--shadow-soft);}
+  .stat-chip .stat-num{font-family:var(--font-display);font-size:22px;color:var(--amber);font-weight:600;line-height:1.1;}
+  .stat-chip .stat-lbl{font-family:var(--font-mono);font-size:10px;color:var(--cream-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
   .test-panel h4{font-family:var(--font-display);text-transform:uppercase;color:var(--amber);margin:0 0 10px;font-size:15px;letter-spacing:.03em;}
   /* Secciones plegables reutilizadas en "Añadir pregunta" (config. de la IA, generación por PDF…)
      para no saturar la pantalla con paneles que no se usan constantemente. */
@@ -718,7 +726,7 @@
   .test-thumbs .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .test-thumbs .thumb button{position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;}
   .test-list{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
-  .test-card{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:3px;padding:10px 12px;}
+  .test-card{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;box-shadow:var(--shadow-soft);}
   .test-card .tc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-size:13px;margin-bottom:4px;}
   .test-card .tc-tag{font-family:var(--font-mono);font-size:10px;color:var(--muted);white-space:nowrap;}
   .test-card .tc-stat{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px;}
@@ -818,13 +826,13 @@
   .toast{
     position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
     background:var(--amber);color:#1b2b1f;font-family:var(--font-mono);font-size:12px;
-    padding:8px 16px;border-radius:2px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:80;
+    padding:9px 18px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:80;
   }
   .toast.show{opacity:1;}
 
   .save-indicator{
     font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;
-    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:2px;
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;
     border:1px solid var(--line);color:var(--cream-dim);
   }
   .save-indicator .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
@@ -2838,12 +2846,31 @@ function renderTests(){
   // "Generar con IA" vive ahora dentro de "Añadir pregunta" (como uno de los 3 métodos), en vez
   // de ser una pestaña aparte; si alguien llega con el estado antiguo, lo redirige sin más.
   if(testsActiveSubtab==='generarIA') testsActiveSubtab = 'anadir';
+  const TAB_ICONS = { practicar:'📝', banco:'📚', anadir:'➕', temario:'📖', progreso:'📊' };
   const tabs = isAdmin
     ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario'],['progreso','Progreso']]
     : [['practicar','Practicar'],['progreso','Progreso']];
+  // Franja de resumen: da un primer vistazo tipo "panel de control" antes de las pestañas, con
+  // los números que más importan (tamaño del banco y precisión global de quien practica).
+  const questions = state.testBank.questions || [];
+  const practicadas = questions.filter(q=>q.stats && q.stats.veces>0);
+  const totalIntentos = questions.reduce((s,q)=> s+(q.stats && q.stats.veces||0), 0);
+  const totalAciertos = questions.reduce((s,q)=> s+(q.stats && q.stats.aciertos||0), 0);
+  const precisionGlobal = totalIntentos ? Math.round((totalAciertos/totalIntentos)*100) : null;
+  const strip = document.createElement('div'); strip.className='stat-strip';
+  const chips = isAdmin
+    ? [[String(questions.length),'Preguntas en el banco'],[String(practicadas.length),'Practicadas alguna vez'],[precisionGlobal!==null?precisionGlobal+'%':'—','Acierto global']]
+    : [[String(practicadas.length),'Preguntas practicadas'],[precisionGlobal!==null?precisionGlobal+'%':'—','Tu acierto global']];
+  chips.forEach(([num,lbl])=>{
+    const chip = document.createElement('div'); chip.className='stat-chip';
+    chip.innerHTML = '<div class="stat-num">'+num+'</div><div class="stat-lbl">'+lbl+'</div>';
+    strip.appendChild(chip);
+  });
+  host.appendChild(strip);
   const nav = document.createElement('div'); nav.className='test-subnav';
   tabs.forEach(([key,label])=>{
-    const b = document.createElement('button'); b.type='button'; b.textContent=label;
+    const b = document.createElement('button'); b.type='button';
+    b.innerHTML = '<span class="tab-ic">'+(TAB_ICONS[key]||'')+'</span><span>'+label+'</span>';
     if(testsActiveSubtab===key) b.classList.add('active');
     b.onclick = ()=>{ testsActiveSubtab = key; if(key!=='practicar'){ clearQuizTimer(); testsQuiz=null; } renderTests(); };
     nav.appendChild(b);
