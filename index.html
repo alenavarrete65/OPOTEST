@@ -1838,7 +1838,7 @@ function renderIAKeyPanel(container, stateObj, opts){
   const gemRow = document.createElement('div'); gemRow.className='test-row';
   const gemKeyField = document.createElement('div'); gemKeyField.className='test-field'; gemKeyField.style.flex='2';
   gemKeyField.innerHTML = '<label>Clave API</label>';
-  const gemKeyInput = document.createElement('input'); gemKeyInput.type='password'; gemKeyInput.placeholder='AIzaSy...'; gemKeyInput.value = getGeminiKey();
+  const gemKeyInput = document.createElement('input'); gemKeyInput.type='text'; gemKeyInput.autocomplete='off'; gemKeyInput.spellcheck=false; gemKeyInput.placeholder='AIzaSy...'; gemKeyInput.value = getGeminiKey();
   gemKeyInput.onchange = ()=> setGeminiKey(gemKeyInput.value.trim());
   gemKeyField.appendChild(gemKeyInput); gemRow.appendChild(gemKeyField);
   const gemModelField = document.createElement('div'); gemModelField.className='test-field';
@@ -1854,7 +1854,7 @@ function renderIAKeyPanel(container, stateObj, opts){
   const orRow = document.createElement('div'); orRow.className='test-row';
   const orKeyField = document.createElement('div'); orKeyField.className='test-field'; orKeyField.style.flex='2';
   orKeyField.innerHTML = '<label>Clave API</label>';
-  const orKeyInput = document.createElement('input'); orKeyInput.type='password'; orKeyInput.placeholder='sk-or-v1-...'; orKeyInput.value = getOpenRouterKey();
+  const orKeyInput = document.createElement('input'); orKeyInput.type='text'; orKeyInput.autocomplete='off'; orKeyInput.spellcheck=false; orKeyInput.placeholder='sk-or-v1-...'; orKeyInput.value = getOpenRouterKey();
   orKeyInput.onchange = ()=> setOpenRouterKey(orKeyInput.value.trim());
   orKeyField.appendChild(orKeyInput); orRow.appendChild(orKeyField);
   const orModelField = document.createElement('div'); orModelField.className='test-field';
@@ -1876,7 +1876,7 @@ function renderIAKeyPanel(container, stateObj, opts){
     exUrlField.appendChild(exUrlInput); exRow.appendChild(exUrlField);
     const exKeyField = document.createElement('div'); exKeyField.className='test-field';
     exKeyField.innerHTML = '<label>Clave API</label>';
-    const exKeyInput = document.createElement('input'); exKeyInput.type='password'; exKeyInput.value = getExtraKey();
+    const exKeyInput = document.createElement('input'); exKeyInput.type='text'; exKeyInput.autocomplete='off'; exKeyInput.spellcheck=false; exKeyInput.value = getExtraKey();
     exKeyInput.onchange = ()=> setExtraKey(exKeyInput.value.trim());
     exKeyField.appendChild(exKeyInput); exRow.appendChild(exKeyField);
     const exModelField = document.createElement('div'); exModelField.className='test-field';
@@ -2171,7 +2171,7 @@ function renderTelegramConfigPanel(container){
   const row = document.createElement('div'); row.className='test-row';
   const tokField = document.createElement('div'); tokField.className='test-field'; tokField.style.flex='2';
   tokField.innerHTML = '<label>Token del bot</label>';
-  const tokInput = document.createElement('input'); tokInput.type='password'; tokInput.placeholder='123456:ABC-...'; tokInput.value = getTelegramBotToken();
+  const tokInput = document.createElement('input'); tokInput.type='text'; tokInput.autocomplete='off'; tokInput.spellcheck=false; tokInput.placeholder='123456:ABC-...'; tokInput.value = getTelegramBotToken();
   tokInput.onchange = ()=> setTelegramBotToken(tokInput.value.trim());
   tokField.appendChild(tokInput);
   row.appendChild(tokField);
