@@ -306,6 +306,8 @@
   .btn.danger{background:transparent;border:1px solid var(--red-text);color:var(--red-text);box-shadow:none;}
   .btn.danger:hover{background:transparent;transform:none;box-shadow:none;}
   .btn.small{padding:7px 13px;font-size:11px;}
+  .btn-spinner{display:inline-block;width:11px;height:11px;border:2px solid rgba(27,43,31,0.35);border-top-color:#1b2b1f;border-radius:50%;animation:btnspin .6s linear infinite;vertical-align:-1px;margin-right:6px;}
+  @keyframes btnspin{to{transform:rotate(360deg);}}
 
   .empty-state{
     border:1px dashed var(--line);padding:40px 20px;text-align:center;color:var(--cream-dim);
@@ -829,10 +831,41 @@
   .section-heading:first-child{margin-top:0;}
   .section-heading .sh-ic{font-size:16px;}
   .practicar-startbar{position:sticky;bottom:0;background:var(--bg-panel);padding:12px 0 4px;margin-top:4px;border-top:1px solid var(--line);}
+  .wizard-wrap{display:flex;flex-direction:column;gap:4px;}
+  .wizard-dots{display:flex;gap:6px;justify-content:center;margin-bottom:18px;}
+  .wizard-dots i{width:7px;height:7px;border-radius:50%;background:var(--line);display:block;}
+  .wizard-dots i.on{background:var(--amber);}
+  .wizard-back{align-self:flex-start;background:none;border:none;color:var(--cream-dim);font-family:var(--font-mono);font-size:12px;cursor:pointer;padding:4px 0 14px;display:flex;align-items:center;gap:4px;}
+  .wizard-back:hover{color:var(--amber);}
+  .wizard-title{font-family:var(--font-display);text-transform:uppercase;color:var(--cream);font-size:19px;letter-spacing:.02em;text-align:center;margin:4px 0 4px;}
+  .wizard-sub{font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);text-align:center;margin:0 0 22px;}
+  .wizard-hero{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 10px 30px;text-align:center;}
+  .wizard-hero .wh-emblem{font-size:44px;margin-bottom:14px;}
+  .wizard-hero h3{font-family:var(--font-display);text-transform:uppercase;color:var(--amber);font-size:22px;letter-spacing:.03em;margin:0 0 8px;}
+  .wizard-hero p{font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin:0 0 26px;max-width:280px;}
+  .wizard-hero .btn{font-size:16px;padding:16px 40px;}
+  .wizard-options{display:flex;flex-direction:column;gap:10px;}
+  .wizard-opt{display:flex;align-items:center;gap:14px;background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));border:1px solid var(--line);border-radius:10px;padding:16px 16px;cursor:pointer;text-align:left;box-shadow:var(--shadow-soft);transition:border-color .15s ease,transform .1s ease;}
+  .wizard-opt:hover{border-color:var(--amber-dim);}
+  .wizard-opt:active{transform:scale(0.99);}
+  .wizard-opt.selected{border-color:var(--amber);background:linear-gradient(180deg, rgba(227,167,82,0.16), var(--bg-panel));}
+  .wizard-opt .wo-ic{font-size:26px;flex-shrink:0;width:36px;text-align:center;}
+  .wizard-opt .wo-txt strong{display:block;font-family:var(--font-display);color:var(--cream);font-size:14px;text-transform:uppercase;letter-spacing:.02em;}
+  .wizard-opt .wo-txt span{display:block;font-family:var(--font-mono);color:var(--cream-dim);font-size:11px;margin-top:2px;}
+  .wizard-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .wizard-num-btn{background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));border:1px solid var(--line);border-radius:10px;padding:16px 6px;cursor:pointer;font-family:var(--font-display);color:var(--cream);font-size:18px;box-shadow:var(--shadow-soft);transition:border-color .15s ease;}
+  .wizard-num-btn:hover{border-color:var(--amber-dim);}
+  .wizard-num-btn.selected{border-color:var(--amber);color:var(--amber);}
+  .wizard-num-btn small{display:block;font-family:var(--font-mono);font-size:9px;color:var(--cream-dim);text-transform:none;letter-spacing:0;margin-top:2px;}
+  .wizard-summary{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:20px;}
+  .wizard-summary .ws-row{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12px;padding:6px 0;border-bottom:1px dashed var(--line);}
+  .wizard-summary .ws-row:last-child{border-bottom:none;}
+  .wizard-summary .ws-row span:first-child{color:var(--cream-dim);}
+  .wizard-summary .ws-row span:last-child{color:var(--cream);text-align:right;}
   .test-check-row input[type="checkbox"]{accent-color:var(--amber);width:16px;height:16px;cursor:pointer;}
   .test-check-row label{font-weight:normal;font-family:var(--font-body);color:var(--cream);cursor:pointer;}
   .test-check-row input[type="number"]{width:64px;}
-  .quiz-timer-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:14px;letter-spacing:.04em;color:var(--amber);background:var(--bg-panel);border:1px solid var(--amber-dim);border-radius:20px;padding:8px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:10;box-shadow:var(--shadow-soft);}
+  .quiz-timer-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:14px;letter-spacing:.04em;color:var(--amber);background:var(--bg-panel);border:1px solid var(--amber-dim);border-radius:20px;padding:8px 16px;box-shadow:var(--shadow-soft);}
   .quiz-timer-badge.warn{color:var(--red-text);border-color:var(--red-text);}
   .quiz-actions-bar{position:sticky;bottom:0;background:var(--bg);padding:10px 0 4px;margin-top:8px;}
 
@@ -1968,6 +2001,7 @@ const TESTBANCO_PAGE_SIZE = 50; // cuántas tarjetas se pintan de golpe en el Ba
 // Selección de temas/subtemas para el test que se está configurando en "Practicar":
 // parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
 let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio' }; // orden: 'aleatorio' | 'ordenado'
+let testsWizardCfg = { numPreguntas:10, modo:null, sinTiempo:false }; // config temporal del asistente de "Practicar"
 
 /* ===================== TIPOS DE PREGUNTA ===================== */
 // El tipo de pregunta viene determinado por la categoría: ortografía y gramática usan un
@@ -2885,7 +2919,7 @@ function renderTests(){
     const b = document.createElement('button'); b.type='button';
     b.innerHTML = '<span class="tab-ic">'+(TAB_ICONS[key]||'')+'</span><span>'+label+'</span>';
     if(testsActiveSubtab===key) b.classList.add('active');
-    b.onclick = ()=>{ testsActiveSubtab = key; if(key!=='practicar'){ clearQuizTimer(); testsQuiz=null; } renderTests(); };
+    b.onclick = ()=>{ const cambiaAPracticar = key==='practicar' && testsActiveSubtab!=='practicar'; testsActiveSubtab = key; if(key!=='practicar'){ clearQuizTimer(); testsQuiz=null; } else if(cambiaAPracticar && !testsQuiz){ resetTestsWizard(); } renderTests(); };
     nav.appendChild(b);
   });
   host.appendChild(nav);
@@ -2959,7 +2993,7 @@ function renderTestsAnadir(body){
       transcribeBtn.textContent='Transcribir con IA';
       transcribeBtn.onclick = async ()=>{
         if(!testsAddState.files.length){ showToast('Selecciona al menos una foto.'); return; }
-        transcribeBtn.disabled = true; transcribeBtn.textContent = 'Transcribiendo…';
+        transcribeBtn.disabled = true; transcribeBtn.innerHTML = '<span class="btn-spinner"></span>Transcribiendo…';
         try{
           const parsed = await callClaudeVisionTranscribe(testsAddState.files);
           testsAddState.enunciado = parsed.enunciado || '';
@@ -3327,7 +3361,7 @@ function renderTestsGenerarIA(body){
 
   const genBtnRow = document.createElement('div'); genBtnRow.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
   const genBtn = document.createElement('button'); genBtn.type='button'; genBtn.className='btn small';
-  genBtn.textContent = testsGenState.generando ? 'Generando…' : 'Generar preguntas con IA';
+  genBtn.innerHTML = testsGenState.generando ? '<span class="btn-spinner"></span>Generando…' : 'Generar preguntas con IA';
   genBtn.disabled = testsGenState.generando;
   genBtn.onclick = ejecutarGeneracionIA;
   genBtnRow.appendChild(genBtn);
@@ -4326,92 +4360,188 @@ function renderTemaPicker(host, pick, onChange){
   }
   host.appendChild(wrap);
 }
+let testsWizardPaso = 0; // 0=portada · 1=alcance · 2=temas · 3=orden · 4=numero · 5=modo · 6=tiempo · 7=resumen
+function resetTestsWizard(){ testsWizardPaso = 0; }
 function renderTestsPracticar(body){
   if(testsQuiz){ renderTestsQuizUI(body); return; }
   const questions = state.testBank.questions;
-  const panel = document.createElement('div'); panel.className='test-panel';
-  panel.innerHTML = `<h4>Configura tu test de práctica</h4>`;
-
-  const seccion1 = document.createElement('div'); seccion1.className='section-heading';
-  seccion1.innerHTML = '<span class="sh-ic">🎯</span><span>Qué practicar</span>';
-  panel.appendChild(seccion1);
-  const row = document.createElement('div'); row.className='test-row';
-  const catField = document.createElement('div'); catField.className='test-field';
-  catField.innerHTML = '<label>Categoría</label>';
-  const catSel = document.createElement('select');
-  const optAll = document.createElement('option'); optAll.value=''; optAll.textContent='Todas'; catSel.appendChild(optAll);
-  TEST_CATEGORIAS.forEach(c=>{ const o=document.createElement('option'); o.value=c.key; o.textContent=c.label; if(testsPickState.categoria===c.key) o.selected=true; catSel.appendChild(o); });
-  catField.appendChild(catSel);
-  row.appendChild(catField);
-  const nField = document.createElement('div'); nField.className='test-field';
-  nField.innerHTML = '<label>Nº de preguntas</label>';
-  const nInput = document.createElement('input'); nInput.type='number'; nInput.min='1'; nInput.value='10';
-  nField.appendChild(nInput);
-  row.appendChild(nField);
-  panel.appendChild(row);
-  const temaFieldWrap = document.createElement('div'); temaFieldWrap.className='test-field';
-  temaFieldWrap.innerHTML = '<label>Temas y subtemas</label>';
-  const pickerHost = document.createElement('div');
-  temaFieldWrap.appendChild(pickerHost);
-  panel.appendChild(temaFieldWrap);
-  const disponibles = document.createElement('div'); disponibles.className='test-empty';
-  panel.appendChild(disponibles);
-  function updateCount(){
-    const filtered = questions.filter(q=> questionMatchesPick(q, testsPickState));
-    disponibles.textContent = filtered.length + ' pregunta(s) disponibles con este filtro.';
+  const wrap = document.createElement('div'); wrap.className='wizard-wrap';
+  if(testsWizardPaso>0){
+    const dots = document.createElement('div'); dots.className='wizard-dots';
+    for(let i=1;i<=6;i++){ const d=document.createElement('i'); if(i<=testsWizardPaso) d.classList.add('on'); dots.appendChild(d); }
+    wrap.appendChild(dots);
+    const back = document.createElement('button'); back.type='button'; back.className='wizard-back'; back.innerHTML='← Atrás';
+    back.onclick = wizardIrAtras;
+    wrap.appendChild(back);
   }
-  function refreshPicker(){ renderTemaPicker(pickerHost, testsPickState, updateCount); updateCount(); }
-  catSel.onchange = ()=>{ testsPickState.categoria = catSel.value; testsPickState.parciales = new Map(); refreshPicker(); };
-  refreshPicker();
-
-  const seccion2 = document.createElement('div'); seccion2.className='section-heading';
-  seccion2.innerHTML = '<span class="sh-ic">⚙️</span><span>Ajustes del test</span>';
-  panel.appendChild(seccion2);
-  const optsRow = document.createElement('div'); optsRow.className='test-row';
-  const timerField = document.createElement('div'); timerField.className='test-field';
-  timerField.innerHTML = '<label>Temporizador</label>';
-  const timerCheckRow = document.createElement('div'); timerCheckRow.className='test-check-row';
-  const timerSwitch = document.createElement('label'); timerSwitch.className='toggle-switch';
-  const timerCheck = document.createElement('input'); timerCheck.type='checkbox'; timerCheck.id='timerCheck';
-  const timerTrack = document.createElement('span'); timerTrack.className='track';
-  timerSwitch.appendChild(timerCheck); timerSwitch.appendChild(timerTrack);
-  const timerCheckLabel = document.createElement('label'); timerCheckLabel.htmlFor='timerCheck'; timerCheckLabel.textContent='Activar';
-  const timerMinInput = document.createElement('input'); timerMinInput.type='number'; timerMinInput.min='0.1'; timerMinInput.step='0.1'; timerMinInput.value='1'; timerMinInput.disabled = true;
-  const timerMinLabel = document.createElement('span'); timerMinLabel.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);'; timerMinLabel.textContent='min/pregunta (estándar: 1)';
-  timerCheck.onchange = ()=>{ timerMinInput.disabled = !timerCheck.checked; };
-  timerCheckRow.appendChild(timerSwitch); timerCheckRow.appendChild(timerCheckLabel);
-  timerCheckRow.appendChild(timerMinInput); timerCheckRow.appendChild(timerMinLabel);
-  timerField.appendChild(timerCheckRow);
-  optsRow.appendChild(timerField);
-  const instField = document.createElement('div'); instField.className='test-field';
-  instField.innerHTML = '<label>Corrección</label>';
-  const instCheckRow = document.createElement('div'); instCheckRow.className='test-check-row';
-  const instSwitch = document.createElement('label'); instSwitch.className='toggle-switch';
-  const instCheck = document.createElement('input'); instCheck.type='checkbox'; instCheck.id='instCheck';
-  const instTrack = document.createElement('span'); instTrack.className='track';
-  instSwitch.appendChild(instCheck); instSwitch.appendChild(instTrack);
-  const instLabel = document.createElement('label'); instLabel.htmlFor='instCheck'; instLabel.textContent='Modo instantáneo (ver si aciertas nada más marcar)';
-  instCheckRow.appendChild(instSwitch); instCheckRow.appendChild(instLabel);
-  instField.appendChild(instCheckRow);
-  optsRow.appendChild(instField);
-  panel.appendChild(optsRow);
-  const ordenField = document.createElement('div'); ordenField.className='test-field'; ordenField.style.marginTop='6px';
-  ordenField.innerHTML = '<label>Orden de las preguntas</label>';
-  const ordenSel = document.createElement('select');
-  [['aleatorio','Desordenado (aleatorio)'],['ordenado','En orden (del 1º tema al último)']].forEach(([val,txt])=>{
-    const o=document.createElement('option'); o.value=val; o.textContent=txt; if(testsPickState.orden===val) o.selected=true; ordenSel.appendChild(o);
+  if(testsWizardPaso===0) renderWizardPortada(wrap);
+  else if(testsWizardPaso===1) renderWizardAlcance(wrap);
+  else if(testsWizardPaso===2) renderWizardTemas(wrap, questions);
+  else if(testsWizardPaso===3) renderWizardOrden(wrap);
+  else if(testsWizardPaso===4) renderWizardNumero(wrap, questions);
+  else if(testsWizardPaso===5) renderWizardModo(wrap);
+  else if(testsWizardPaso===6) renderWizardTiempo(wrap);
+  else renderWizardResumen(wrap, questions);
+  body.appendChild(wrap);
+}
+function wizardIrAtras(){
+  if(testsWizardPaso===2){ testsWizardPaso=1; }
+  else if(testsWizardPaso===6){ testsWizardPaso=5; }
+  else if(testsWizardPaso===7){ testsWizardPaso = testsWizardCfg.modo==='instantaneo' ? 6 : 5; }
+  else testsWizardPaso = Math.max(0, testsWizardPaso-1);
+  renderTests();
+}
+function renderWizardPortada(wrap){
+  const hero = document.createElement('div'); hero.className='wizard-hero';
+  hero.innerHTML = '<div class="wh-emblem">🎯</div><h3>Practicar</h3><p>Elige qué quieres practicar hoy: te lo preguntamos paso a paso, sin formularios largos.</p>';
+  const btn = document.createElement('button'); btn.type='button'; btn.className='btn'; btn.textContent='Hacer test';
+  btn.onclick = ()=>{ testsWizardPaso=1; renderTests(); };
+  hero.appendChild(btn);
+  wrap.appendChild(hero);
+}
+function wizardOpt(container, icon, titulo, sub, onClick, selected){
+  const opt = document.createElement('div'); opt.className='wizard-opt'+(selected?' selected':'');
+  opt.innerHTML = '<div class="wo-ic">'+icon+'</div><div class="wo-txt"><strong>'+titulo+'</strong>'+(sub?('<span>'+sub+'</span>'):'')+'</div>';
+  opt.onclick = onClick;
+  container.appendChild(opt);
+  return opt;
+}
+function renderWizardAlcance(wrap){
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Qué quieres practicar?';
+  wrap.appendChild(t);
+  const opts = document.createElement('div'); opts.className='wizard-options';
+  wizardOpt(opts,'🌐','Global','Preguntas de todas las categorías mezcladas', ()=>{
+    testsPickState.categoria=''; testsPickState.parciales=new Map(); testsWizardPaso=3; renderTests();
+  }, testsPickState.categoria==='' && testsWizardPaso>1);
+  wizardOpt(opts,'📚','Por temas','Elige categoría y, si quieres, temas o subtemas concretos', ()=>{
+    testsWizardPaso=2; renderTests();
   });
-  ordenSel.onchange = ()=>{ testsPickState.orden = ordenSel.value; };
-  ordenField.appendChild(ordenSel);
-  panel.appendChild(ordenField);
-
-  const startBar = document.createElement('div'); startBar.className='practicar-startbar';
-  const startBtn = document.createElement('button'); startBtn.type='button'; startBtn.className='btn'; startBtn.style.width='100%';
-  startBtn.textContent = 'Empezar test';
+  wrap.appendChild(opts);
+}
+function renderWizardTemas(wrap, questions){
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Qué categoría y temas?';
+  wrap.appendChild(t);
+  const catOpts = document.createElement('div'); catOpts.className='wizard-grid'; catOpts.style.marginBottom='16px';
+  TEST_CATEGORIAS.forEach(c=>{
+    const b = document.createElement('button'); b.type='button'; b.className='wizard-num-btn'+(testsPickState.categoria===c.key?' selected':'');
+    b.style.fontSize='13px'; b.textContent = c.label;
+    b.onclick = ()=>{ testsPickState.categoria=c.key; testsPickState.parciales=new Map(); renderTests(); };
+    catOpts.appendChild(b);
+  });
+  wrap.appendChild(catOpts);
+  if(testsPickState.categoria){
+    const pickerHost = document.createElement('div'); pickerHost.className='test-field';
+    wrap.appendChild(pickerHost);
+    const disponibles = document.createElement('div'); disponibles.className='test-empty'; disponibles.style.marginBottom='14px';
+    function updateCount(){ disponibles.textContent = questions.filter(q=>questionMatchesPick(q,testsPickState)).length+' pregunta(s) disponibles con este filtro.'; }
+    renderTemaPicker(pickerHost, testsPickState, updateCount);
+    updateCount();
+    wrap.appendChild(disponibles);
+    const cont = document.createElement('button'); cont.type='button'; cont.className='btn'; cont.style.width='100%'; cont.textContent='Continuar';
+    cont.onclick = ()=>{ testsWizardPaso=3; renderTests(); };
+    wrap.appendChild(cont);
+  }
+}
+function renderWizardOrden(wrap){
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿En qué orden?';
+  wrap.appendChild(t);
+  const opts = document.createElement('div'); opts.className='wizard-options';
+  wizardOpt(opts,'🔀','Aleatorio','Las preguntas salen desordenadas', ()=>{
+    testsPickState.orden='aleatorio'; testsWizardPaso=4; renderTests();
+  }, testsPickState.orden==='aleatorio');
+  wizardOpt(opts,'📑','En orden','Del primer tema al último, tal cual el temario', ()=>{
+    testsPickState.orden='ordenado'; testsWizardPaso=4; renderTests();
+  }, testsPickState.orden==='ordenado');
+  wrap.appendChild(opts);
+}
+function renderWizardNumero(wrap, questions){
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Cuántas preguntas?';
+  const filtered = questions.filter(q=>questionMatchesPick(q,testsPickState));
+  const sub = document.createElement('div'); sub.className='wizard-sub'; sub.textContent = filtered.length+' pregunta(s) disponibles con tu filtro.';
+  wrap.appendChild(t); wrap.appendChild(sub);
+  const grid = document.createElement('div'); grid.className='wizard-grid';
+  const presets = [5,10,20,30,50,filtered.length];
+  const vistos = new Set();
+  presets.forEach(n=>{
+    const mostrado = Math.min(n,filtered.length);
+    if(mostrado<1 || vistos.has(mostrado)) return; vistos.add(mostrado);
+    const b = document.createElement('button'); b.type='button'; b.className='wizard-num-btn';
+    b.innerHTML = String(mostrado)+(mostrado===filtered.length?'<small>todas</small>':'<small>preguntas</small>');
+    b.disabled = filtered.length===0;
+    b.onclick = ()=>{ testsWizardCfg.numPreguntas = mostrado||1; testsWizardPaso=5; renderTests(); };
+    grid.appendChild(b);
+  });
+  wrap.appendChild(grid);
+  const customField = document.createElement('div'); customField.className='test-field'; customField.style.marginTop='16px';
+  customField.innerHTML = '<label>O elige un número concreto</label>';
+  const customInput = document.createElement('input'); customInput.type='number'; customInput.min='1'; customInput.max=String(filtered.length||1); customInput.value = String(Math.min(testsWizardCfg.numPreguntas, filtered.length||1));
+  customField.appendChild(customInput);
+  const customBtn = document.createElement('button'); customBtn.type='button'; customBtn.className='btn'; customBtn.style.cssText='width:100%;margin-top:10px;'; customBtn.textContent='Continuar';
+  customBtn.disabled = filtered.length===0;
+  customBtn.onclick = ()=>{
+    const n = Math.max(1, Math.min(Number(customInput.value)||1, filtered.length));
+    testsWizardCfg.numPreguntas = n; testsWizardPaso=5; renderTests();
+  };
+  wrap.appendChild(customField);
+  wrap.appendChild(customBtn);
+  if(!filtered.length){ const w=document.createElement('div'); w.className='test-empty'; w.textContent='No hay preguntas guardadas con ese filtro todavía.'; wrap.appendChild(w); }
+}
+function renderWizardModo(wrap){
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Cómo quieres corregir?';
+  wrap.appendChild(t);
+  const opts = document.createElement('div'); opts.className='wizard-options';
+  wizardOpt(opts,'⚡','Instantáneo','Ves si aciertas nada más responder cada pregunta', ()=>{
+    testsWizardCfg.modo='instantaneo'; testsWizardPaso=6; renderTests();
+  }, testsWizardCfg.modo==='instantaneo');
+  wizardOpt(opts,'🎓','Examen','Respondes todo y corriges al final, como en el examen real', ()=>{
+    testsWizardCfg.modo='examen'; testsWizardCfg.sinTiempo=false; testsWizardPaso=7; renderTests();
+  }, testsWizardCfg.modo==='examen');
+  wrap.appendChild(opts);
+}
+function renderWizardTiempo(wrap){
+  // Este paso solo se alcanza en modo instantáneo: en modo examen el temporizador va siempre
+  // activo (como en el examen real), así que ahí no tiene sentido ofrecer "sin tiempo".
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Con temporizador?';
+  wrap.appendChild(t);
+  const opts = document.createElement('div'); opts.className='wizard-options';
+  wizardOpt(opts,'⏱','Con temporizador','Practicas también a controlar el tiempo', ()=>{
+    testsWizardCfg.sinTiempo=false; testsWizardPaso=7; renderTests();
+  }, testsWizardCfg.sinTiempo===false);
+  wizardOpt(opts,'🕊','Sin tiempo','Solo disponible en modo instantáneo: practica con calma', ()=>{
+    testsWizardCfg.sinTiempo=true; testsWizardPaso=7; renderTests();
+  }, testsWizardCfg.sinTiempo===true);
+  wrap.appendChild(opts);
+}
+function renderWizardResumen(wrap, questions){
+  const t = document.createElement('div'); t.className='wizard-title'; t.textContent='Todo listo';
+  wrap.appendChild(t);
+  const filtered = questions.filter(q=>questionMatchesPick(q,testsPickState));
+  const n = Math.max(1, Math.min(testsWizardCfg.numPreguntas||10, filtered.length||1));
+  const sum = document.createElement('div'); sum.className='wizard-summary';
+  const temaTxt = testsPickState.categoria ? (TEST_CATEGORIAS.find(c=>c.key===testsPickState.categoria)||{}).label + (testsPickState.parciales.size? ' (temas seleccionados)':' (todos los temas)') : 'Global (todas las categorías)';
+  const modoTxt = testsWizardCfg.modo==='instantaneo' ? 'Instantáneo' : 'Examen (corrección al final)';
+  const tiempoTxt = testsWizardCfg.sinTiempo ? 'Sin tiempo' : '1 min/pregunta';
+  sum.innerHTML = `
+    <div class="ws-row"><span>Qué</span><span>${temaTxt}</span></div>
+    <div class="ws-row"><span>Orden</span><span>${testsPickState.orden==='ordenado'?'En orden':'Aleatorio'}</span></div>
+    <div class="ws-row"><span>Preguntas</span><span>${n}</span></div>
+    <div class="ws-row"><span>Corrección</span><span>${modoTxt}</span></div>
+    <div class="ws-row"><span>Tiempo</span><span>${tiempoTxt}</span></div>
+  `;
+  wrap.appendChild(sum);
+  let minPorPregunta = 1;
+  if(!testsWizardCfg.sinTiempo){
+    const minField = document.createElement('div'); minField.className='test-field'; minField.style.marginBottom='18px';
+    minField.innerHTML = '<label>Minutos por pregunta</label>';
+    const minInput = document.createElement('input'); minInput.type='number'; minInput.min='0.1'; minInput.step='0.1'; minInput.value='1';
+    minInput.onchange = ()=>{ minPorPregunta = Math.max(0.1, Number(minInput.value)||1); };
+    minField.appendChild(minInput);
+    wrap.appendChild(minField);
+  }
+  const startBtn = document.createElement('button'); startBtn.type='button'; startBtn.className='btn'; startBtn.style.width='100%'; startBtn.textContent='🚀 Empezar test';
+  startBtn.disabled = !filtered.length;
   startBtn.onclick = ()=>{
-    const filtered = questions.filter(q=> questionMatchesPick(q, testsPickState));
     if(!filtered.length){ showToast('No hay preguntas guardadas con ese filtro todavía.'); return; }
-    const n = Math.max(1, Math.min(Number(nInput.value)||10, filtered.length));
     let chosen;
     if(testsPickState.orden==='ordenado'){
       // Orden 1º tema → último (y dentro de cada tema, por subtema y fecha de alta), tal
@@ -4428,20 +4558,17 @@ function renderTestsPracticar(body){
       chosen = shuffleArr(filtered).slice(0,n);
     }
     clearQuizTimer();
-    const temporizadorActivo = timerCheck.checked;
-    const minPorPregunta = Math.max(0.1, Number(timerMinInput.value)||1);
+    const temporizadorActivo = !testsWizardCfg.sinTiempo;
     const totalSegundos = Math.round(minPorPregunta*60*n);
     testsQuiz = {
       items: chosen.map(q=>({ q, respuesta: qTipo(q)==='ortografia' ? [false,false,false,false] : null, revelado:false })),
       corregido:false,
-      instantaneo: instCheck.checked,
+      instantaneo: testsWizardCfg.modo==='instantaneo',
       temporizador: temporizadorActivo ? { totalSegundos, restante: totalSegundos } : null
     };
     renderTests();
   };
-  startBar.appendChild(startBtn);
-  panel.appendChild(startBar);
-  body.appendChild(panel);
+  wrap.appendChild(startBtn);
 }
 function clearQuizTimer(){
   if(testsQuizTimerHandle){ clearInterval(testsQuizTimerHandle); testsQuizTimerHandle = null; }
@@ -4524,14 +4651,32 @@ function buildScoreBanner(){
   return wrap;
 }
 function renderTestsQuizUI(body){
+  // Actualiza en vivo "N / total respondidas" sin repintar toda la pantalla (evita perder la
+  // posición del scroll cada vez que se marca una opción en un test largo).
+  window.updateQuizProgress = function(){
+    if(!testsQuiz) return;
+    const txt = document.getElementById('quizProgressTxt'), bar = document.getElementById('quizProgressBar');
+    if(!txt || !bar) return;
+    const respondidas = testsQuiz.items.filter(it=> it.respuesta!==null && !(Array.isArray(it.respuesta) && it.respuesta.every(v=>!v))).length;
+    txt.textContent = respondidas+' / '+testsQuiz.items.length+' respondidas';
+    bar.style.width = Math.round((respondidas/testsQuiz.items.length)*100)+'%';
+  };
   const panel = document.createElement('div');
   if(testsQuiz.corregido){
     clearQuizTimer();
     panel.appendChild(buildScoreBanner());
-  } else if(testsQuiz.temporizador){
-    const badge = document.createElement('div'); badge.className='quiz-timer-badge'; badge.id='quizTimerBadge';
-    badge.textContent = '⏱ '+formatQuizTime(testsQuiz.temporizador.restante);
-    panel.appendChild(badge);
+  } else {
+    const topBar = document.createElement('div'); topBar.style.cssText='display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:8px;z-index:10;margin-bottom:14px;';
+    if(testsQuiz.temporizador){
+      const badge = document.createElement('div'); badge.className='quiz-timer-badge'; badge.id='quizTimerBadge'; badge.style.margin='0';
+      badge.textContent = '⏱ '+formatQuizTime(testsQuiz.temporizador.restante);
+      topBar.appendChild(badge);
+    }
+    const respondidas = testsQuiz.items.filter(it=> it.respuesta!==null && !(Array.isArray(it.respuesta) && it.respuesta.every(v=>!v))).length;
+    const progWrap = document.createElement('div'); progWrap.style.cssText='flex:1;min-width:120px;background:var(--bg-panel);border:1px solid var(--line);border-radius:20px;padding:8px 14px;box-shadow:var(--shadow-soft);';
+    progWrap.innerHTML = '<div id="quizProgressTxt" style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-bottom:4px;">'+respondidas+' / '+testsQuiz.items.length+' respondidas</div><div style="background:var(--line);border-radius:8px;height:6px;overflow:hidden;"><div id="quizProgressBar" style="background:var(--amber);height:100%;width:'+Math.round((respondidas/testsQuiz.items.length)*100)+'%;"></div></div>';
+    topBar.appendChild(progWrap);
+    panel.appendChild(topBar);
   }
   testsQuiz.items.forEach((it,i)=>{
     const q = it.q;
@@ -4582,8 +4727,8 @@ function renderTestsQuizUI(body){
             renderTests();
           }
         }
-        btnBien.onclick = ()=>{ if(revelada) return; it.respuesta[wi]=false; checkOrtoInstant(); paintWordBtns(); };
-        btnMal.onclick = ()=>{ if(revelada) return; it.respuesta[wi]=true; checkOrtoInstant(); paintWordBtns(); };
+        btnBien.onclick = ()=>{ if(revelada) return; it.respuesta[wi]=false; checkOrtoInstant(); paintWordBtns(); updateQuizProgress(); };
+        btnMal.onclick = ()=>{ if(revelada) return; it.respuesta[wi]=true; checkOrtoInstant(); paintWordBtns(); updateQuizProgress(); };
         paintWordBtns();
         wrow.appendChild(btnBien); wrow.appendChild(btnMal);
         card.appendChild(wrow);
@@ -4607,7 +4752,7 @@ function renderTestsQuizUI(body){
             else chip.classList.add('incorrecta-elegida');
           }
         }
-        chip.onclick = ()=>{ if(revelada) return; it.respuesta[wi] = !it.respuesta[wi]; paintChip(); };
+        chip.onclick = ()=>{ if(revelada) return; it.respuesta[wi] = !it.respuesta[wi]; paintChip(); updateQuizProgress(); };
         paintChip();
         row.appendChild(chip);
       });
@@ -4640,12 +4785,12 @@ function renderTestsQuizUI(body){
       btnBien.onclick = ()=>{
         if(revelada) return; it.respuesta = true;
         if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; it.q.stats.veces=(it.q.stats.veces||0)+1; if(it.respuesta===it.q.correcta) it.q.stats.aciertos=(it.q.stats.aciertos||0)+1; saveTestQuestionRemote(it.q); renderTests(); return; }
-        paintGramBtns();
+        paintGramBtns(); updateQuizProgress();
       };
       btnMal.onclick = ()=>{
         if(revelada) return; it.respuesta = false;
         if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; it.q.stats.veces=(it.q.stats.veces||0)+1; if(it.respuesta===it.q.correcta) it.q.stats.aciertos=(it.q.stats.aciertos||0)+1; saveTestQuestionRemote(it.q); renderTests(); return; }
-        paintGramBtns();
+        paintGramBtns(); updateQuizProgress();
       };
       paintGramBtns();
       wrow.appendChild(btnBien); wrow.appendChild(btnMal);
@@ -4667,6 +4812,8 @@ function renderTestsQuizUI(body){
             if(it.respuesta===it.q.correcta) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
             saveTestQuestionRemote(it.q);
             renderTests();
+          } else {
+            updateQuizProgress();
           }
         };
         optRow.appendChild(radio);
@@ -4688,7 +4835,7 @@ function renderTestsQuizUI(body){
     btnRow.appendChild(corrBtn);
   } else {
     const newBtn = document.createElement('button'); newBtn.type='button'; newBtn.className='btn'; newBtn.style.width='100%'; newBtn.textContent='Nuevo test';
-    newBtn.onclick = ()=>{ clearQuizTimer(); testsQuiz = null; renderTests(); };
+    newBtn.onclick = ()=>{ clearQuizTimer(); testsQuiz = null; resetTestsWizard(); renderTests(); };
     btnRow.appendChild(newBtn);
   }
   panel.appendChild(btnRow);
