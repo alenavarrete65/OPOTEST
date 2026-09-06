@@ -4460,7 +4460,7 @@ function renderWizardNumero(wrap, questions){
   const sub = document.createElement('div'); sub.className='wizard-sub'; sub.textContent = filtered.length+' pregunta(s) disponibles con tu filtro.';
   wrap.appendChild(t); wrap.appendChild(sub);
   const grid = document.createElement('div'); grid.className='wizard-grid';
-  const presets = [5,10,20,30,50,filtered.length];
+  const presets = [20,50,100,filtered.length];
   const vistos = new Set();
   presets.forEach(n=>{
     const mostrado = Math.min(n,filtered.length);
