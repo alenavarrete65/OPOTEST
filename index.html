@@ -2002,6 +2002,27 @@ const TESTBANCO_PAGE_SIZE = 50; // cuántas tarjetas se pintan de golpe en el Ba
 // parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
 let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio' }; // orden: 'aleatorio' | 'ordenado'
 let testsWizardCfg = { numPreguntas:10, modo:null, sinTiempo:false }; // config temporal del asistente de "Practicar"
+// Racha de días seguidos practicando. Se guarda solo en este dispositivo (no en Firebase): es una
+// motivación de hábito, no un dato que necesite sincronizarse entre dispositivos.
+function fmtFechaKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function getStreakDates(){ try{ return JSON.parse(localStorage.getItem('opotest-streak-dates')||'[]'); }catch(e){ return []; } }
+function registrarActividadHoy(){
+  try{
+    const key = fmtFechaKey(new Date());
+    const dates = getStreakDates();
+    if(!dates.includes(key)){ dates.push(key); localStorage.setItem('opotest-streak-dates', JSON.stringify(dates.slice(-400))); }
+  }catch(e){}
+}
+function calcularRachaActual(){
+  const dates = new Set(getStreakDates());
+  const d = new Date();
+  // Si hoy todavía no se ha practicado, se empieza a contar desde ayer para no "romper" la
+  // racha visualmente antes de que acabe el día (el usuario aún puede practicar hoy).
+  if(!dates.has(fmtFechaKey(d))) d.setDate(d.getDate()-1);
+  let racha = 0;
+  while(dates.has(fmtFechaKey(d))){ racha++; d.setDate(d.getDate()-1); }
+  return racha;
+}
 
 /* ===================== TIPOS DE PREGUNTA ===================== */
 // El tipo de pregunta viene determinado por la categoría: ortografía y gramática usan un
@@ -2904,10 +2925,11 @@ function renderTests(){
   const totalIntentos = questions.reduce((s,q)=> s+(q.stats && q.stats.veces||0), 0);
   const totalAciertos = questions.reduce((s,q)=> s+(q.stats && q.stats.aciertos||0), 0);
   const precisionGlobal = totalIntentos ? Math.round((totalAciertos/totalIntentos)*100) : null;
+  const racha = calcularRachaActual();
   const strip = document.createElement('div'); strip.className='stat-strip';
   const chips = isAdmin
-    ? [[String(questions.length),'Preguntas en el banco'],[String(practicadas.length),'Practicadas alguna vez'],[precisionGlobal!==null?precisionGlobal+'%':'—','Acierto global']]
-    : [[String(practicadas.length),'Preguntas practicadas'],[precisionGlobal!==null?precisionGlobal+'%':'—','Tu acierto global']];
+    ? [[String(questions.length),'Preguntas en el banco'],[String(practicadas.length),'Practicadas alguna vez'],[precisionGlobal!==null?precisionGlobal+'%':'—','Acierto global'],[(racha?'🔥 ':'')+racha,'Días seguidos']]
+    : [[String(practicadas.length),'Preguntas practicadas'],[precisionGlobal!==null?precisionGlobal+'%':'—','Tu acierto global'],[(racha?'🔥 ':'')+racha,'Días seguidos']];
   chips.forEach(([num,lbl])=>{
     const chip = document.createElement('div'); chip.className='stat-chip';
     chip.innerHTML = '<div class="stat-num">'+num+'</div><div class="stat-lbl">'+lbl+'</div>';
@@ -3660,13 +3682,20 @@ function buildStatBarRow(label, aciertos, intentos, subtext){
 function renderTestsProgreso(body){
   const questions = state.testBank.questions || [];
   const panel = document.createElement('div'); panel.className='test-panel';
-  panel.innerHTML = '<h4>Progreso</h4>';
+  panel.innerHTML = '<h4>📊 Progreso</h4>';
 
   const totalPreguntas = questions.length;
   const practicadas = questions.filter(q=>q.stats && q.stats.veces>0);
   const totalIntentos = questions.reduce((s,q)=> s+(q.stats && q.stats.veces||0), 0);
   const totalAciertos = questions.reduce((s,q)=> s+(q.stats && q.stats.aciertos||0), 0);
   const precisionGlobal = totalIntentos ? Math.round((totalAciertos/totalIntentos)*100) : null;
+  const racha = calcularRachaActual();
+  if(racha>0){
+    const rachaBox = document.createElement('div');
+    rachaBox.style.cssText = 'display:flex;align-items:center;gap:10px;background:linear-gradient(180deg, rgba(227,167,82,0.16), var(--bg-panel-2));border:1px solid var(--amber-dim);border-radius:10px;padding:12px 16px;margin-bottom:16px;';
+    rachaBox.innerHTML = '<span style="font-size:24px;">🔥</span><span style="font-family:var(--font-display);color:var(--amber);font-size:15px;text-transform:uppercase;letter-spacing:.02em;">'+racha+' día'+(racha===1?'':'s')+' seguido'+(racha===1?'':'s')+' practicando</span>';
+    panel.appendChild(rachaBox);
+  }
   const resumen = document.createElement('p');
   resumen.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-bottom:16px;';
   resumen.textContent = totalPreguntas+' preguntas en el banco · '+practicadas.length+' practicada(s) al menos una vez · '+totalIntentos+' intento(s) en total'+(precisionGlobal!==null ? ' · '+precisionGlobal+'% de acierto global' : '');
@@ -3678,6 +3707,38 @@ function renderTestsProgreso(body){
     panel.appendChild(empty);
     body.appendChild(panel);
     return;
+  }
+
+  // Por tema, para el ranking de "dónde más fallo" (con un mínimo de intentos para que no salga
+  // arriba un tema con un único fallo suelto y descoloque las prioridades de estudio). Se calcula
+  // aquí arriba (antes de pintar nada) para poder mostrar ya un resumen de "puntos débiles".
+  const UMBRAL_INTENTOS = 3;
+  const porTemaPre = {};
+  questions.forEach(q=>{
+    const st = q.stats||{};
+    if(!st.veces || !q.tema) return;
+    const key = q.categoria+'|'+q.tema;
+    const t = porTemaPre[key] = porTemaPre[key] || {categoria:q.categoria, tema:q.tema, intentos:0, aciertos:0, preguntas:0};
+    t.intentos += st.veces; t.aciertos += st.aciertos||0; t.preguntas++;
+  });
+  const temasArr = Object.values(porTemaPre).filter(t=>t.intentos>=UMBRAL_INTENTOS);
+  temasArr.sort((a,b)=> (a.aciertos/a.intentos) - (b.aciertos/b.intentos));
+
+  if(temasArr.length){
+    const debilTitle = document.createElement('h5');
+    debilTitle.style.cssText = 'margin:0 0 8px;font-family:var(--font-display);color:var(--amber);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
+    debilTitle.textContent = '🎯 Tus 3 puntos más débiles ahora mismo';
+    panel.appendChild(debilTitle);
+    const debilWrap = document.createElement('div'); debilWrap.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:20px;';
+    temasArr.slice(0,3).forEach(t=>{
+      const temaObj = testCatTemaObj(t.categoria, t.tema);
+      const nombre = testCatLabel(t.categoria)+' · '+(temaObj ? temaObj.nombre : 'Tema '+t.tema);
+      const pct = Math.round((t.aciertos/t.intentos)*100);
+      const row = document.createElement('div'); row.style.cssText='display:flex;justify-content:space-between;align-items:center;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-family:var(--font-mono);font-size:11px;';
+      row.innerHTML = '<span>'+nombre+'</span><span style="color:var(--red-text);font-weight:600;">'+pct+'%</span>';
+      debilWrap.appendChild(row);
+    });
+    panel.appendChild(debilWrap);
   }
 
   // Por categoría
@@ -3698,20 +3759,8 @@ function renderTestsProgreso(body){
     panel.appendChild(buildStatBarRow(c.label, d.aciertos, d.intentos, d.preguntas+' pregunta(s) practicada(s)'));
   });
 
-  // Por tema, para el ranking de "dónde más fallo" (con un mínimo de intentos para que no salga
-  // arriba un tema con un único fallo suelto y descoloque las prioridades de estudio)
-  const UMBRAL_INTENTOS = 3;
-  const porTema = {};
-  questions.forEach(q=>{
-    const st = q.stats||{};
-    if(!st.veces || !q.tema) return;
-    const key = q.categoria+'|'+q.tema;
-    const t = porTema[key] = porTema[key] || {categoria:q.categoria, tema:q.tema, intentos:0, aciertos:0, preguntas:0};
-    t.intentos += st.veces; t.aciertos += st.aciertos||0; t.preguntas++;
-  });
-  const temasArr = Object.values(porTema).filter(t=>t.intentos>=UMBRAL_INTENTOS);
-  temasArr.sort((a,b)=> (a.aciertos/a.intentos) - (b.aciertos/b.intentos));
-
+  // Ranking completo "dónde más fallo" (temasArr y UMBRAL_INTENTOS ya se calcularon arriba,
+  // antes de pintar nada, para poder mostrar ya el resumen de "puntos débiles").
   const rankTitle = document.createElement('h5');
   rankTitle.style.cssText = 'margin:20px 0 8px;font-family:var(--font-display);color:var(--amber);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
   rankTitle.textContent = 'Temas donde más fallas (mín. '+UMBRAL_INTENTOS+' intentos)';
@@ -4374,7 +4423,7 @@ function renderTestsPracticar(body){
     back.onclick = wizardIrAtras;
     wrap.appendChild(back);
   }
-  if(testsWizardPaso===0) renderWizardPortada(wrap);
+  if(testsWizardPaso===0) renderWizardPortada(wrap, questions);
   else if(testsWizardPaso===1) renderWizardAlcance(wrap);
   else if(testsWizardPaso===2) renderWizardTemas(wrap, questions);
   else if(testsWizardPaso===3) renderWizardOrden(wrap);
@@ -4391,8 +4440,22 @@ function wizardIrAtras(){
   else testsWizardPaso = Math.max(0, testsWizardPaso-1);
   renderTests();
 }
-function renderWizardPortada(wrap){
+function renderWizardPortada(wrap, questions){
   const hero = document.createElement('div'); hero.className='wizard-hero';
+  if(!questions.length){
+    hero.innerHTML = '<div class="wh-emblem">🚀</div><h3>¡Bienvenido!</h3><p>Todavía no tienes preguntas guardadas. Añade tu primera pregunta (a mano, desde una foto o desde un PDF con IA) para poder empezar a practicar.</p>';
+    if(isAdmin){
+      const btn = document.createElement('button'); btn.type='button'; btn.className='btn'; btn.textContent='Añadir pregunta';
+      btn.onclick = ()=>{ testsActiveSubtab='anadir'; renderTests(); };
+      hero.appendChild(btn);
+    } else {
+      const nota = document.createElement('div'); nota.className='test-empty'; nota.style.marginTop='6px';
+      nota.textContent = 'Pídele a quien administra el banco que añada preguntas.';
+      hero.appendChild(nota);
+    }
+    wrap.appendChild(hero);
+    return;
+  }
   hero.innerHTML = '<div class="wh-emblem">🎯</div><h3>Practicar</h3><p>Elige qué quieres practicar hoy: te lo preguntamos paso a paso, sin formularios largos.</p>';
   const btn = document.createElement('button'); btn.type='button'; btn.className='btn'; btn.textContent='Hacer test';
   btn.onclick = ()=>{ testsWizardPaso=1; renderTests(); };
@@ -4542,6 +4605,7 @@ function renderWizardResumen(wrap, questions){
   startBtn.disabled = !filtered.length;
   startBtn.onclick = ()=>{
     if(!filtered.length){ showToast('No hay preguntas guardadas con ese filtro todavía.'); return; }
+    registrarActividadHoy();
     let chosen;
     if(testsPickState.orden==='ordenado'){
       // Orden 1º tema → último (y dentro de cada tema, por subtema y fecha de alta), tal
