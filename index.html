@@ -1649,6 +1649,11 @@ const TEST_CATEGORIAS = [
   {key:'gramatica', label:'Gramática'}
 ];
 function testCatLabel(key){ const c = TEST_CATEGORIAS.find(c=>c.key===key); return c ? c.label : key; }
+// Color de acento por categoría (reutiliza la paleta ya existente en la app, sin añadir colores
+// nuevos): ayuda a identificar de qué categoría es una pregunta de un vistazo en el Banco.
+function testCatColor(key){
+  return ({ conocimientos:'var(--amber)', ingles:'var(--blue)', psico:'var(--green)', ortografia:'var(--red)', gramatica:'var(--cream-dim)' })[key] || 'var(--muted)';
+}
 // Nº de temas de una categoría: viene del temario cargado (editable por el admin), no de un
 // número fijo, así que si se añade o quita un tema el resto de la app se entera automáticamente.
 function testCatTemario(key){ return (state.temario && state.temario[key]) || []; }
@@ -1834,7 +1839,7 @@ function renderOrtoBuilder(host, st, onChange){
   paintSentence();
   paintMalos();
 }
-let testsAddState = { metodo:'manual', uiKeyOpen:false, files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
+let testsAddState = { metodo:'manual', metodoElegido:false, uiKeyOpen:false, files:[], parsed:null, categoria:'conocimientos', tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
 // Crea (o reutiliza) una sección <details> plegable dentro de container, cuyo estado abierto/cerrado
 // se recuerda en stateObj[key] entre renders (si no, cada renderTests() la volvería a colapsar).
 // Devuelve el <div> interno donde meter el contenido de la sección.
@@ -2901,7 +2906,7 @@ function newTestQuestionFromState(){
   return base;
 }
 function resetTestsAddState(){
-  testsAddState = { metodo: testsAddState.metodo, uiKeyOpen: testsAddState.uiKeyOpen, files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
+  testsAddState = { metodo: testsAddState.metodo, metodoElegido: testsAddState.metodoElegido, uiKeyOpen: testsAddState.uiKeyOpen, files:[], parsed:null, categoria: testsAddState.categoria, tema:null, subtema:null, origen:'', enunciado:'', opciones:['',''], correcta:0, explicacion:'', imagenes:[], ortoSeleccion: [], gramaticaCorrecta:true };
 }
 
 function renderTests(){
@@ -2958,17 +2963,29 @@ function renderTests(){
 function renderTestsAnadir(body){
   const tipoActual = testTipoForCategoria(testsAddState.categoria);
 
-  // Selector de método: decide qué bloque de "captura" se ve debajo. Los tres acaban en el mismo
+  // Paso 1: elegir método con tarjetas grandes (como en "Practicar"). Los tres acaban en el mismo
   // sitio (una pregunta guardada en el banco), pero "pdf" tiene su propio flujo de revisión en
   // lista y no comparte el formulario de abajo con los otros dos.
-  const metodoNav = document.createElement('div'); metodoNav.className='test-subnav';
-  [['manual','✍️ A mano'],['foto','📷 Desde foto (IA)'],['pdf','📄 Varias desde PDF (IA)']].forEach(([key,label])=>{
-    const b = document.createElement('button'); b.type='button'; b.textContent=label;
-    if(testsAddState.metodo===key) b.classList.add('active');
-    b.onclick = ()=>{ testsAddState.metodo = key; renderTests(); };
-    metodoNav.appendChild(b);
-  });
-  body.appendChild(metodoNav);
+  if(!testsAddState.metodoElegido){
+    const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Cómo quieres añadir la pregunta?';
+    body.appendChild(t);
+    const opts = document.createElement('div'); opts.className='wizard-options';
+    wizardOpt(opts,'✍️','A mano','Escribes tú el enunciado, opciones y respuesta', ()=>{
+      testsAddState.metodo='manual'; testsAddState.metodoElegido=true; renderTests();
+    });
+    wizardOpt(opts,'📷','Desde foto (IA)','Haces una captura de la pregunta ya corregida y la IA la transcribe', ()=>{
+      testsAddState.metodo='foto'; testsAddState.metodoElegido=true; renderTests();
+    });
+    wizardOpt(opts,'📄','Varias desde PDF (IA)','Subes un PDF (examen, simulacro, temario…) y la IA saca varias preguntas de golpe', ()=>{
+      testsAddState.metodo='pdf'; testsAddState.metodoElegido=true; renderTests();
+    });
+    body.appendChild(opts);
+    return;
+  }
+  const cambiar = document.createElement('button'); cambiar.type='button'; cambiar.className='wizard-back';
+  cambiar.innerHTML = '← Cambiar método ('+({manual:'✍️ A mano',foto:'📷 Desde foto',pdf:'📄 Desde PDF'}[testsAddState.metodo])+')';
+  cambiar.onclick = ()=>{ testsAddState.metodoElegido=false; renderTests(); };
+  body.appendChild(cambiar);
 
   if(testsAddState.metodo==='pdf'){
     renderTestsGenerarIA(body);
@@ -3871,12 +3888,13 @@ function renderTestsBanco(body){
       visibles.forEach(t=>{
         const q = t.q;
         const card = document.createElement('div'); card.className='test-card'; card.style.cursor='pointer';
+        card.style.borderLeft = '3px solid '+testCatColor(q.categoria);
         card.title = 'Pulsa para ver la pregunta completa';
         card.onclick = ()=> openTestPreviewModal(q);
         const head = document.createElement('div'); head.className='tc-head';
         const imgTag = (q.imagenes && q.imagenes.length) ? ' 🖼' : '';
         head.innerHTML = `<span>${(q.enunciado||'(sin enunciado)').slice(0,140)}${imgTag}</span>
-          <span class="tc-tag">${questionTemaTag(q)}</span>`;
+          <span class="tc-tag" style="background:color-mix(in srgb, ${testCatColor(q.categoria)} 18%, transparent);color:${testCatColor(q.categoria)};border:1px solid ${testCatColor(q.categoria)};border-radius:10px;padding:2px 8px;">${questionTemaTag(q)}</span>`;
         card.appendChild(head);
         const stat = document.createElement('div'); stat.className='tc-stat';
         stat.textContent = 'Eliminada el '+new Date(t.deletedAt).toLocaleString();
@@ -3896,12 +3914,13 @@ function renderTestsBanco(body){
     const visibles = filtered.slice(0, bancoVisibleCount);
     visibles.forEach(q=>{
       const card = document.createElement('div'); card.className='test-card'; card.style.cursor='pointer';
+      card.style.borderLeft = '3px solid '+testCatColor(q.categoria);
       card.title = 'Pulsa para ver la pregunta completa';
       card.onclick = ()=> openTestPreviewModal(q);
       const head = document.createElement('div'); head.className='tc-head';
       const imgTag = (q.imagenes && q.imagenes.length) ? ' 🖼' : '';
       head.innerHTML = `<span>${(q.enunciado||'(sin enunciado)').slice(0,140)}${imgTag}</span>
-        <span class="tc-tag">${questionTemaTag(q)}</span>`;
+        <span class="tc-tag" style="background:color-mix(in srgb, ${testCatColor(q.categoria)} 18%, transparent);color:${testCatColor(q.categoria)};border:1px solid ${testCatColor(q.categoria)};border-radius:10px;padding:2px 8px;">${questionTemaTag(q)}</span>`;
       card.appendChild(head);
       const stat = document.createElement('div'); stat.className='tc-stat';
       let statTxt = q.stats.veces ? `Practicada ${q.stats.veces} vez(es) · ${q.stats.aciertos} acierto(s)` : 'Sin practicar todavía';
