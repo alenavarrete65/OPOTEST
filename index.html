@@ -2389,11 +2389,6 @@ async function exportQuestionPNG(q, withAnswer){
     const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
     if(!blob) throw new Error('No se pudo generar el PNG.');
     const filename = 'opotest-pregunta-'+(q.id||Date.now())+(withAnswer?'-solucion':'')+'.png';
-    const file = new File([blob], filename, { type:'image/png' });
-    if(navigator.canShare && navigator.canShare({ files:[file] })){
-      try{ await navigator.share({ files:[file], title: withAnswer ? 'Solución OpoTest' : 'Pregunta OpoTest' }); return; }
-      catch(shareErr){ if(shareErr && shareErr.name==='AbortError') return; /* si falla el share, seguimos con la descarga */ }
-    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
