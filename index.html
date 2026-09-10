@@ -2290,9 +2290,12 @@ function renderTelegramConfigPanel(container){
   row.appendChild(chatField);
   bodyDiv.appendChild(row);
 }
-// Construye (fuera de pantalla) una tarjeta de la pregunta SIN revelar la respuesta correcta,
-// reutilizando las mismas clases .tq-* que usa el resto de la app para que se vea igual.
-function buildQuestionExportNode(q){
+// Construye (fuera de pantalla) una tarjeta de la pregunta, reutilizando las mismas clases
+// .tq-* que usa el resto de la app para que se vea igual. Por defecto NO revela la respuesta
+// correcta (para publicar la pregunta "en blanco"); con withAnswer=true marca la opción
+// correcta en verde (igual que la vista de corrección) y añade la explicación si la hay,
+// pensado para generar una segunda imagen de "solución" que se manda después.
+function buildQuestionExportNode(q, withAnswer){
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:#1b2b24;border:1px solid #34493d;border-radius:6px;padding:22px;font-family:var(--font-body);color:#ece4d3;box-sizing:border-box;';
   const top = document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
@@ -2300,7 +2303,7 @@ function buildQuestionExportNode(q){
   const tag = document.createElement('div'); tag.style.cssText='font-family:var(--font-mono);font-size:10.5px;color:#b9baa8;text-transform:uppercase;letter-spacing:.05em;'; tag.textContent = questionTemaTag(q);
   top.appendChild(brand); top.appendChild(tag);
   wrap.appendChild(top);
-  const card = document.createElement('div'); card.className='test-quiz-q'; card.style.cssText='margin:0;';
+  const card = document.createElement('div'); card.className = withAnswer ? 'test-quiz-q corregida' : 'test-quiz-q'; card.style.cssText='margin:0;';
   const tipo = qTipo(q);
   const esOrtoNuevo = tipo==='ortografia' && ortoEsFormatoNuevo(q.enunciado, q.palabras);
   if(tipo==='gramatica'){
@@ -2308,17 +2311,28 @@ function buildQuestionExportNode(q){
     card.appendChild(prompt);
     const frase = document.createElement('div'); frase.className='tq-opt'; frase.style.cssText='font-style:italic;cursor:default;'; frase.textContent = '"'+(q.enunciado||'')+'"';
     card.appendChild(frase);
+    if(withAnswer){
+      const badge = document.createElement('div'); badge.className='tq-opt correcta';
+      badge.textContent = q.correcta ? 'Frase correcta ✓' : 'Frase incorrecta ✕';
+      card.appendChild(badge);
+    }
   } else if(tipo==='ortografia' && esOrtoNuevo){
     const prompt = document.createElement('div'); prompt.className='tq-enun'; prompt.textContent = '¿Qué palabra numerada está mal escrita?';
     card.appendChild(prompt);
     const frase = document.createElement('div'); frase.style.marginBottom='8px';
-    pintarFraseConPalabras(frase, q.enunciado, q.palabras, {mostrarVerdad:false});
+    pintarFraseConPalabras(frase, q.enunciado, q.palabras, {mostrarVerdad: !!withAnswer});
     card.appendChild(frase);
   } else if(tipo==='ortografia'){
     const prompt = document.createElement('div'); prompt.className='tq-enun'; prompt.textContent = '¿Cuál de estas palabras está mal escrita?';
     card.appendChild(prompt);
     const palRow = document.createElement('div'); palRow.className='tq-palabras';
-    (q.palabras||[]).forEach((p,i)=>{ const chip=document.createElement('span'); chip.className='tq-palabra'; chip.style.color='#ece4d3'; chip.style.borderColor='#34493d'; chip.textContent=(i+1)+'. '+p.texto; palRow.appendChild(chip); });
+    (q.palabras||[]).forEach((p,i)=>{
+      const chip=document.createElement('span');
+      chip.className = withAnswer ? ('tq-palabra'+(p.incorrecta?' mal':' bien')) : 'tq-palabra';
+      if(!withAnswer){ chip.style.color='#ece4d3'; chip.style.borderColor='#34493d'; }
+      chip.textContent=(i+1)+'. '+p.texto+(withAnswer ? (p.incorrecta?' ✕':' ✓') : '');
+      palRow.appendChild(chip);
+    });
     card.appendChild(palRow);
   } else {
     if(q.enunciado){ const enun = document.createElement('div'); enun.className='tq-enun'; enun.textContent = q.enunciado; card.appendChild(enun); }
@@ -2331,16 +2345,22 @@ function buildQuestionExportNode(q){
   if(tipo==='multiple' && q.opciones && q.opciones.length){
     const LETRAS='ABCDEFGHIJ';
     q.opciones.forEach((op,oi)=>{
-      const optRow = document.createElement('div'); optRow.className='tq-opt'; optRow.style.cssText='cursor:default;';
+      const esCorrecta = withAnswer && oi===q.correcta;
+      const optRow = document.createElement('div'); optRow.className = 'tq-opt'+(esCorrecta?' correcta':''); optRow.style.cssText='cursor:default;';
       const marker = document.createElement('span'); marker.style.cssText='flex-shrink:0;width:20px;color:var(--amber);font-family:var(--font-mono);font-weight:700;'; marker.textContent = LETRAS[oi]+')';
       optRow.appendChild(marker);
-      const span = document.createElement('span'); span.textContent = op;
+      const span = document.createElement('span'); span.textContent = op + (esCorrecta ? ' ✓' : '');
       optRow.appendChild(span);
       card.appendChild(optRow);
     });
   }
+  if(withAnswer && q.explicacion){
+    const ex = document.createElement('div'); ex.className='tq-explic'; ex.textContent = q.explicacion;
+    card.appendChild(ex);
+  }
   wrap.appendChild(card);
-  const foot = document.createElement('div'); foot.style.cssText='margin-top:16px;font-family:var(--font-mono);font-size:10px;color:#8a8f7d;text-align:right;'; foot.textContent = '¿Te la sabes? 🧠';
+  const foot = document.createElement('div'); foot.style.cssText='margin-top:16px;font-family:var(--font-mono);font-size:10px;color:#8a8f7d;text-align:right;';
+  foot.textContent = withAnswer ? 'Solución ✅' : '¿Te la sabes? 🧠';
   wrap.appendChild(foot);
   return wrap;
 }
@@ -2357,21 +2377,21 @@ function loadHtml2Canvas(){
   });
   return html2canvasLoading;
 }
-async function exportQuestionPNG(q){
-  showToast('Generando imagen…');
+async function exportQuestionPNG(q, withAnswer){
+  showToast(withAnswer ? 'Generando imagen de la solución…' : 'Generando imagen…');
   let node = null;
   try{
     await loadHtml2Canvas();
-    node = buildQuestionExportNode(q);
+    node = buildQuestionExportNode(q, withAnswer);
     document.body.appendChild(node);
     if(document.fonts && document.fonts.ready) await document.fonts.ready;
     const canvas = await window.html2canvas(node, { backgroundColor:'#1b2b24', scale:2, useCORS:true });
     const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
     if(!blob) throw new Error('No se pudo generar el PNG.');
-    const filename = 'opotest-pregunta-'+(q.id||Date.now())+'.png';
+    const filename = 'opotest-pregunta-'+(q.id||Date.now())+(withAnswer?'-solucion':'')+'.png';
     const file = new File([blob], filename, { type:'image/png' });
     if(navigator.canShare && navigator.canShare({ files:[file] })){
-      try{ await navigator.share({ files:[file], title:'Pregunta OpoTest' }); return; }
+      try{ await navigator.share({ files:[file], title: withAnswer ? 'Solución OpoTest' : 'Pregunta OpoTest' }); return; }
       catch(shareErr){ if(shareErr && shareErr.name==='AbortError') return; /* si falla el share, seguimos con la descarga */ }
     }
     const url = URL.createObjectURL(blob);
@@ -2472,6 +2492,58 @@ async function sendTelegramPoll(q){
   }catch(err){
     console.error(err);
     showToast('No se pudo enviar a Telegram: '+(err.message||'error desconocido'));
+  }
+}
+
+// Devuelve {texto} con la respuesta correcta en texto plano según el tipo de pregunta, o
+// {error} si esta pregunta no tiene una respuesta que se pueda expresar así (p. ej. una
+// pregunta de Psicotécnicos que es solo una imagen, o sin respuesta correcta definida).
+function buildRespuestaTexto(q){
+  const tipo = qTipo(q);
+  if(tipo==='multiple'){
+    if(!q.opciones || !q.opciones.length || typeof q.correcta!=='number' || !q.opciones[q.correcta]) return { error:'Esta pregunta no tiene una respuesta correcta definida.' };
+    const LETRAS = 'ABCDEFGHIJ';
+    return { texto: LETRAS[q.correcta]+') '+q.opciones[q.correcta] };
+  }
+  if(tipo==='gramatica'){
+    return { texto: 'La frase está '+(q.correcta ? 'BIEN' : 'MAL')+' escrita gramaticalmente.' };
+  }
+  if(tipo==='ortografia'){
+    const malas = (q.palabras||[]).filter(p=>p.incorrecta);
+    if(!malas.length) return { texto:'Las 4 palabras están bien escritas.' };
+    return { texto:(malas.length===1?'La palabra mal escrita es: ':'Palabras mal escritas: ')+malas.map(p=>p.texto).join(', ') };
+  }
+  return { error:'Este tipo de pregunta no tiene un formato de respuesta para enviar a Telegram.' };
+}
+// Telegram (parse_mode HTML) interpreta &, < y > como marcado; hay que escaparlos en
+// cualquier texto dinámico (enunciado, opción, explicación) antes de meterlo en el mensaje.
+function escapeTelegramHTML(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+// Manda la respuesta correcta (y la explicación, si la hay) como un único mensaje de texto
+// con formato "spoiler" de Telegram (<tg-spoiler>): en el grupo se ve tapado/difuminado hasta
+// que alguien lo toca, así se puede publicar justo debajo de la pregunta (PNG o encuesta) sin
+// destriparla. Reutiliza el mismo bot/token/chat que ya tengas configurado arriba.
+async function sendTelegramAnswerSpoiler(q){
+  const token = getTelegramBotToken(), chatId = getTelegramChatId();
+  if(!token || !chatId){ showToast('Configura antes el token del bot y el chat de Telegram.'); return; }
+  const r = buildRespuestaTexto(q);
+  if(r.error){ showToast(r.error); return; }
+  let cuerpo = '✅ <b>Respuesta correcta:</b> '+escapeTelegramHTML(r.texto);
+  if(q.explicacion) cuerpo += '\n💬 '+escapeTelegramHTML(q.explicacion);
+  const text = '<tg-spoiler>'+cuerpo+'</tg-spoiler>';
+  showToast('Enviando respuesta a Telegram…');
+  try{
+    const res = await fetch('https://api.telegram.org/bot'+token+'/sendMessage', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode:'HTML' })
+    });
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.description || 'Telegram rechazó el mensaje.');
+    showToast('Respuesta enviada como spoiler ✓');
+  }catch(err){
+    console.error(err);
+    showToast('No se pudo enviar la respuesta: '+(err.message||'error desconocido'));
   }
 }
 
@@ -4030,9 +4102,15 @@ function openTestPreviewModal(q){
     const pngBtn = document.createElement('button'); pngBtn.type='button'; pngBtn.className='btn small ghost'; pngBtn.textContent='📸 Exportar a PNG (sin respuesta)';
     pngBtn.onclick = ()=> exportQuestionPNG(q);
     shareRow.appendChild(pngBtn);
+    const pngAnswerBtn = document.createElement('button'); pngAnswerBtn.type='button'; pngAnswerBtn.className='btn small ghost'; pngAnswerBtn.textContent='🧾 Exportar a PNG (con respuesta)';
+    pngAnswerBtn.onclick = ()=> exportQuestionPNG(q, true);
+    shareRow.appendChild(pngAnswerBtn);
     const tgBtn = document.createElement('button'); tgBtn.type='button'; tgBtn.className='btn small ghost'; tgBtn.textContent='📊 Enviar encuesta a Telegram';
     tgBtn.onclick = ()=> sendTelegramPoll(q);
     shareRow.appendChild(tgBtn);
+    const tgAnswerBtn = document.createElement('button'); tgAnswerBtn.type='button'; tgAnswerBtn.className='btn small ghost'; tgAnswerBtn.textContent='🙈 Enviar respuesta a Telegram (spoiler)';
+    tgAnswerBtn.onclick = ()=> sendTelegramAnswerSpoiler(q);
+    shareRow.appendChild(tgAnswerBtn);
     box.appendChild(shareRow);
     renderTelegramConfigPanel(box);
   }
