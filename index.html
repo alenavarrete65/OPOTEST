@@ -4099,10 +4099,10 @@ function openTestPreviewModal(q){
 
   if(isAdmin){
     const shareRow = document.createElement('div'); shareRow.style.cssText='display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;';
-    const pngBtn = document.createElement('button'); pngBtn.type='button'; pngBtn.className='btn small ghost'; pngBtn.textContent='📸 Exportar a PNG (sin respuesta)';
+    const pngBtn = document.createElement('button'); pngBtn.type='button'; pngBtn.className='btn small ghost'; pngBtn.textContent='⬇️ Exportar a PNG (sin respuesta)';
     pngBtn.onclick = ()=> exportQuestionPNG(q);
     shareRow.appendChild(pngBtn);
-    const pngAnswerBtn = document.createElement('button'); pngAnswerBtn.type='button'; pngAnswerBtn.className='btn small ghost'; pngAnswerBtn.textContent='🧾 Exportar a PNG (con respuesta)';
+    const pngAnswerBtn = document.createElement('button'); pngAnswerBtn.type='button'; pngAnswerBtn.className='btn small ghost'; pngAnswerBtn.textContent='⬇️ Exportar a PNG (con respuesta)';
     pngAnswerBtn.onclick = ()=> exportQuestionPNG(q, true);
     shareRow.appendChild(pngAnswerBtn);
     const tgBtn = document.createElement('button'); tgBtn.type='button'; tgBtn.className='btn small ghost'; tgBtn.textContent='📊 Enviar encuesta a Telegram';
