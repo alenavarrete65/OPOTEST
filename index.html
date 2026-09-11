@@ -2389,6 +2389,11 @@ async function exportQuestionPNG(q, withAnswer){
     const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
     if(!blob) throw new Error('No se pudo generar el PNG.');
     const filename = 'opotest-pregunta-'+(q.id||Date.now())+(withAnswer?'-solucion':'')+'.png';
+    const file = new File([blob], filename, { type:'image/png' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file], title: withAnswer ? 'Solución OpoTest' : 'Pregunta OpoTest' }); return; }
+      catch(shareErr){ if(shareErr && shareErr.name==='AbortError') return; /* si falla el share, seguimos con la descarga */ }
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -2515,31 +2520,75 @@ function buildRespuestaTexto(q){
 function escapeTelegramHTML(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-// Manda la respuesta correcta (y la explicación, si la hay) como un único mensaje de texto
-// con formato "spoiler" de Telegram (<tg-spoiler>): en el grupo se ve tapado/difuminado hasta
-// que alguien lo toca, así se puede publicar justo debajo de la pregunta (PNG o encuesta) sin
-// destriparla. Reutiliza el mismo bot/token/chat que ya tengas configurado arriba.
-async function sendTelegramAnswerSpoiler(q){
+// Construye el mensaje final que se mandaría a Telegram: {cuerpoPlano, textoHtml} o {error}.
+// cuerpoPlano es para mostrar en la vista previa (sin las etiquetas HTML); textoHtml es lo que
+// se manda de verdad a la API, con <tg-spoiler> envolviendo toda la respuesta + explicación.
+function buildSpoilerMensaje(q){
+  const r = buildRespuestaTexto(q);
+  if(r.error) return { error: r.error };
+  let cuerpoPlano = '✅ Respuesta correcta: '+r.texto;
+  if(q.explicacion) cuerpoPlano += '\n💬 '+q.explicacion;
+  let cuerpoHtml = '✅ <b>Respuesta correcta:</b> '+escapeTelegramHTML(r.texto);
+  if(q.explicacion) cuerpoHtml += '\n💬 '+escapeTelegramHTML(q.explicacion);
+  return { cuerpoPlano, textoHtml: '<tg-spoiler>'+cuerpoHtml+'</tg-spoiler>' };
+}
+// Manda de verdad el mensaje ya construido (POST a la API de Telegram). No construye texto ni
+// pide confirmación — eso lo hace quien la llama (openSpoilerPreview).
+async function postTelegramMessage(textoHtml){
+  const token = getTelegramBotToken(), chatId = getTelegramChatId();
+  const res = await fetch('https://api.telegram.org/bot'+token+'/sendMessage', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ chat_id: chatId, text: textoHtml, parse_mode:'HTML' })
+  });
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.description || 'Telegram rechazó el mensaje.');
+}
+// Abre una vista previa de la respuesta (tal cual se va a mandar, en texto plano) con botones
+// Enviar/Cancelar, para no mandar nada a Telegram a ciegas. Reutiliza el mismo bot/token/chat
+// que ya tengas configurado arriba.
+function openSpoilerPreview(q){
   const token = getTelegramBotToken(), chatId = getTelegramChatId();
   if(!token || !chatId){ showToast('Configura antes el token del bot y el chat de Telegram.'); return; }
-  const r = buildRespuestaTexto(q);
-  if(r.error){ showToast(r.error); return; }
-  let cuerpo = '✅ <b>Respuesta correcta:</b> '+escapeTelegramHTML(r.texto);
-  if(q.explicacion) cuerpo += '\n💬 '+escapeTelegramHTML(q.explicacion);
-  const text = '<tg-spoiler>'+cuerpo+'</tg-spoiler>';
-  showToast('Enviando respuesta a Telegram…');
-  try{
-    const res = await fetch('https://api.telegram.org/bot'+token+'/sendMessage', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode:'HTML' })
-    });
-    const data = await res.json();
-    if(!data.ok) throw new Error(data.description || 'Telegram rechazó el mensaje.');
-    showToast('Respuesta enviada como spoiler ✓');
-  }catch(err){
-    console.error(err);
-    showToast('No se pudo enviar la respuesta: '+(err.message||'error desconocido'));
-  }
+  const msg = buildSpoilerMensaje(q);
+  if(msg.error){ showToast(msg.error); return; }
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
+  overlay.onclick = (e)=>{ if(e.target===overlay) document.body.removeChild(overlay); };
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-panel);border:1px solid var(--line);border-radius:4px;padding:18px;max-width:480px;width:100%;';
+  overlay.appendChild(box);
+
+  const h = document.createElement('h3'); h.style.cssText='font-family:var(--font-display);color:var(--amber);text-transform:uppercase;margin:0 0 4px;'; h.textContent='Vista previa del envío';
+  box.appendChild(h);
+  const sub = document.createElement('div'); sub.className='sub'; sub.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-bottom:12px;'; sub.textContent = 'Así llegará al chat, tapado hasta que alguien lo toque:';
+  box.appendChild(sub);
+
+  const preview = document.createElement('div'); preview.style.cssText='background:var(--bg-panel-2);border:1px dashed var(--line);border-radius:6px;padding:12px;white-space:pre-wrap;font-size:14px;line-height:1.5;margin-bottom:14px;';
+  preview.textContent = msg.cuerpoPlano;
+  box.appendChild(preview);
+
+  const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;';
+  const cancelBtn = document.createElement('button'); cancelBtn.type='button'; cancelBtn.className='btn small ghost'; cancelBtn.textContent='Cancelar';
+  cancelBtn.onclick = ()=> document.body.removeChild(overlay);
+  btnRow.appendChild(cancelBtn);
+  const sendBtn = document.createElement('button'); sendBtn.type='button'; sendBtn.className='btn small'; sendBtn.textContent='Enviar a Telegram';
+  sendBtn.onclick = async ()=>{
+    sendBtn.disabled = true; cancelBtn.disabled = true; sendBtn.textContent = 'Enviando…';
+    try{
+      await postTelegramMessage(msg.textoHtml);
+      showToast('Respuesta enviada como spoiler ✓');
+      document.body.removeChild(overlay);
+    }catch(err){
+      console.error(err);
+      showToast('No se pudo enviar la respuesta: '+(err.message||'error desconocido'));
+      sendBtn.disabled = false; cancelBtn.disabled = false; sendBtn.textContent = 'Enviar a Telegram';
+    }
+  };
+  btnRow.appendChild(sendBtn);
+  box.appendChild(btnRow);
+
+  document.body.appendChild(overlay);
 }
 
 function fileToBase64(file){
@@ -4093,20 +4142,27 @@ function openTestPreviewModal(q){
   box.appendChild(stat);
 
   if(isAdmin){
-    const shareRow = document.createElement('div'); shareRow.style.cssText='display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;';
-    const pngBtn = document.createElement('button'); pngBtn.type='button'; pngBtn.className='btn small ghost'; pngBtn.textContent='⬇️ Exportar a PNG (sin respuesta)';
+    const shareToggle = document.createElement('button'); shareToggle.type='button'; shareToggle.className='btn small ghost'; shareToggle.style.marginTop='10px'; shareToggle.textContent='📤 Compartir ▾';
+    const shareMenu = document.createElement('div'); shareMenu.style.cssText='display:none;flex-direction:column;gap:6px;margin:8px 0;padding:10px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:6px;';
+    shareToggle.onclick = ()=>{
+      const abierto = shareMenu.style.display !== 'none';
+      shareMenu.style.display = abierto ? 'none' : 'flex';
+      shareToggle.textContent = abierto ? '📤 Compartir ▾' : '📤 Compartir ▴';
+    };
+    const pngBtn = document.createElement('button'); pngBtn.type='button'; pngBtn.className='btn small ghost'; pngBtn.textContent='📸 Exportar a PNG (sin respuesta)';
     pngBtn.onclick = ()=> exportQuestionPNG(q);
-    shareRow.appendChild(pngBtn);
-    const pngAnswerBtn = document.createElement('button'); pngAnswerBtn.type='button'; pngAnswerBtn.className='btn small ghost'; pngAnswerBtn.textContent='⬇️ Exportar a PNG (con respuesta)';
+    shareMenu.appendChild(pngBtn);
+    const pngAnswerBtn = document.createElement('button'); pngAnswerBtn.type='button'; pngAnswerBtn.className='btn small ghost'; pngAnswerBtn.textContent='🧾 Exportar a PNG (con respuesta)';
     pngAnswerBtn.onclick = ()=> exportQuestionPNG(q, true);
-    shareRow.appendChild(pngAnswerBtn);
+    shareMenu.appendChild(pngAnswerBtn);
     const tgBtn = document.createElement('button'); tgBtn.type='button'; tgBtn.className='btn small ghost'; tgBtn.textContent='📊 Enviar encuesta a Telegram';
     tgBtn.onclick = ()=> sendTelegramPoll(q);
-    shareRow.appendChild(tgBtn);
+    shareMenu.appendChild(tgBtn);
     const tgAnswerBtn = document.createElement('button'); tgAnswerBtn.type='button'; tgAnswerBtn.className='btn small ghost'; tgAnswerBtn.textContent='🙈 Enviar respuesta a Telegram (spoiler)';
-    tgAnswerBtn.onclick = ()=> sendTelegramAnswerSpoiler(q);
-    shareRow.appendChild(tgAnswerBtn);
-    box.appendChild(shareRow);
+    tgAnswerBtn.onclick = ()=> openSpoilerPreview(q);
+    shareMenu.appendChild(tgAnswerBtn);
+    box.appendChild(shareToggle);
+    box.appendChild(shareMenu);
     renderTelegramConfigPanel(box);
   }
 
