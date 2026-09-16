@@ -2479,7 +2479,7 @@ async function sendTelegramPoll(q){
       question: payload.question,
       options: payload.options,
       type: 'quiz',
-      is_anonymous: true,
+      is_anonymous: false,
       correct_option_id: payload.correct_option_id
     };
     if(payload.explanation) body.explanation = payload.explanation;
