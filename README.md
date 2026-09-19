@@ -186,6 +186,87 @@ futuro hacia una plataforma de test multiusuario.
   → Publicar, para que la nueva ruta `users/{tu uid}/config/{docId}` tenga
   permisos (si no, el temario no se podrá guardar ni leer).
 
+## Practicar: pantalla "Hoy", test rápido y objetivo diario
+
+- La portada de **Practicar** es ahora la pantalla **Hoy**: un anillo con las preguntas que llevas
+  hoy frente a tu **objetivo diario** (se cambia con los botones − / +, de 5 en 5), tu racha de días
+  y un botón grande **Test rápido de hoy**.
+- **Test rápido**: 10 preguntas en modo instantáneo y sin temporizador, mezcladas automáticamente:
+  ~40 % de tus fallos, ~30 % de repasos que te tocan hoy, ~20 % de las más flojas (acierto < 60 %
+  con al menos 2 intentos), el resto de preguntas nuevas y, si aún faltan, las que llevas más
+  tiempo sin repasar.
+- **Repasar mis fallos / Solo nuevas**: atajos en la pantalla Hoy y opciones en el primer paso del
+  asistente. En el paso de temas hay además un selector *Todas · Mis fallos · Nuevas* para
+  combinarlo con una categoría y unos temas concretos. Una pregunta cuenta como "fallo" mientras su
+  **último intento** fue un fallo (campo `stats.ultimo`); en preguntas antiguas, sin ese dato, cuenta
+  como fallo si alguna vez se falló. En cuanto la aciertas deja de estar en la lista.
+- **Pantalla de resultados**: junto a la nota muestra la comparación con el test anterior, cuántas
+  preguntas has **recuperado** (las que fallabas antes y ahora aciertas), cómo vas con el objetivo
+  de hoy y los botones **Repetir solo las falladas** y **Otro test rápido**.
+- **Racha**: un día suma a la racha cuando respondes al menos tantas preguntas como tu objetivo
+  diario (antes bastaba con empezar un test). Las preguntas de opción múltiple dejadas en blanco no
+  cuentan para el objetivo. La racha antigua se conserva: se migra sola la primera vez.
+- **Progreso personal sincronizado**: la racha, el objetivo y el historial de los últimos 40 tests
+  se guardan en `users/{tu uid}/progreso/resumen`, así que son los mismos en móvil y ordenador.
+  **Hay que volver a publicar `firestore.rules`** (Firebase → Firestore Database → Reglas →
+  pegar → Publicar) para que esa ruta tenga permisos. Mientras no se publiquen, la app funciona
+  igual pero solo guarda el progreso en cada dispositivo (verás un aviso en la consola del
+  navegador, nada más).
+- Limitación que ya existía: las estadísticas por pregunta (`stats`) las guarda solo la cuenta
+  admin en el banco compartido. Una cuenta que solo practica ve sus fallos/nuevas durante la sesión,
+  pero esos datos no se conservan al recargar; su racha, objetivo e historial sí se guardan.
+
+## Varias fotos → varias preguntas
+
+En **Añadir pregunta → Desde foto (IA)** ahora hay dos modos (selector arriba):
+
+- **Varias preguntas (1 foto = 1 pregunta)**, el modo por defecto: subes hasta **5 fotos** (se pueden
+  elegir de golpe o ir añadiéndolas), cada una con UNA pregunta y su retroalimentación visible. La IA
+  transcribe cada foto por separado (una llamada por foto, con el mismo respaldo Gemini → OpenRouter →
+  proveedor extra de siempre): enunciado, opciones, respuesta correcta deducida de la corrección, y la
+  retroalimentación copiada en la explicación. Las fotos se reducen a 1600 px antes de enviarlas.
+- **1 pregunta (varias capturas)**: el modo anterior, donde todas las imágenes son una sola pregunta.
+
+Las preguntas transcritas van a la misma lista de **"Revisa antes de guardar"** que "Desde PDF"
+(puedes editarlas, cambiar tema/subtema, descartarlas o guardar todas las marcadas); no se guarda nada
+en el banco hasta que lo confirmas, y avisa si alguna se parece a otra que ya tienes. Si una foto falla,
+las demás siguen y la fallida se queda en la lista para reintentarla con un clic. El límite de 5 está en
+la constante `MAX_FOTOS_LOTE` de `index.html`.
+
+## Repaso espaciado
+
+Cada vez que respondes una pregunta se calcula cuándo te toca volver a verla (`stats.nivel` y
+`stats.prox`): si la fallas, mañana; cada acierto seguido la aleja más (3, 7, 14, 30 y 60 días).
+La pantalla Hoy muestra **Repaso de hoy** con las preguntas que te tocan (las atrasadas se acumulan)
+y cuántas hay para mañana; también es un alcance del asistente y un filtro del paso de temas. Las
+preguntas antiguas, sin fecha de repaso, solo entran si están falladas; en cuanto las practiques
+una vez ya tendrán su calendario.
+
+## Mapa del temario
+
+En **Progreso**, cada tema del temario (categorías con temas: teoría, inglés…) es una casilla de color:
+**Dominado** (de las preguntas que has practicado, al menos el 85 % las tienes bien ahora y has visto
+como mínimo el 70 % del tema), **En camino**, **Flojo** (menos del 60 % bien) y **Sin ver**. Arriba
+se resume cuántos temas llevas dominados. Al tocar una casilla se abre el asistente de Practicar ya
+con ese tema elegido.
+
+## "Explícamelo" con IA
+
+Al responder una pregunta (modo instantáneo, o al corregir un test) aparece **🤖 Explícamelo**
+siempre que ese dispositivo tenga alguna clave de IA configurada (Gemini, OpenRouter u otro
+proveedor, en *Añadir pregunta*). Usa el mismo sistema de respaldo entre proveedores que el resto de
+la app y muestra una explicación breve, marcada como generada por IA para que la contrastes con el
+temario. Si eres admin, **💾 Guardar como explicación** la guarda en la pregunta (pide confirmación
+si ya tenía una) y desde ese momento se ve con el formato enriquecido como cualquier otra.
+
+## Explicaciones con formato
+
+Al escribir la explicación de una pregunta hay una barra con **negrita**, <u>subrayado</u>,
+resaltado y tres colores (rojo, verde, azul), con vista previa. El texto se guarda como string normal
+con marcas: `**negrita**`, `__subrayado__`, `==resaltado==`, `{rojo:texto}` (también `verde` y
+`azul`). Las explicaciones antiguas se ven igual. En Telegram se conservan negrita y subrayado; el
+resto de formatos se envía como texto normal.
+
 ## Cómo publicar un cambio
 
 1. Edita los archivos que necesites (normalmente `index.html`).

@@ -39,6 +39,7 @@
     --blue: #5c8a99;
     --muted: #8a9186;
     --red-text: #d9705a;
+    --rt-rojo:#ff8f7a; --rt-verde:#8fd19a; --rt-azul:#7fc4e8; --rt-mark:rgba(201,162,39,0.38);
     --font-display: 'Playfair Display', serif;
     --font-mono: 'IBM Plex Mono', monospace;
     --font-body: 'Source Sans 3', sans-serif;
@@ -67,6 +68,7 @@
     --blue:#3d6b78;
     --muted:#7a7160;
     --red-text:#a8402c;
+    --rt-rojo:#b23a26; --rt-verde:#2f7a4a; --rt-azul:#2b6a8f; --rt-mark:rgba(184,144,31,0.32);
     --bg-overlay-1: rgba(244,236,214,0.86);
     --bg-overlay-2: rgba(244,236,214,0.93);
     --bg-overlay-3: rgba(244,236,214,0.97);
@@ -745,6 +747,84 @@
   .test-quiz-q.corregida .tq-opt.correcta{background:rgba(111,154,106,0.18);border:1px solid var(--green);}
   .test-quiz-q.corregida .tq-opt.incorrecta-elegida{background:rgba(182,84,63,0.18);border:1px solid var(--red);}
   .test-quiz-q .tq-explic{font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+  .test-quiz-q .tq-explic strong, .rt-preview strong{color:var(--cream);font-weight:700;}
+  .rt-u{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:2px;}
+  .rt-h{background:var(--rt-mark);color:inherit;padding:0 2px;border-radius:2px;}
+  .rt-c-rojo{color:var(--rt-rojo);}
+  .rt-c-verde{color:var(--rt-verde);}
+  .rt-c-azul{color:var(--rt-azul);}
+  .rt-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 6px;}
+  .rt-btn{min-width:34px;height:32px;padding:0 9px;border-radius:6px;border:1px solid var(--line);background:var(--bg-panel-2);color:var(--cream);font-family:var(--font-body);font-size:14px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
+  .rt-btn:hover{border-color:var(--amber-dim);}
+  .rt-btn:active{background:var(--bg-panel);}
+  .rt-dot{width:14px;height:14px;border-radius:50%;display:block;}
+  .rt-dot.rojo{background:var(--rt-rojo);} .rt-dot.verde{background:var(--rt-verde);} .rt-dot.azul{background:var(--rt-azul);}
+  .rt-hint{font-family:var(--font-mono);font-size:10.5px;color:var(--cream-dim);margin-left:4px;}
+  .rt-preview{margin-top:6px;padding:8px 10px;border:1px dashed var(--line);border-radius:6px;font-size:13px;line-height:1.45;color:var(--cream-dim);}
+  .rt-preview .rt-cap{display:block;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;margin-bottom:3px;opacity:.8;}
+  /* ---- Pantalla "Hoy" (portada de Practicar), resultados y filtro por estado ---- */
+  .hoy-card{display:flex;align-items:center;gap:16px;background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow-soft);}
+  .hoy-ring{position:relative;width:96px;height:96px;flex:0 0 96px;}
+  .hoy-ring svg{width:100%;height:100%;transform:rotate(-90deg);display:block;}
+  .hoy-ring .ring-bg{stroke:var(--line);}
+  .hoy-ring .ring-fg{stroke:var(--amber);transition:stroke-dashoffset .7s ease;}
+  .hoy-ring.done .ring-fg{stroke:var(--green);}
+  .hoy-ring-txt{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--font-display);color:var(--cream);line-height:1;}
+  .hoy-ring-txt b{font-size:24px;font-weight:700;}
+  .hoy-ring-txt small{font-family:var(--font-mono);font-size:10px;color:var(--cream-dim);margin-top:4px;}
+  .hoy-info{flex:1;min-width:0;}
+  .hoy-title{font-family:var(--font-display);font-size:18px;color:var(--amber);text-transform:uppercase;letter-spacing:.03em;}
+  .hoy-sub{font-size:13.5px;color:var(--cream);margin-top:3px;line-height:1.35;}
+  .hoy-racha{font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:6px;}
+  .hoy-goal{display:flex;align-items:center;gap:8px;margin-top:9px;font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);flex-wrap:wrap;}
+  .hoy-goal button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--bg-panel);color:var(--cream);cursor:pointer;font-size:16px;line-height:1;padding:0;}
+  .hoy-goal button:hover{border-color:var(--amber-dim);}
+  .hoy-goal b{color:var(--cream);font-size:13px;min-width:22px;text-align:center;}
+  .btn.hoy-go{display:block;width:100%;text-align:center;padding:16px 18px;font-size:16px;}
+  .btn.hoy-go small{display:block;font-family:var(--font-mono);font-size:11px;text-transform:none;letter-spacing:0;font-weight:500;margin-top:4px;opacity:.85;}
+  .btn.hoy-go:disabled{opacity:.5;cursor:default;}
+  .hoy-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .hoy-chip{flex:1;min-width:140px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;text-align:left;color:var(--cream);font-family:var(--font-body);}
+  .hoy-chip:hover{border-color:var(--amber-dim);}
+  .hoy-chip strong{display:block;font-family:var(--font-display);font-size:13px;text-transform:uppercase;letter-spacing:.02em;}
+  .hoy-chip span{display:block;font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-top:3px;}
+  .hoy-chip.vacio{opacity:.6;cursor:default;}
+  .hoy-more{display:block;margin:12px auto 0;background:none;border:none;color:var(--cream-dim);font-family:var(--font-mono);font-size:12px;text-decoration:underline;cursor:pointer;}
+  .seg{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .seg button{flex:1;min-width:90px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-panel-2);color:var(--cream-dim);font-family:var(--font-mono);font-size:12px;cursor:pointer;}
+  .seg button.on{border-color:var(--amber);color:var(--amber);background:rgba(227,167,82,0.12);}
+  .res-card{background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));border:1px solid var(--amber-dim);border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow-soft);}
+  .res-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .res-big{font-family:var(--font-display);font-size:26px;color:var(--amber);}
+  .res-delta{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--cream-dim);}
+  .res-delta.up{color:var(--rt-verde);} .res-delta.down{color:var(--rt-rojo);}
+  .res-vs{font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);}
+  .res-line{font-size:13.5px;color:var(--cream);margin:4px 0;line-height:1.4;}
+  .res-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .res-actions .btn{flex:1;min-width:150px;}
+  /* ---- Mapa del temario y bloque de IA ---- */
+  .mapa-cat{font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px;}
+  .mapa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+  .mapa-t{display:flex;flex-direction:column;justify-content:space-between;gap:6px;text-align:left;min-height:66px;padding:9px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg-panel-2);color:var(--cream);cursor:pointer;font-family:var(--font-body);}
+  .mapa-t:hover{border-color:var(--amber-dim);}
+  .mapa-t .mapa-n{font-size:12.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .mapa-t .mapa-s{font-family:var(--font-mono);font-size:10.5px;color:var(--cream-dim);}
+  .mapa-t.vacio{opacity:.45;border-style:dotted;cursor:default;}
+  .mapa-t.sinver{border-style:dashed;}
+  .mapa-t.flojo{border-color:var(--red);background:rgba(182,84,63,0.18);}
+  .mapa-t.camino{border-color:var(--amber-dim);background:rgba(201,162,39,0.14);}
+  .mapa-t.dominado{border-color:var(--green);background:rgba(111,154,106,0.20);}
+  .mapa-leyenda{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 4px;font-family:var(--font-mono);font-size:10.5px;color:var(--cream-dim);}
+  .mapa-leyenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid var(--line);}
+  .mapa-leyenda i.flojo{background:rgba(182,84,63,0.5);border-color:var(--red);}
+  .mapa-leyenda i.camino{background:rgba(201,162,39,0.45);border-color:var(--amber-dim);}
+  .mapa-leyenda i.dominado{background:rgba(111,154,106,0.6);border-color:var(--green);}
+  .mapa-leyenda i.sinver{border-style:dashed;}
+  .tq-ia{margin-top:8px;padding:8px 10px;border:1px dashed var(--amber-dim);border-radius:8px;font-size:13px;line-height:1.5;color:var(--cream);}
+  .tq-ia .ia-head{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;color:var(--amber);margin-bottom:4px;}
+  .tq-ia .ia-err{color:var(--rt-rojo);font-size:12px;margin-bottom:6px;word-break:break-word;}
+  .tq-ia-btn{background:transparent;border:1px solid var(--amber-dim);color:var(--amber);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:12px;cursor:pointer;margin-right:6px;margin-top:4px;}
+  .tq-ia-btn:hover{background:rgba(227,167,82,0.12);}
   .test-score-banner{text-align:center;padding:16px;background:var(--bg-panel-2);border:1px solid var(--amber-dim);border-radius:8px;margin-bottom:16px;}
   .test-score-banner .num{font-family:var(--font-display);font-size:32px;color:var(--amber);}
   .tq-images{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
@@ -1081,6 +1161,170 @@ function showToast(msg){
   t.textContent = msg; t.classList.add('show');
   clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), 1600);
 }
+/* ===== Texto enriquecido en las explicaciones =====
+   La explicación sigue guardándose como un string normal (compatible con todo lo que ya
+   tienes guardado). Las marcas son:
+     **negrita**   __subrayado__   ==resaltado==   {rojo:texto} {verde:texto} {azul:texto}
+   Se convierten a elementos del DOM con createElement/textContent (nunca innerHTML), así que
+   no hay riesgo de inyectar HTML. Una marca sin pareja se muestra tal cual, como texto. */
+function richTokens(text){
+  const s = String(text==null?'':text);
+  const toks = [];
+  let buf = '', i = 0;
+  const flush = ()=>{ if(buf){ toks.push({t:'text', raw:buf}); buf=''; } };
+  while(i < s.length){
+    const two = s.substr(i,2);
+    if(two==='**' || two==='__' || two==='=='){ flush(); toks.push({t:'m', k:two, raw:two}); i+=2; continue; }
+    if(s[i]==='{'){
+      const m = /^\{(rojo|verde|azul):/.exec(s.slice(i, i+8));
+      if(m){ flush(); toks.push({t:'open', k:m[1], raw:m[0]}); i+=m[0].length; continue; }
+    }
+    if(s[i]==='}'){ flush(); toks.push({t:'close', raw:'}'}); i++; continue; }
+    buf += s[i]; i++;
+  }
+  flush();
+  const stack = [];
+  toks.forEach((tk, idx)=>{
+    const top = stack.length ? stack[stack.length-1] : -1;
+    if(tk.t==='m'){
+      if(top>=0 && toks[top].t==='m' && toks[top].k===tk.k){
+        // Pareja vacía pegada (p. ej. "____" de un hueco a rellenar): se deja como texto literal.
+        if(top===idx-1){ stack.pop(); return; }
+        toks[top].pair = idx; tk.pair = top; tk.closing = true; stack.pop();
+      } else stack.push(idx);
+    } else if(tk.t==='open'){
+      stack.push(idx);
+    } else if(tk.t==='close'){
+      if(top>=0 && toks[top].t==='open'){
+        // "{rojo:}" vacío: se deja como texto literal
+        if(top===idx-1){ stack.pop(); return; }
+        toks[top].pair = idx; tk.pair = top; tk.closing = true; stack.pop();
+      }
+    }
+  });
+  return toks;
+}
+function hasRich(text){ return richTokens(text).some(t=>t.pair!==undefined); }
+function renderRich(text, host){
+  const stack = [host];
+  richTokens(text).forEach(tk=>{
+    const cur = stack[stack.length-1];
+    if(tk.t==='text' || tk.pair===undefined){ cur.appendChild(document.createTextNode(tk.raw)); return; }
+    if(tk.closing){ stack.pop(); return; }
+    let el;
+    if(tk.t==='m'){
+      el = document.createElement(tk.k==='**' ? 'strong' : (tk.k==='==' ? 'mark' : 'span'));
+      if(tk.k==='__') el.className = 'rt-u';
+      if(tk.k==='==') el.className = 'rt-h';
+    } else { el = document.createElement('span'); el.className = 'rt-c-'+tk.k; }
+    cur.appendChild(el); stack.push(el);
+  });
+  return host;
+}
+// Texto plano (sin marcas): para encuestas de Telegram y vistas previas de texto.
+function stripRich(text){
+  return richTokens(text).map(tk => (tk.t!=='text' && tk.pair!==undefined) ? '' : tk.raw).join('');
+}
+// Para mensajes de Telegram (parse_mode HTML): admite negrita y subrayado; el resaltado y
+// los colores no existen en Telegram, así que se quitan y queda el texto normal.
+function richToTelegramHTML(text){
+  return richTokens(text).map(tk=>{
+    if(tk.t==='text' || tk.pair===undefined) return escapeTelegramHTML(tk.raw);
+    if(tk.t==='m' && tk.k==='**') return tk.closing ? '</b>' : '<b>';
+    if(tk.t==='m' && tk.k==='__') return tk.closing ? '</u>' : '<u>';
+    return '';
+  }).join('');
+}
+function richToggleWrap(ta, open, close){
+  const v = ta.value, s = ta.selectionStart, e = ta.selectionEnd, sel = v.slice(s,e);
+  let nv, ns, ne;
+  if(s>=open.length && v.slice(s-open.length, s)===open && v.slice(e, e+close.length)===close){
+    nv = v.slice(0, s-open.length) + sel + v.slice(e+close.length); ns = s-open.length; ne = ns+sel.length;
+  } else if(sel.length>=open.length+close.length && sel.startsWith(open) && sel.endsWith(close)){
+    const inner = sel.slice(open.length, sel.length-close.length);
+    nv = v.slice(0,s) + inner + v.slice(e); ns = s; ne = s+inner.length;
+  } else {
+    nv = v.slice(0,s) + open + sel + close + v.slice(e); ns = s+open.length; ne = ns+sel.length;
+  }
+  ta.value = nv; ta.setSelectionRange(ns, ne);
+}
+function richApplyColor(ta, color){
+  const v = ta.value, s = ta.selectionStart, e = ta.selectionEnd, sel = v.slice(s,e);
+  const before = v.slice(0,s), after = v.slice(e);
+  const m = /\{(rojo|verde|azul):$/.exec(before);
+  let nv, ns;
+  if(m && after.startsWith('}')){
+    const base = before.slice(0, before.length-m[0].length);
+    if(m[1]===color){ nv = base + sel + after.slice(1); ns = base.length; }          // mismo color: lo quita
+    else { nv = base + '{'+color+':' + sel + after; ns = base.length + color.length + 2; } // cambia de color
+  } else {
+    nv = before + '{'+color+':' + sel + '}' + after; ns = s + color.length + 2;
+  }
+  ta.value = nv; ta.setSelectionRange(ns, ns+sel.length);
+}
+// Campo de explicación con barra de formato (negrita, subrayado, resaltado, 3 colores) y
+// vista previa. opts: { label, placeholder, get(), set(valor) }.
+function buildRichExplField(opts){
+  const field = document.createElement('div'); field.className = 'test-field';
+  const lab = document.createElement('label'); lab.textContent = opts.label || 'Explicación (opcional)';
+  field.appendChild(lab);
+
+  const ta = document.createElement('textarea');
+  ta.value = opts.get() || '';
+  if(opts.placeholder) ta.placeholder = opts.placeholder;
+
+  const prev = document.createElement('div'); prev.className = 'rt-preview';
+  const paintPrev = ()=>{
+    prev.textContent = '';
+    if(!hasRich(ta.value)){ prev.style.display = 'none'; return; }
+    prev.style.display = '';
+    const cap = document.createElement('span'); cap.className = 'rt-cap'; cap.textContent = 'Así se verá';
+    const body = document.createElement('div');
+    renderRich(ta.value, body);
+    prev.appendChild(cap); prev.appendChild(body);
+  };
+  const changed = ()=>{ opts.set(ta.value); paintPrev(); };
+  ta.addEventListener('input', changed);
+  const run = (fn)=>{ fn(); changed(); ta.focus(); };
+
+  const bar = document.createElement('div'); bar.className = 'rt-bar';
+  const addBtn = (inner, title, onClick)=>{
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'rt-btn';
+    b.title = title; b.setAttribute('aria-label', title);
+    if(typeof inner === 'string') b.textContent = inner; else b.appendChild(inner);
+    b.addEventListener('mousedown', ev=>ev.preventDefault()); // no quitar la selección del textarea
+    b.addEventListener('click', ()=>run(onClick));
+    bar.appendChild(b);
+    return b;
+  };
+  const bB = document.createElement('strong'); bB.textContent = 'B';
+  addBtn(bB, 'Negrita (Ctrl+B)', ()=>richToggleWrap(ta,'**','**'));
+  const bU = document.createElement('span'); bU.className = 'rt-u'; bU.textContent = 'U';
+  addBtn(bU, 'Subrayado (Ctrl+U)', ()=>richToggleWrap(ta,'__','__'));
+  const bH = document.createElement('span'); bH.className = 'rt-h'; bH.textContent = 'ab';
+  addBtn(bH, 'Resaltar', ()=>richToggleWrap(ta,'==','=='));
+  [['rojo','Texto en rojo'],['verde','Texto en verde'],['azul','Texto en azul']].forEach(([c,t])=>{
+    const dot = document.createElement('span'); dot.className = 'rt-dot '+c;
+    addBtn(dot, t, ()=>richApplyColor(ta, c));
+  });
+  const hint = document.createElement('span'); hint.className = 'rt-hint'; hint.textContent = 'Selecciona texto y pulsa un botón';
+  bar.appendChild(hint);
+
+  ta.addEventListener('keydown', ev=>{
+    if((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !ev.altKey){
+      const k = ev.key.toLowerCase();
+      if(k==='b'){ ev.preventDefault(); run(()=>richToggleWrap(ta,'**','**')); }
+      else if(k==='u'){ ev.preventDefault(); run(()=>richToggleWrap(ta,'__','__')); }
+    }
+  });
+
+  field.appendChild(bar);
+  field.appendChild(ta);
+  field.appendChild(prev);
+  paintPrev();
+  return field;
+}
+
 function setSaveStatus(status, msg){
   const el = document.getElementById('saveIndicator');
   const textEl = document.getElementById('saveIndicatorText');
@@ -2005,28 +2249,191 @@ let testsBancoFiltro = {categoria:'', tema:'', subtema:'', q:'', papelera:false}
 const TESTBANCO_PAGE_SIZE = 50; // cuántas tarjetas se pintan de golpe en el Banco antes de pedir "mostrar más"
 // Selección de temas/subtemas para el test que se está configurando en "Practicar":
 // parciales: Map<temaNum, 'ALL' | Set<subtemaNum>> — vacío significa "todos los temas".
-let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio' }; // orden: 'aleatorio' | 'ordenado'
+let testsPickState = { categoria:'', parciales:new Map(), orden:'aleatorio', estado:'' }; // estado: '' (todas) | 'fallos' | 'nuevas' | 'repaso' // orden: 'aleatorio' | 'ordenado'
 let testsWizardCfg = { numPreguntas:10, modo:null, sinTiempo:false }; // config temporal del asistente de "Practicar"
-// Racha de días seguidos practicando. Se guarda solo en este dispositivo (no en Firebase): es una
-// motivación de hábito, no un dato que necesite sincronizarse entre dispositivos.
+/* ===================== PROGRESO PERSONAL: racha, objetivo diario e historial de tests =====================
+   Se guarda en este dispositivo (localStorage) y también en Firebase (users/{tu uid}/progreso/resumen),
+   para que la racha y el objetivo sean los mismos en el móvil y en el ordenador. Si Firebase rechaza
+   la escritura (p. ej. porque aún no has publicado las reglas nuevas de firestore.rules), la app sigue
+   funcionando igual, solo en este dispositivo.
+   Un día suma a la racha cuando respondes al menos tantas preguntas como tu objetivo diario. */
+const OBJETIVO_DEFECTO = 10;
+const TEST_RAPIDO_N = 10;
 function fmtFechaKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function getStreakDates(){ try{ return JSON.parse(localStorage.getItem('opotest-streak-dates')||'[]'); }catch(e){ return []; } }
-function registrarActividadHoy(){
+function progresoVacio(){ return { dias:[], porDia:{}, objetivo:OBJETIVO_DEFECTO, objetivoTs:0, historial:[], actualizado:0 }; }
+let progreso = progresoVacio();
+let progresoTimer = null, progresoSinPermiso = false;
+function progresoKey(){ return 'opotest_progreso_'+(currentUid||'anon'); }
+function normalizaProgreso(p){
+  const o = progresoVacio();
+  if(!p || typeof p!=='object') return o;
+  if(Array.isArray(p.dias)) o.dias = p.dias.filter(x=>typeof x==='string');
+  if(p.porDia && typeof p.porDia==='object') Object.keys(p.porDia).forEach(k=>{ const v = Number(p.porDia[k]); if(isFinite(v) && v>0) o.porDia[k] = v; });
+  const ob = Number(p.objetivo); if(isFinite(ob) && ob>=1) o.objetivo = Math.min(500, Math.round(ob));
+  o.objetivoTs = Number(p.objetivoTs)||0;
+  if(Array.isArray(p.historial)) o.historial = p.historial.filter(h=>h && h.id && isFinite(Number(h.t))).map(h=>({id:String(h.id), t:Number(h.t), n:Number(h.n)||0, ac:Number(h.ac)||0}));
+  o.actualizado = Number(p.actualizado)||0;
+  return o;
+}
+// Une dos versiones del progreso sin perder nada de ninguna (móvil + ordenador).
+function mergeProgreso(a, b){
+  a = normalizaProgreso(a); b = normalizaProgreso(b);
+  const dias = Array.from(new Set(a.dias.concat(b.dias))).sort().slice(-400);
+  const porDia = {};
+  Array.from(new Set(Object.keys(a.porDia).concat(Object.keys(b.porDia)))).forEach(k=>{ porDia[k] = Math.max(a.porDia[k]||0, b.porDia[k]||0); });
+  const keys = Object.keys(porDia).sort();
+  keys.slice(0, Math.max(0, keys.length-45)).forEach(k=>{ delete porDia[k]; });
+  const porId = new Map();
+  a.historial.concat(b.historial).forEach(h=>porId.set(h.id, h));
+  const historial = Array.from(porId.values()).sort((x,y)=>x.t-y.t).slice(-40);
+  const ganador = (b.objetivoTs > a.objetivoTs) ? b : a; // el objetivo cambiado más recientemente
+  return { dias, porDia, objetivo:ganador.objetivo, objetivoTs:ganador.objetivoTs, historial, actualizado:Math.max(a.actualizado, b.actualizado) };
+}
+function cargarProgresoLocal(){
+  let p = progresoVacio();
+  try{ const raw = localStorage.getItem(progresoKey()); if(raw) p = normalizaProgreso(JSON.parse(raw)); }catch(e){}
+  // Migración: la racha antigua se guardaba solo en este dispositivo bajo otra clave.
   try{
-    const key = fmtFechaKey(new Date());
-    const dates = getStreakDates();
-    if(!dates.includes(key)){ dates.push(key); localStorage.setItem('opotest-streak-dates', JSON.stringify(dates.slice(-400))); }
+    const old = JSON.parse(localStorage.getItem('opotest-streak-dates')||'[]');
+    if(Array.isArray(old) && old.length) p = mergeProgreso(p, Object.assign(progresoVacio(), {dias:old}));
   }catch(e){}
+  return p;
+}
+function guardarProgresoLocal(){ try{ localStorage.setItem(progresoKey(), JSON.stringify(progreso)); }catch(e){} }
+function progresoDifiere(fusionado, remoto){
+  if(!remoto) return true;
+  return fusionado.dias.length!==remoto.dias.length || fusionado.historial.length!==remoto.historial.length
+    || fusionado.objetivo!==remoto.objetivo || Object.keys(fusionado.porDia).length!==Object.keys(remoto.porDia).length;
+}
+async function cargarProgreso(){
+  progresoSinPermiso = false;
+  progreso = cargarProgresoLocal();
+  if(!firebaseOk || !currentUid) return;
+  try{
+    const snap = await db.collection('users').doc(currentUid).collection('progreso').doc('resumen').get();
+    const remoto = snap.exists ? normalizaProgreso(snap.data()) : null;
+    progreso = mergeProgreso(progreso, remoto);
+    guardarProgresoLocal();
+    if(progresoDifiere(progreso, remoto)) programarGuardadoProgreso(false); // sube lo que solo estaba en local
+  }catch(e){
+    if(e && e.code==='permission-denied'){ progresoSinPermiso = true; console.warn('Progreso: Firestore no deja guardarlo todavía (publica las reglas nuevas de firestore.rules).'); }
+    else console.error('No se pudo cargar el progreso remoto', e);
+  }
+}
+function programarGuardadoProgreso(inmediato){
+  guardarProgresoLocal();
+  if(progresoTimer) clearTimeout(progresoTimer);
+  progresoTimer = setTimeout(guardarProgresoRemoto, inmediato ? 0 : 4000);
+}
+async function guardarProgresoRemoto(){
+  progresoTimer = null;
+  if(!firebaseOk || !currentUid || progresoSinPermiso) return;
+  try{
+    const ref = db.collection('users').doc(currentUid).collection('progreso').doc('resumen');
+    const snap = await ref.get(); // fusiona con lo que haya subido otro dispositivo entretanto
+    if(snap.exists) progreso = mergeProgreso(progreso, snap.data());
+    progreso.actualizado = Date.now();
+    guardarProgresoLocal();
+    await ref.set(progreso);
+  }catch(e){
+    if(e && e.code==='permission-denied'){ progresoSinPermiso = true; console.warn('Progreso: Firestore no deja guardarlo todavía (publica las reglas nuevas de firestore.rules).'); }
+    else console.error('No se pudo sincronizar el progreso', e);
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden' && progresoTimer){ clearTimeout(progresoTimer); guardarProgresoRemoto(); }
+});
+function getStreakDates(){ return progreso.dias; }
+function objetivoDiario(){ return progreso.objetivo || OBJETIVO_DEFECTO; }
+function practicadasHoy(){ return progreso.porDia[fmtFechaKey(new Date())] || 0; }
+function marcaDiaSiCumplido(){
+  const hoy = fmtFechaKey(new Date());
+  if((progreso.porDia[hoy]||0) >= objetivoDiario() && !progreso.dias.includes(hoy)){
+    progreso.dias.push(hoy); progreso.dias.sort(); progreso.dias = progreso.dias.slice(-400);
+  }
+}
+// Suma k preguntas respondidas hoy (para el objetivo diario y la racha).
+function sumarPracticaHoy(k){
+  const hoy = fmtFechaKey(new Date());
+  progreso.porDia[hoy] = (progreso.porDia[hoy]||0) + k;
+  marcaDiaSiCumplido();
+  programarGuardadoProgreso(false);
+}
+function cambiarObjetivo(v){
+  progreso.objetivo = Math.max(5, Math.min(200, Math.round(v)));
+  progreso.objetivoTs = Date.now();
+  marcaDiaSiCumplido(); // si con el nuevo objetivo ya has llegado hoy, cuenta; nunca se quita un día ya ganado
+  programarGuardadoProgreso(false);
 }
 function calcularRachaActual(){
   const dates = new Set(getStreakDates());
   const d = new Date();
-  // Si hoy todavía no se ha practicado, se empieza a contar desde ayer para no "romper" la
-  // racha visualmente antes de que acabe el día (el usuario aún puede practicar hoy).
+  // Si hoy todavía no se ha cumplido el objetivo, se empieza a contar desde ayer para no
+  // "romper" la racha visualmente antes de que acabe el día (aún puedes cumplirlo hoy).
   if(!dates.has(fmtFechaKey(d))) d.setDate(d.getDate()-1);
   let racha = 0;
   while(dates.has(fmtFechaKey(d))){ racha++; d.setDate(d.getDate()-1); }
   return racha;
+}
+
+/* ===== Estado de cada pregunta según tus resultados (para "mis fallos", "nuevas" y el test rápido) ===== */
+function esNueva(q){ return !(q.stats && q.stats.veces>0); }
+// "Fallada" = el último intento fue un fallo. En preguntas antiguas, sin "último resultado"
+// guardado, se considera fallada si alguna vez se falló (aciertos < veces).
+function esFallada(q){
+  const st = q.stats;
+  if(!st || !(st.veces>0)) return false;
+  if(st.ultimo===0) return true;
+  if(st.ultimo===1) return false;
+  return (st.aciertos||0) < st.veces;
+}
+function esFloja(q){ const st = q.stats; return !!st && st.veces>=2 && (st.aciertos||0)/st.veces < 0.6; }
+/* Repaso espaciado ligero: tras cada intento se fija cuándo toca volver a ver la pregunta.
+   nivel = aciertos seguidos (0 = acabas de fallar). Fallar la devuelve a mañana; cada acierto
+   seguido la aleja más: 1 → 3 → 7 → 14 → 30 → 60 días. Se guardan en stats.nivel y stats.prox. */
+const REPASO_DIAS = [1, 3, 7, 14, 30, 60];
+function calcularProxRepaso(nivel, ahora){
+  const d = new Date(ahora); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + REPASO_DIAS[Math.min(Math.max(nivel,0), REPASO_DIAS.length-1)]);
+  return d.getTime();
+}
+// ¿Toca repasarla hoy? Preguntas antiguas sin fecha de repaso: solo si están falladas.
+function tocaRepasar(q, ahora){
+  const st = q.stats;
+  if(!st || !(st.veces>0)) return false;
+  if(typeof st.prox==='number') return st.prox <= (ahora||Date.now());
+  return esFallada(q);
+}
+// Cuántas preguntas tocan hoy (incluye las atrasadas) y cuántas mañana.
+function contarRepasos(questions){
+  const ahora = Date.now();
+  const m = new Date(ahora); m.setHours(0,0,0,0); m.setDate(m.getDate()+1);
+  const pasado = new Date(m.getTime()); pasado.setDate(pasado.getDate()+1);
+  let hoy = 0, manana = 0;
+  questions.forEach(q=>{
+    if(tocaRepasar(q, ahora)) hoy++;
+    else if(q.stats && typeof q.stats.prox==='number' && q.stats.prox>=m.getTime() && q.stats.prox<pasado.getTime()) manana++;
+  });
+  return { hoy, manana };
+}
+// Test rápido: mezcla fallos (~40 %), repasos que tocan (~30 %), flojas (~20 %), nuevas y, si falta, las repasadas hace más tiempo.
+function armarTestRapido(questions, n){
+  const usados = new Set(), out = [];
+  const tomar = (arr, max)=>{ let c = 0; for(const q of arr){ if(out.length>=n || c>=max) break; if(usados.has(q.id)) continue; usados.add(q.id); out.push(q); c++; } };
+  const fallos = shuffleArr(questions.filter(esFallada));
+  const vencidas = shuffleArr(questions.filter(q=>tocaRepasar(q) && !esFallada(q)))
+    .sort((x,y)=>((x.stats&&x.stats.prox)||0)-((y.stats&&y.stats.prox)||0));
+  const flojas = shuffleArr(questions.filter(q=>esFloja(q) && !esFallada(q)));
+  const nuevas = shuffleArr(questions.filter(esNueva));
+  const resto = shuffleArr(questions.filter(q=>!esNueva(q) && !esFallada(q) && !esFloja(q)))
+    .sort((x,y)=>((x.stats&&x.stats.fecha)||0)-((y.stats&&y.stats.fecha)||0));
+  tomar(fallos, Math.ceil(n*0.4));
+  tomar(vencidas, Math.ceil(n*0.3));
+  tomar(flojas, Math.ceil(n*0.2));
+  tomar(nuevas, n-out.length);
+  tomar(resto, n-out.length);
+  tomar(fallos, n); tomar(vencidas, n); tomar(flojas, n);
+  return shuffleArr(out);
 }
 
 /* ===================== TIPOS DE PREGUNTA ===================== */
@@ -2355,7 +2762,7 @@ function buildQuestionExportNode(q, withAnswer){
     });
   }
   if(withAnswer && q.explicacion){
-    const ex = document.createElement('div'); ex.className='tq-explic'; ex.textContent = q.explicacion;
+    const ex = document.createElement('div'); ex.className='tq-explic'; renderRich(q.explicacion, ex);
     card.appendChild(ex);
   }
   wrap.appendChild(card);
@@ -2427,7 +2834,7 @@ function buildTelegramPollPayload(q){
       question: 'Elige la opción correcta 👆 (pregunta completa arriba)',
       options: q.opciones.map((_,i)=> LETRAS[i]),
       correct_option_id: q.correcta,
-      explanation: recorta(q.explicacion || explicPorDefecto, LIMITE_EXPLIC)
+      explanation: recorta(stripRich(q.explicacion) || explicPorDefecto, LIMITE_EXPLIC)
     };
   }
   if(tipo==='gramatica'){
@@ -2439,7 +2846,7 @@ function buildTelegramPollPayload(q){
       question: cabe ? '¿Es correcta esta frase? "'+frase+'"' : '¿Es correcta esta frase? 👆 (arriba)',
       options: ['Correcta','Incorrecta'],
       correct_option_id: q.correcta ? 0 : 1,
-      explanation: recorta(q.explicacion || explicPorDefecto, LIMITE_EXPLIC)
+      explanation: recorta(stripRich(q.explicacion) || explicPorDefecto, LIMITE_EXPLIC)
     };
   }
   if(tipo==='ortografia'){
@@ -2454,7 +2861,7 @@ function buildTelegramPollPayload(q){
       question: cabe ? preguntaLarga : '¿Cuál de estas palabras está mal escrita? 👆 (frase arriba)',
       options: q.palabras.map(p=> recorta(p.texto, 100)),
       correct_option_id: malas[0].i,
-      explanation: recorta(q.explicacion || explicPorDefecto, LIMITE_EXPLIC)
+      explanation: recorta(stripRich(q.explicacion) || explicPorDefecto, LIMITE_EXPLIC)
     };
   }
   return { error:'Este tipo de pregunta no se puede convertir en encuesta de Telegram.' };
@@ -2527,9 +2934,9 @@ function buildSpoilerMensaje(q){
   const r = buildRespuestaTexto(q);
   if(r.error) return { error: r.error };
   let cuerpoPlano = '✅ Respuesta correcta: '+r.texto;
-  if(q.explicacion) cuerpoPlano += '\n💬 '+q.explicacion;
+  if(q.explicacion) cuerpoPlano += '\n💬 '+stripRich(q.explicacion);
   let cuerpoHtml = '✅ <b>Respuesta correcta:</b> '+escapeTelegramHTML(r.texto);
-  if(q.explicacion) cuerpoHtml += '\n💬 '+escapeTelegramHTML(q.explicacion);
+  if(q.explicacion) cuerpoHtml += '\n💬 '+richToTelegramHTML(q.explicacion);
   return { cuerpoPlano, textoHtml: '<tg-spoiler>'+cuerpoHtml+'</tg-spoiler>' };
 }
 // Manda de verdad el mensaje ya construido (POST a la API de Telegram). No construye texto ni
@@ -3075,6 +3482,152 @@ function renderTests(){
   else renderTestsAnadir(body);
 }
 
+/* ===================== VARIAS FOTOS → VARIAS PREGUNTAS =====================
+   Hasta MAX_FOTOS_LOTE fotos por tanda; cada foto es UNA pregunta distinta (con su retroalimentación
+   visible). Se manda una llamada a la IA por foto, así cada foto da exactamente una pregunta y, si una
+   falla, las demás siguen. Las preguntas transcritas van a la misma lista de revisión que "Desde PDF":
+   nada se guarda en el banco hasta que las revisas y pulsas guardar. */
+const MAX_FOTOS_LOTE = 5;
+let testsFotosLote = { modo:'varias', files:[], categoria:'conocimientos', procesando:false, progreso:null, errores:[], uiKeyOpen:false };
+async function callIATranscribirFotoLote(file, categoria){
+  let b64, mime = 'image/jpeg';
+  try{
+    // Se reduce la foto (lado máx. 1600 px) para que suba rápido sin perder legibilidad del texto.
+    b64 = (await fileToCompressedDataURL(file, 1600, 0.85)).split(',')[1];
+  }catch(e){
+    b64 = await fileToBase64(file); mime = file.type || 'image/jpeg';
+  }
+  const temarioCtx = buildTemarioPromptContext(categoria);
+  const schema = '{"enunciado":"texto literal de la pregunta","opciones":["opción A","opción B","opción C","opción D"],"correcta":0,"explicacion":"retroalimentación que aparece en la imagen, o cadena vacía si no hay","tema_sugerido":null,"subtema_sugerido":null}';
+  const prompt = 'Esta imagen es una captura o foto de UNA pregunta de un test de oposición ya respondido (puede estar acertada, fallada o en blanco), normalmente con la retroalimentación o corrección visible.\n'
+    + 'Categoría de destino en el banco de preguntas: "'+testCatLabel(categoria)+'".\n'
+    + (temarioCtx ? (temarioCtx+'\n') : '')
+    + 'Tarea: transcribe LITERALMENTE el enunciado y todas las opciones que aparezcan (sin resumir ni reformular). Si en la imagen hay retroalimentación o explicación, cópiala en "explicacion" lo más completa posible: puedes quitar elementos de la interfaz (botones, números de página…), pero no la resumas hasta perder contenido. Si hay más de una pregunta en la imagen, transcribe solo la principal.\n'
+    + 'Devuelve SOLO un objeto JSON válido (sin texto adicional, sin backticks, sin comentarios) con esta forma exacta:\n'+schema+'\n'
+    + 'Reglas: "correcta" es el índice (empezando en 0) de la opción correcta; dedúcelo de la retroalimentación o de las marcas de corrección aunque el usuario la haya fallado o dejado en blanco; si no puedes saberlo pon null (NO te lo inventes). '
+    + '"tema_sugerido" es el nombre EXACTO de uno de los temas listados arriba si la pregunta encaja claramente, o null. "subtema_sugerido" igual, con nombre exacto de subtema, o null.';
+  const contenido = [{ tipo:'imagen', mime, b64 }, { tipo:'texto', texto:prompt }];
+  const texto = await llamarIAConFallback(contenido, { temperature:0.1, maxTokens:2500 }, true);
+  let parsed;
+  try{ parsed = JSON.parse(limpiarJsonIA(texto)); }
+  catch(e){ throw new Error('No se pudo interpretar la respuesta de '+ultimoProveedorIA+' para esta foto.'); }
+  if(Array.isArray(parsed)) parsed = parsed[0];
+  if(!parsed || typeof parsed!=='object') throw new Error('La IA no devolvió una pregunta para esta foto.');
+  return parsed;
+}
+async function ejecutarTranscripcionLote(){
+  const st = testsFotosLote;
+  if(st.procesando) return;
+  if(!st.files.length){ showToast('Selecciona al menos una foto.'); return; }
+  st.procesando = true; st.errores = []; st.progreso = null; renderTests();
+  const archivos = st.files.slice();
+  const fallidas = [];
+  let ok = 0, dups = 0;
+  for(let i=0;i<archivos.length;i++){
+    st.progreso = { actual:i+1, total:archivos.length }; renderTests();
+    try{
+      const parsed = await callIATranscribirFotoLote(archivos[i], st.categoria);
+      const nuevos = buildCandidatosFromParsed([parsed], st.categoria, '📷 Foto '+(i+1)+(archivos[i].name ? ' · '+archivos[i].name : ''));
+      if(!nuevos.length) throw new Error('No se pudo leer ningún enunciado en esta foto.');
+      testsGenState.candidatos = testsGenState.candidatos.concat(nuevos);
+      persistGenDraft();
+      ok++; dups += nuevos.filter(c=>c.posibleDuplicado).length;
+    }catch(err){
+      console.error(err);
+      fallidas.push(archivos[i]);
+      st.errores.push({ n:i+1, nombre: archivos[i].name || ('foto '+(i+1)), error: (err && err.message) || 'error desconocido' });
+    }
+  }
+  st.files = fallidas; // las que fallaron se quedan para reintentarlas con un solo clic
+  st.procesando = false; st.progreso = null;
+  renderTests();
+  if(ok) document.getElementById('genResultsAnchor')?.scrollIntoView({behavior:'smooth'});
+  showToast(ok
+    ? (ok+' pregunta'+(ok===1?'':'s')+' transcrita'+(ok===1?'':'s')+' con '+(ultimoProveedorIA||'IA')+(dups?(', '+dups+' parece'+(dups===1?'':'n')+' duplicada'+(dups===1?'':'s')):'')+(fallidas.length?(' · '+fallidas.length+' foto(s) fallaron'):'')+'. Revísalas abajo antes de guardar ✓')
+    : 'No se pudo transcribir ninguna foto. Mira el detalle debajo del botón.');
+}
+function renderFotosLote(body){
+  const st = testsFotosLote;
+  tryRestoreGenDraft();
+  renderIAKeyPanel(body, st, { conExtra:true });
+
+  const panel = document.createElement('div'); panel.className = 'test-panel';
+  panel.innerHTML = '<h4>Sube hasta '+MAX_FOTOS_LOTE+' fotos: una foto = una pregunta</h4>'
+    + '<p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);">Cada foto debe traer UNA pregunta con su retroalimentación visible. La IA transcribe cada una por separado y te las deja abajo para revisarlas antes de guardarlas.</p>';
+
+  const catField = document.createElement('div'); catField.className = 'test-field';
+  catField.innerHTML = '<label>Categoría de destino</label>';
+  const catSel = document.createElement('select');
+  TEST_CATEGORIAS.filter(c=>testTipoForCategoria(c.key)==='multiple').forEach(c=>{
+    const o = document.createElement('option'); o.value = c.key; o.textContent = c.label; if(c.key===st.categoria) o.selected = true; catSel.appendChild(o);
+  });
+  catSel.disabled = st.procesando;
+  catSel.onchange = ()=>{ st.categoria = catSel.value; };
+  catField.appendChild(catSel);
+  panel.appendChild(catField);
+
+  const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.multiple = true;
+  fileInput.disabled = st.procesando || st.files.length>=MAX_FOTOS_LOTE;
+  fileInput.onchange = (e)=>{
+    const nuevas = Array.from(e.target.files||[]);
+    const hueco = MAX_FOTOS_LOTE - st.files.length;
+    if(nuevas.length > hueco) showToast('Máximo '+MAX_FOTOS_LOTE+' fotos por tanda: he cogido las primeras '+hueco+'.');
+    st.files = st.files.concat(nuevas.slice(0, Math.max(0,hueco)));
+    st.errores = [];
+    renderTests();
+  };
+  panel.appendChild(fileInput);
+
+  const cuenta = document.createElement('div');
+  cuenta.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-top:6px;';
+  cuenta.textContent = st.files.length+'/'+MAX_FOTOS_LOTE+' fotos'+(st.files.length>=MAX_FOTOS_LOTE ? ' (tanda completa)' : (st.files.length ? ' · puedes añadir más' : ''));
+  panel.appendChild(cuenta);
+
+  const thumbs = document.createElement('div'); thumbs.className = 'test-thumbs';
+  st.files.forEach((f,i)=>{
+    const t = document.createElement('div'); t.className = 'thumb';
+    const img = document.createElement('img'); img.src = URL.createObjectURL(f); t.appendChild(img);
+    const num = document.createElement('span'); num.textContent = String(i+1);
+    num.style.cssText = 'position:absolute;left:4px;top:4px;background:var(--amber);color:var(--bg-deep,#14211c);border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;';
+    t.appendChild(num);
+    if(!st.procesando){
+      const del = document.createElement('button'); del.type = 'button'; del.textContent = '✕';
+      del.onclick = ()=>{ st.files.splice(i,1); st.errores = []; renderTests(); };
+      t.appendChild(del);
+    }
+    thumbs.appendChild(t);
+  });
+  panel.appendChild(thumbs);
+
+  const btnRow = document.createElement('div'); btnRow.style.cssText = 'margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;';
+  const go = document.createElement('button'); go.type = 'button'; go.className = 'btn small';
+  go.disabled = st.procesando || !st.files.length;
+  go.innerHTML = st.procesando ? '<span class="btn-spinner"></span>Transcribiendo…' : 'Transcribir '+(st.files.length||'')+' pregunta'+(st.files.length===1?'':'s')+' con IA';
+  go.onclick = ejecutarTranscripcionLote;
+  btnRow.appendChild(go);
+  if(st.procesando && st.progreso){
+    const pr = document.createElement('span'); pr.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--amber);';
+    pr.textContent = 'Foto '+st.progreso.actual+' de '+st.progreso.total+'…';
+    btnRow.appendChild(pr);
+  }
+  panel.appendChild(btnRow);
+
+  if(st.errores.length){
+    const box = document.createElement('div'); box.style.cssText = 'margin-top:10px;padding:10px;border:1px solid var(--amber);border-radius:4px;';
+    const t = document.createElement('div'); t.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--amber);margin-bottom:4px;';
+    t.textContent = '⚠ '+st.errores.length+' foto(s) no se pudieron transcribir (siguen arriba: pulsa el botón para reintentarlas):';
+    box.appendChild(t);
+    st.errores.forEach(e=>{
+      const l = document.createElement('div'); l.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);word-break:break-word;';
+      l.textContent = '• Foto '+e.n+' ('+e.nombre+'): '+e.error;
+      box.appendChild(l);
+    });
+    panel.appendChild(box);
+  }
+  body.appendChild(panel);
+  renderPanelRevisionCandidatos(body);
+}
+
 /* ---- Sub-vista: Añadir pregunta (a mano, desde foto con IA, o generando varias desde un PDF) ---- */
 function renderTestsAnadir(body){
   const tipoActual = testTipoForCategoria(testsAddState.categoria);
@@ -3089,7 +3642,7 @@ function renderTestsAnadir(body){
     wizardOpt(opts,'✍️','A mano','Escribes tú el enunciado, opciones y respuesta', ()=>{
       testsAddState.metodo='manual'; testsAddState.metodoElegido=true; renderTests();
     });
-    wizardOpt(opts,'📷','Desde foto (IA)','Haces una captura de la pregunta ya corregida y la IA la transcribe', ()=>{
+    wizardOpt(opts,'📷','Desde foto (IA)','Hasta 5 fotos de preguntas ya corregidas: la IA transcribe cada una', ()=>{
       testsAddState.metodo='foto'; testsAddState.metodoElegido=true; renderTests();
     });
     wizardOpt(opts,'📄','Varias desde PDF (IA)','Subes un PDF (examen, simulacro, temario…) y la IA saca varias preguntas de golpe', ()=>{
@@ -3109,6 +3662,18 @@ function renderTestsAnadir(body){
   }
 
   if(testsAddState.metodo==='foto'){
+    const segFoto = document.createElement('div'); segFoto.className = 'seg';
+    [['varias','📷 Varias preguntas (1 foto = 1 pregunta)'],['una','1 pregunta (varias capturas)']].forEach(([val,lbl])=>{
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = lbl;
+      if(testsFotosLote.modo===val) b.classList.add('on');
+      b.onclick = ()=>{ testsFotosLote.modo = val; renderTests(); };
+      segFoto.appendChild(b);
+    });
+    body.appendChild(segFoto);
+    if(testsFotosLote.modo==='varias'){
+      renderFotosLote(body);
+      return;
+    }
     if(tipoActual!=='multiple'){
       const nota = document.createElement('div'); nota.className='test-panel';
       nota.innerHTML = '<p style="font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);line-height:1.5;">'
@@ -3229,11 +3794,7 @@ function renderTestsAnadir(body){
     };
     renderOrtoBuilder(ortoHost, ortoSt);
 
-    const explField = document.createElement('div'); explField.className='test-field';
-    explField.innerHTML = '<label>Explicación (opcional)</label>';
-    const explTa = document.createElement('textarea'); explTa.value = testsAddState.explicacion;
-    explTa.oninput = ()=>{ testsAddState.explicacion = explTa.value; };
-    explField.appendChild(explTa);
+    const explField = buildRichExplField({ get:()=>testsAddState.explicacion, set:v=>{ testsAddState.explicacion = v; } });
     reviewPanel.appendChild(explField);
 
     const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small';
@@ -3272,11 +3833,7 @@ function renderTestsAnadir(body){
     });
     reviewPanel.appendChild(correctField);
 
-    const explField = document.createElement('div'); explField.className='test-field';
-    explField.innerHTML = '<label>Explicación (opcional)</label>';
-    const explTa = document.createElement('textarea'); explTa.value = testsAddState.explicacion;
-    explTa.oninput = ()=>{ testsAddState.explicacion = explTa.value; };
-    explField.appendChild(explTa);
+    const explField = buildRichExplField({ get:()=>testsAddState.explicacion, set:v=>{ testsAddState.explicacion = v; } });
     reviewPanel.appendChild(explField);
 
     const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small';
@@ -3329,11 +3886,7 @@ function renderTestsAnadir(body){
   optsWrap.appendChild(addOptBtn);
   reviewPanel.appendChild(optsWrap);
 
-  const explField = document.createElement('div'); explField.className='test-field';
-  explField.innerHTML = '<label>Explicación / retroalimentación (opcional)</label>';
-  const explTa = document.createElement('textarea'); explTa.value = testsAddState.explicacion; explTa.placeholder='Por qué es correcta esta opción…';
-  explTa.oninput = ()=>{ testsAddState.explicacion = explTa.value; };
-  explField.appendChild(explTa);
+  const explField = buildRichExplField({ label:'Explicación / retroalimentación (opcional)', placeholder:'Por qué es correcta esta opción…', get:()=>testsAddState.explicacion, set:v=>{ testsAddState.explicacion = v; } });
   reviewPanel.appendChild(explField);
 
   const saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn small';
@@ -3548,6 +4101,11 @@ function renderTestsGenerarIA(body){
   }
   body.appendChild(genPanel);
 
+  renderPanelRevisionCandidatos(body);
+}
+
+// Lista de preguntas generadas por IA (desde PDF o desde fotos) pendientes de revisar y guardar.
+function renderPanelRevisionCandidatos(body){
   const resultsPanel = document.createElement('div'); resultsPanel.className='test-panel'; resultsPanel.id='genResultsAnchor';
   resultsPanel.innerHTML = '<h4>Revisa antes de guardar</h4>';
   if(!testsGenState.candidatos.length){
@@ -3741,11 +4299,7 @@ function openGenCandidatoModal(c){
     box.appendChild(optsWrap);
   }
 
-  const explField = document.createElement('div'); explField.className='test-field';
-  explField.innerHTML = '<label>Explicación (opcional)</label>';
-  const explTa = document.createElement('textarea'); explTa.value = c.explicacion;
-  explTa.oninput = ()=>{ c.explicacion = explTa.value; };
-  explField.appendChild(explTa);
+  const explField = buildRichExplField({ get:()=>c.explicacion, set:v=>{ c.explicacion = v; } });
   box.appendChild(explField);
 
   const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;';
@@ -3812,6 +4366,63 @@ function buildStatBarRow(label, aciertos, intentos, subtext){
   }
   return row;
 }
+// Estado de un tema según tus resultados: vacío (sin preguntas), sin ver, flojo, en camino o dominado.
+// "Dominio" = de las preguntas que has practicado, cuántas tienes bien ahora (último intento acertado).
+function estadoTemaMapa(preguntas){
+  const total = preguntas.length;
+  if(!total) return { clave:'vacio', total:0, practicadas:0, dominio:0, cobertura:0 };
+  const practicadas = preguntas.filter(q=>!esNueva(q)).length;
+  if(!practicadas) return { clave:'sinver', total, practicadas:0, dominio:0, cobertura:0 };
+  const fallos = preguntas.filter(esFallada).length;
+  const dominio = (practicadas - fallos) / practicadas;
+  const cobertura = practicadas / total;
+  let clave = 'camino';
+  if(dominio < 0.6) clave = 'flojo';
+  else if(dominio >= 0.85 && cobertura >= 0.7) clave = 'dominado';
+  return { clave, total, practicadas, dominio, cobertura };
+}
+function practicarTema(catKey, num){
+  testsPickState.categoria = catKey; testsPickState.parciales = new Map([[num, 'ALL']]);
+  testsPickState.estado = ''; testsPickState.orden = 'aleatorio';
+  testsActiveSubtab = 'practicar'; testsWizardPaso = 4; renderTests();
+}
+function buildMapaTemario(questions){
+  const wrap = document.createElement('div'); wrap.style.marginBottom = '20px';
+  const title = document.createElement('h5');
+  title.style.cssText = 'margin:0 0 4px;font-family:var(--font-display);color:var(--amber);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
+  title.textContent = '🗺 Mapa del temario';
+  wrap.appendChild(title);
+  const resumen = document.createElement('div'); resumen.style.cssText = 'font-size:12.5px;color:var(--cream);margin-bottom:2px;';
+  wrap.appendChild(resumen);
+  const ley = document.createElement('div'); ley.className = 'mapa-leyenda';
+  [['dominado','Dominado'],['camino','En camino'],['flojo','Flojo'],['sinver','Sin ver']].forEach(([k,l])=>{
+    const sp = document.createElement('span'); const i = document.createElement('i'); i.className = k;
+    sp.appendChild(i); sp.appendChild(document.createTextNode(l)); ley.appendChild(sp);
+  });
+  wrap.appendChild(ley);
+  let dominados = 0, conPreguntas = 0;
+  TEST_CATEGORIAS.filter(c=>testCatTemas(c.key)>0).forEach(c=>{
+    const cab = document.createElement('div'); cab.className = 'mapa-cat'; cab.textContent = c.label; wrap.appendChild(cab);
+    const grid = document.createElement('div'); grid.className = 'mapa-grid';
+    testCatTemario(c.key).forEach((t, i)=>{
+      const num = i+1;
+      const e = estadoTemaMapa(questions.filter(q=>q.categoria===c.key && Number(q.tema)===num));
+      if(e.total) conPreguntas++;
+      if(e.clave==='dominado') dominados++;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'mapa-t '+e.clave;
+      const n = document.createElement('span'); n.className = 'mapa-n'; n.textContent = t.nombre || ('Tema '+num);
+      const sub = document.createElement('span'); sub.className = 'mapa-s';
+      sub.textContent = e.clave==='vacio' ? 'Sin preguntas' : (e.clave==='sinver' ? e.total+' preguntas · sin ver' : Math.round(e.dominio*100)+'% bien · '+e.practicadas+'/'+e.total+' vistas');
+      b.appendChild(n); b.appendChild(sub);
+      b.title = 'Practicar este tema';
+      b.onclick = ()=>{ if(!e.total){ showToast('Este tema todavía no tiene preguntas.'); return; } practicarTema(c.key, num); };
+      grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+  });
+  resumen.textContent = conPreguntas ? dominados+' de '+conPreguntas+' temas dominados. Toca un tema para practicarlo.' : 'Aún no hay preguntas clasificadas por tema.';
+  return wrap;
+}
 function renderTestsProgreso(body){
   const questions = state.testBank.questions || [];
   const panel = document.createElement('div'); panel.className='test-panel';
@@ -3873,6 +4484,8 @@ function renderTestsProgreso(body){
     });
     panel.appendChild(debilWrap);
   }
+
+  panel.appendChild(buildMapaTemario(questions));
 
   // Por categoría
   const porCategoria = {};
@@ -4132,7 +4745,7 @@ function openTestPreviewModal(q){
     });
   }
   if(q.explicacion){
-    const ex = document.createElement('div'); ex.className='tq-explic'; ex.textContent = q.explicacion;
+    const ex = document.createElement('div'); ex.className='tq-explic'; renderRich(q.explicacion, ex);
     card.appendChild(ex);
   }
   box.appendChild(card);
@@ -4307,11 +4920,7 @@ function openTestEditModal(q){
       optsWrap.appendChild(addOptBtn);
       typeHost.appendChild(optsWrap);
     }
-    const explField = document.createElement('div'); explField.className='test-field';
-    explField.innerHTML = '<label>Explicación (opcional)</label>';
-    const explTa = document.createElement('textarea'); explTa.value = localExplicacion;
-    explTa.oninput = ()=>{ localExplicacion = explTa.value; };
-    explField.appendChild(explTa);
+    const explField = buildRichExplField({ get:()=>localExplicacion, set:v=>{ localExplicacion = v; } });
     typeHost.appendChild(explField);
   }
   catSel.onchange = ()=>{ editCategoria = catSel.value; editTema=null; editSubtema=null; paintTemaSub(); paintTypeFields(); };
@@ -4486,6 +5095,9 @@ function shuffleArr(arr){
 // pick.parciales vacío = sin filtro (toda la categoría). Un tema puede estar como 'ALL' (todo el
 // tema, incluidas preguntas sin subtema asignado) o como Set de números de subtema concretos.
 function questionMatchesPick(q, pick){
+  if(pick.estado==='fallos' && !esFallada(q)) return false;
+  if(pick.estado==='nuevas' && !esNueva(q)) return false;
+  if(pick.estado==='repaso' && !tocaRepasar(q)) return false;
   if(!pick.categoria) return true; // "Todas" las categorías: no se aplica ningún filtro de tema
   if(q.categoria !== pick.categoria) return false;
   if(!pick.parciales.size) return true; // "Todos" los temas de la categoría
@@ -4584,6 +5196,7 @@ function renderTestsPracticar(body){
 function wizardIrAtras(){
   if(testsWizardPaso===2){ testsWizardPaso=1; }
   else if(testsWizardPaso===6){ testsWizardPaso=5; }
+  else if(testsWizardPaso===3 && !testsPickState.categoria){ testsWizardPaso=1; } // Global / mis fallos / nuevas vienen directos del paso 1
   else if(testsWizardPaso===7){ testsWizardPaso = testsWizardCfg.modo==='instantaneo' ? 6 : 5; }
   else testsWizardPaso = Math.max(0, testsWizardPaso-1);
   renderTests();
@@ -4604,11 +5217,92 @@ function renderWizardPortada(wrap, questions){
     wrap.appendChild(hero);
     return;
   }
-  hero.innerHTML = '<div class="wh-emblem">🎯</div><h3>Practicar</h3><p>Elige qué quieres practicar hoy: te lo preguntamos paso a paso, sin formularios largos.</p>';
-  const btn = document.createElement('button'); btn.type='button'; btn.className='btn'; btn.textContent='Hacer test';
-  btn.onclick = ()=>{ testsWizardPaso=1; renderTests(); };
-  hero.appendChild(btn);
-  wrap.appendChild(hero);
+  renderPortadaHoy(wrap, questions);
+}
+// Portada de Practicar: qué llevas hoy, tu racha y un botón grande para empezar sin pensar.
+function renderPortadaHoy(wrap, questions){
+  const hoyN = practicadasHoy(), meta = objetivoDiario();
+  const cumplido = hoyN >= meta;
+  const racha = calcularRachaActual();
+  const nFallos = questions.filter(esFallada).length;
+  const nNuevas = questions.filter(esNueva).length;
+  const rep = contarRepasos(questions);
+
+  const card = document.createElement('div'); card.className = 'hoy-card';
+  const ring = document.createElement('div'); ring.className = 'hoy-ring'+(cumplido?' done':'');
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 100 100');
+  const R = 42, C = 2*Math.PI*R, frac = Math.min(1, hoyN/meta);
+  const mk = (cls)=>{
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('class', cls); c.setAttribute('cx', '50'); c.setAttribute('cy', '50'); c.setAttribute('r', String(R));
+    c.setAttribute('fill', 'none'); c.setAttribute('stroke-width', '9'); c.setAttribute('stroke-linecap', 'round');
+    return c;
+  };
+  const bg = mk('ring-bg'); svg.appendChild(bg);
+  const fg = mk('ring-fg');
+  fg.setAttribute('stroke-dasharray', C.toFixed(2));
+  fg.setAttribute('stroke-dashoffset', C.toFixed(2));
+  svg.appendChild(fg);
+  ring.appendChild(svg);
+  requestAnimationFrame(()=>{ fg.setAttribute('stroke-dashoffset', (C*(1-frac)).toFixed(2)); });
+  const rt = document.createElement('div'); rt.className = 'hoy-ring-txt';
+  const rb = document.createElement('b'); rb.textContent = String(hoyN);
+  const rs = document.createElement('small'); rs.textContent = 'de '+meta;
+  rt.appendChild(rb); rt.appendChild(rs); ring.appendChild(rt);
+  card.appendChild(ring);
+
+  const info = document.createElement('div'); info.className = 'hoy-info';
+  const tt = document.createElement('div'); tt.className = 'hoy-title'; tt.textContent = 'Hoy'; info.appendChild(tt);
+  const sub = document.createElement('div'); sub.className = 'hoy-sub';
+  sub.textContent = cumplido ? '🎉 ¡Objetivo de hoy cumplido! Todo lo que hagas ahora es de más.'
+    : (hoyN===0 ? 'Tu objetivo de hoy: '+meta+' preguntas.' : 'Te faltan '+(meta-hoyN)+' pregunta'+((meta-hoyN)===1?'':'s')+' para tu objetivo.');
+  info.appendChild(sub);
+  const rc = document.createElement('div'); rc.className = 'hoy-racha';
+  rc.textContent = racha>0 ? '🔥 '+racha+' día'+(racha===1?'':'s')+' seguido'+(racha===1?'':'s') : 'Cumple el objetivo hoy para empezar tu racha';
+  info.appendChild(rc);
+  const goal = document.createElement('div'); goal.className = 'hoy-goal';
+  const gl = document.createElement('span'); gl.textContent = 'Objetivo diario';
+  const minus = document.createElement('button'); minus.type = 'button'; minus.textContent = '−'; minus.setAttribute('aria-label', 'Bajar objetivo diario');
+  const gv = document.createElement('b'); gv.textContent = String(meta);
+  const plus = document.createElement('button'); plus.type = 'button'; plus.textContent = '+'; plus.setAttribute('aria-label', 'Subir objetivo diario');
+  minus.onclick = ()=>{ cambiarObjetivo(meta-5); renderTests(); };
+  plus.onclick = ()=>{ cambiarObjetivo(meta+5); renderTests(); };
+  goal.appendChild(gl); goal.appendChild(minus); goal.appendChild(gv); goal.appendChild(plus);
+  info.appendChild(goal);
+  card.appendChild(info);
+  wrap.appendChild(card);
+
+  const nRapido = Math.min(TEST_RAPIDO_N, questions.length);
+  const go = document.createElement('button'); go.type = 'button'; go.className = 'btn hoy-go';
+  go.appendChild(document.createTextNode('⚡ Test rápido de hoy'));
+  const gs = document.createElement('small'); gs.textContent = nRapido+' preguntas · mezcla de tus repasos, fallos, nuevas y las más flojas';
+  go.appendChild(gs);
+  go.onclick = lanzarTestRapido;
+  wrap.appendChild(go);
+
+  const chips = document.createElement('div'); chips.className = 'hoy-chips';
+  const irA = (estado)=>{
+    testsPickState.categoria = ''; testsPickState.parciales = new Map(); testsPickState.estado = estado; testsPickState.orden = 'aleatorio';
+    testsWizardPaso = 4; renderTests();
+  };
+  const chip = (titulo, subtxt, vacio, onClick)=>{
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'hoy-chip'+(vacio?' vacio':'');
+    const st = document.createElement('strong'); st.textContent = titulo;
+    const sp = document.createElement('span'); sp.textContent = subtxt;
+    b.appendChild(st); b.appendChild(sp);
+    b.onclick = vacio ? ()=>{ showToast(subtxt); } : onClick;
+    chips.appendChild(b);
+  };
+  chip('🧠 Repaso de hoy', rep.hoy ? rep.hoy+' para hoy'+(rep.manana ? ' · '+rep.manana+' mañana' : '') : (rep.manana ? 'Nada para hoy · '+rep.manana+' mañana' : 'Nada pendiente hoy ✓'), rep.hoy===0, ()=>irA('repaso'));
+  chip('🔁 Repasar mis fallos', nFallos ? nFallos+' pregunta'+(nFallos===1?'':'s')+' pendientes' : 'No tienes fallos pendientes ✓', nFallos===0, ()=>irA('fallos'));
+  chip('🆕 Solo nuevas', nNuevas ? nNuevas+' sin practicar' : 'Ya has practicado todas ✓', nNuevas===0, ()=>irA('nuevas'));
+  wrap.appendChild(chips);
+
+  const more = document.createElement('button'); more.type = 'button'; more.className = 'hoy-more';
+  more.textContent = 'Prefiero elegir yo qué practicar';
+  more.onclick = ()=>{ testsWizardPaso = 1; renderTests(); };
+  wrap.appendChild(more);
 }
 function wizardOpt(container, icon, titulo, sub, onClick, selected){
   const opt = document.createElement('div'); opt.className='wizard-opt'+(selected?' selected':'');
@@ -4621,12 +5315,27 @@ function renderWizardAlcance(wrap){
   const t = document.createElement('div'); t.className='wizard-title'; t.textContent='¿Qué quieres practicar?';
   wrap.appendChild(t);
   const opts = document.createElement('div'); opts.className='wizard-options';
+  const qsAll = state.testBank.questions || [];
+  const nFallos = qsAll.filter(esFallada).length, nNuevas = qsAll.filter(esNueva).length;
+  const repAlc = contarRepasos(qsAll);
   wizardOpt(opts,'🌐','Global','Preguntas de todas las categorías mezcladas', ()=>{
-    testsPickState.categoria=''; testsPickState.parciales=new Map(); testsWizardPaso=3; renderTests();
-  }, testsPickState.categoria==='' && testsWizardPaso>1);
+    testsPickState.categoria=''; testsPickState.parciales=new Map(); testsPickState.estado=''; testsWizardPaso=3; renderTests();
+  }, testsPickState.categoria==='' && !testsPickState.estado && testsWizardPaso>1);
   wizardOpt(opts,'📚','Por temas','Elige categoría y, si quieres, temas o subtemas concretos', ()=>{
-    testsWizardPaso=2; renderTests();
+    testsPickState.estado=''; testsWizardPaso=2; renderTests();
   });
+  wizardOpt(opts,'🧠','Repaso de hoy', repAlc.hoy ? repAlc.hoy+' pregunta(s) que toca repasar hoy' : 'Nada pendiente hoy ✓', ()=>{
+    if(!repAlc.hoy){ showToast('No tienes repasos pendientes hoy ✓'); return; }
+    testsPickState.categoria=''; testsPickState.parciales=new Map(); testsPickState.estado='repaso'; testsWizardPaso=3; renderTests();
+  }, testsPickState.estado==='repaso' && testsWizardPaso>1);
+  wizardOpt(opts,'🔁','Repasar mis fallos', nFallos ? nFallos+' pregunta(s) que fallaste la última vez' : 'No tienes fallos pendientes ✓', ()=>{
+    if(!nFallos){ showToast('No tienes fallos pendientes ✓'); return; }
+    testsPickState.categoria=''; testsPickState.parciales=new Map(); testsPickState.estado='fallos'; testsWizardPaso=3; renderTests();
+  }, testsPickState.estado==='fallos' && testsWizardPaso>1);
+  wizardOpt(opts,'🆕','Solo preguntas nuevas', nNuevas ? nNuevas+' pregunta(s) que aún no has practicado' : 'Ya has practicado todas ✓', ()=>{
+    if(!nNuevas){ showToast('Ya has practicado todas las preguntas ✓'); return; }
+    testsPickState.categoria=''; testsPickState.parciales=new Map(); testsPickState.estado='nuevas'; testsWizardPaso=3; renderTests();
+  }, testsPickState.estado==='nuevas' && testsWizardPaso>1);
   wrap.appendChild(opts);
 }
 function renderWizardTemas(wrap, questions){
@@ -4641,6 +5350,14 @@ function renderWizardTemas(wrap, questions){
   });
   wrap.appendChild(catOpts);
   if(testsPickState.categoria){
+    const seg = document.createElement('div'); seg.className = 'seg';
+    [['','Todas'],['repaso','Repaso de hoy'],['fallos','Mis fallos'],['nuevas','Nuevas']].forEach(([val,lbl])=>{
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = lbl;
+      if((testsPickState.estado||'')===val) b.classList.add('on');
+      b.onclick = ()=>{ testsPickState.estado = val; renderTests(); };
+      seg.appendChild(b);
+    });
+    wrap.appendChild(seg);
     const pickerHost = document.createElement('div'); pickerHost.className='test-field';
     wrap.appendChild(pickerHost);
     const disponibles = document.createElement('div'); disponibles.className='test-empty'; disponibles.style.marginBottom='14px';
@@ -4730,10 +5447,11 @@ function renderWizardResumen(wrap, questions){
   const n = Math.max(1, Math.min(testsWizardCfg.numPreguntas||10, filtered.length||1));
   const sum = document.createElement('div'); sum.className='wizard-summary';
   const temaTxt = testsPickState.categoria ? (TEST_CATEGORIAS.find(c=>c.key===testsPickState.categoria)||{}).label + (testsPickState.parciales.size? ' (temas seleccionados)':' (todos los temas)') : 'Global (todas las categorías)';
+  const estadoTxt = testsPickState.estado==='fallos' ? ' · solo mis fallos' : (testsPickState.estado==='nuevas' ? ' · solo nuevas' : (testsPickState.estado==='repaso' ? ' · repaso de hoy' : ''));
   const modoTxt = testsWizardCfg.modo==='instantaneo' ? 'Instantáneo' : 'Examen (corrección al final)';
   const tiempoTxt = testsWizardCfg.sinTiempo ? 'Sin tiempo' : '1 min/pregunta';
   sum.innerHTML = `
-    <div class="ws-row"><span>Qué</span><span>${temaTxt}</span></div>
+    <div class="ws-row"><span>Qué</span><span>${temaTxt}${estadoTxt}</span></div>
     <div class="ws-row"><span>Orden</span><span>${testsPickState.orden==='ordenado'?'En orden':'Aleatorio'}</span></div>
     <div class="ws-row"><span>Preguntas</span><span>${n}</span></div>
     <div class="ws-row"><span>Corrección</span><span>${modoTxt}</span></div>
@@ -4753,7 +5471,6 @@ function renderWizardResumen(wrap, questions){
   startBtn.disabled = !filtered.length;
   startBtn.onclick = ()=>{
     if(!filtered.length){ showToast('No hay preguntas guardadas con ese filtro todavía.'); return; }
-    registrarActividadHoy();
     let chosen;
     if(testsPickState.orden==='ordenado'){
       // Orden 1º tema → último (y dentro de cada tema, por subtema y fecha de alta), tal
@@ -4769,16 +5486,7 @@ function renderWizardResumen(wrap, questions){
     } else {
       chosen = shuffleArr(filtered).slice(0,n);
     }
-    clearQuizTimer();
-    const temporizadorActivo = !testsWizardCfg.sinTiempo;
-    const totalSegundos = Math.round(minPorPregunta*60*n);
-    testsQuiz = {
-      items: chosen.map(q=>({ q, respuesta: qTipo(q)==='ortografia' ? [false,false,false,false] : null, revelado:false })),
-      corregido:false,
-      instantaneo: testsWizardCfg.modo==='instantaneo',
-      temporizador: temporizadorActivo ? { totalSegundos, restante: totalSegundos } : null
-    };
-    renderTests();
+    iniciarQuiz(chosen, { instantaneo: testsWizardCfg.modo==='instantaneo', sinTiempo: testsWizardCfg.sinTiempo, minPorPregunta });
   };
   wrap.appendChild(startBtn);
 }
@@ -4803,6 +5511,171 @@ function testItemFullyAnswered(it){
   if(tipo==='gramatica') return it.respuesta!==null;
   return true; // en opción múltiple sí se admite dejar en blanco
 }
+// Acierto de un ítem del test en curso (ortografía: sin ningún fallo de palabra).
+function itemAcierto(it){
+  if(qTipo(it.q)==='ortografia') return ortografiaFallosCount(it)===0;
+  return it.respuesta===it.q.correcta;
+}
+// Guarda el resultado de UNA pregunta: estadísticas de la pregunta, último resultado (para "mis
+// fallos") y, si procede, suma al objetivo diario.
+function registrarResultadoPregunta(it, acierto, contarObjetivo){
+  const st = it.q.stats = it.q.stats || {veces:0, aciertos:0};
+  st.veces = (st.veces||0)+1;
+  if(acierto) st.aciertos = (st.aciertos||0)+1;
+  st.ultimo = acierto ? 1 : 0;
+  st.fecha = Date.now();
+  st.nivel = acierto ? (st.nivel||0)+1 : 0;
+  st.prox = calcularProxRepaso(st.nivel, st.fecha);
+  if(contarObjetivo) sumarPracticaHoy(1);
+  saveTestQuestionRemote(it.q);
+}
+// Único punto de entrada para arrancar un test (asistente, test rápido, repetir falladas…).
+// Guarda cómo estaba cada pregunta ANTES de responder, para poder decir luego cuáles has recuperado.
+function iniciarQuiz(chosen, cfg){
+  clearQuizTimer();
+  const n = chosen.length;
+  const total = Math.round((cfg.minPorPregunta||1)*60*n);
+  testsQuiz = {
+    items: chosen.map(q=>({ q, respuesta: qTipo(q)==='ortografia' ? [false,false,false,false] : null, revelado:false, prevFallada: esFallada(q), prevNueva: esNueva(q) })),
+    corregido:false,
+    instantaneo: !!cfg.instantaneo,
+    temporizador: cfg.sinTiempo ? null : { totalSegundos: total, restante: total },
+    diaCumplidoAntes: progreso.dias.includes(fmtFechaKey(new Date()))
+  };
+  renderTests();
+  try{ window.scrollTo({top:0, behavior:'smooth'}); }catch(e){}
+}
+// Al corregir: calcula el resumen del test (comparación con el anterior, preguntas recuperadas,
+// objetivo del día) y lo añade al historial.
+function registrarResultadoDelTest(){
+  const items = testsQuiz.items, total = items.length;
+  const aciertos = items.filter(itemAcierto).length;
+  const previo = progreso.historial.length ? progreso.historial[progreso.historial.length-1] : null;
+  const hoy = fmtFechaKey(new Date());
+  testsQuiz.resultado = {
+    total, aciertos,
+    pct: total ? Math.round(aciertos/total*100) : 0,
+    previoPct: (previo && previo.n) ? Math.round(previo.ac/previo.n*100) : null,
+    recuperadas: items.filter(it=>it.prevFallada && itemAcierto(it)).length,
+    siguenFallando: items.filter(it=>it.prevFallada && !itemAcierto(it)).length,
+    hoyN: practicadasHoy(), meta: objetivoDiario(),
+    recienCumplido: !testsQuiz.diaCumplidoAntes && progreso.dias.includes(hoy)
+  };
+  progreso.historial.push({ id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), n:total, ac:aciertos });
+  progreso.historial = progreso.historial.slice(-40);
+  programarGuardadoProgreso(true);
+}
+function preguntasFalladasDelTest(){ return testsQuiz.items.filter(it=>!itemAcierto(it)).map(it=>it.q); }
+function lanzarTestRapido(){
+  const chosen = armarTestRapido(state.testBank.questions||[], TEST_RAPIDO_N);
+  if(!chosen.length){ showToast('Todavía no hay preguntas en el banco.'); return; }
+  iniciarQuiz(chosen, { instantaneo:true, sinTiempo:true });
+}
+function buildResultadoCard(){
+  const r = testsQuiz.resultado;
+  const card = document.createElement('div'); card.className = 'res-card';
+  if(!r) return card;
+  const head = document.createElement('div'); head.className = 'res-head';
+  const big = document.createElement('span'); big.className = 'res-big'; big.textContent = r.aciertos+'/'+r.total+' · '+r.pct+'%';
+  head.appendChild(big);
+  if(r.previoPct!==null){
+    const d = r.pct - r.previoPct;
+    const delta = document.createElement('span'); delta.className = 'res-delta'+(d>0?' up':(d<0?' down':''));
+    delta.textContent = d>0 ? '▲ +'+d+' pts' : (d<0 ? '▼ '+d+' pts' : '= igual');
+    head.appendChild(delta);
+    const vs = document.createElement('span'); vs.className = 'res-vs'; vs.textContent = 'vs. tu test anterior ('+r.previoPct+'%)';
+    head.appendChild(vs);
+  }
+  card.appendChild(head);
+  const linea = (txt)=>{ const l = document.createElement('div'); l.className = 'res-line'; l.textContent = txt; card.appendChild(l); };
+  if(r.previoPct===null) linea('⭐ Es el primer test que guardo en tu historial: a partir de ahora verás cómo mejoras.');
+  if(r.recuperadas>0) linea('🔄 Has recuperado '+r.recuperadas+' pregunta'+(r.recuperadas===1?'':'s')+' que antes fallabas.');
+  if(r.siguenFallando>0) linea('⚠️ '+r.siguenFallando+' pregunta'+(r.siguenFallando===1?'':'s')+' de las que ya fallabas '+(r.siguenFallando===1?'sigue':'siguen')+' sin salir: repítelas ahora que las tienes frescas.');
+  const racha = calcularRachaActual();
+  if(r.recienCumplido) linea('🎉 ¡Objetivo de hoy cumplido! ('+r.hoyN+'/'+r.meta+')'+(racha>0 ? ' · 🔥 '+racha+' día'+(racha===1?'':'s')+' seguido'+(racha===1?'':'s') : ''));
+  else if(r.hoyN>=r.meta) linea('🎯 Objetivo de hoy ya cumplido ('+r.hoyN+'/'+r.meta+').');
+  else linea('🎯 Hoy llevas '+r.hoyN+' de '+r.meta+' preguntas: te faltan '+(r.meta-r.hoyN)+'.');
+  const acts = document.createElement('div'); acts.className = 'res-actions';
+  const falladas = preguntasFalladasDelTest();
+  if(falladas.length){
+    const rep = document.createElement('button'); rep.type = 'button'; rep.className = 'btn';
+    rep.textContent = '🔁 Repetir solo las falladas ('+falladas.length+')';
+    rep.onclick = ()=> iniciarQuiz(falladas.slice(), { instantaneo:true, sinTiempo:true });
+    acts.appendChild(rep);
+  }
+  const rap = document.createElement('button'); rap.type = 'button'; rap.className = 'btn ghost';
+  rap.textContent = '⚡ Otro test rápido'; rap.onclick = lanzarTestRapido;
+  acts.appendChild(rap);
+  card.appendChild(acts);
+  return card;
+}
+/* ===== "Explícamelo": pide a la IA (la misma clave que ya usas para transcribir/generar) una explicación
+   de la pregunta que acabas de responder. Solo aparece si este dispositivo tiene alguna clave de IA. ===== */
+function hayIAConfigurada(){ return !!(getGeminiKey() || getOpenRouterKey() || (getExtraKey() && getExtraBaseUrl() && getExtraModel())); }
+function promptExplicacion(it){
+  const q = it.q, tipo = qTipo(q), L = 'ABCDEFGHIJ';
+  let cuerpo;
+  if(tipo==='multiple'){
+    cuerpo = 'Pregunta: '+q.enunciado+'\n'+q.opciones.map((o,i)=>L[i]+') '+o).join('\n')+'\nRespuesta correcta según el banco: '+L[q.correcta]+') '+q.opciones[q.correcta];
+    if(it.respuesta!==null && it.respuesta!==q.correcta && q.opciones[it.respuesta]!==undefined) cuerpo += '\nEl opositor marcó: '+L[it.respuesta]+') '+q.opciones[it.respuesta];
+  } else if(tipo==='gramatica'){
+    cuerpo = 'Frase a valorar: "'+q.enunciado+'"\nSegún el banco, la frase está '+(q.correcta ? 'BIEN' : 'MAL')+' escrita gramaticalmente.';
+    if(it.respuesta!==null && it.respuesta!==q.correcta) cuerpo += '\nEl opositor respondió que estaba '+(it.respuesta ? 'bien' : 'mal')+'.';
+  } else {
+    cuerpo = 'Frase: "'+q.enunciado+'"\nPalabras numeradas: '+(q.palabras||[]).map((p,i)=>(i+1)+') '+p.texto+(p.incorrecta ? ' [MAL escrita]' : ' [bien escrita]')).join(' · ');
+  }
+  const t = q.tema ? testCatTemaObj(q.categoria, q.tema) : null;
+  return 'Eres preparador de oposiciones en España. Categoría de la pregunta: '+testCatLabel(q.categoria)+(t ? ' · '+t.nombre : '')+'.\n\n'+cuerpo+'\n\n'
+    + 'Explica en español, de forma clara y breve (máximo 5 frases), por qué esa es la respuesta correcta y, si procede, por qué las demás no lo son. '
+    + 'Indica la norma o regla en la que se basa solo si la conoces con seguridad; si no estás seguro de un dato concreto (artículo, fecha, cifra), dilo en lugar de inventarlo. '
+    + 'Si crees que la respuesta del banco es errónea, dilo claramente al principio. '
+    + 'Puedes resaltar las ideas clave con **negrita**; no uses ningún otro formato (ni listas, ni títulos, ni tablas).';
+}
+function limpiaTextoIA(t){ return String(t||'').trim().replace(/^```[a-z]*\n?/i,'').replace(/```$/,'').replace(/\n{3,}/g,'\n\n').trim(); }
+async function pedirExplicacionIA(it){
+  if(it.ia && it.ia.estado==='cargando') return;
+  it.ia = { estado:'cargando' }; renderTests();
+  try{
+    const txt = await llamarIAConFallback([{ tipo:'texto', texto: promptExplicacion(it) }], { temperature:0.3, maxTokens:700 }, true);
+    it.ia = { estado:'ok', texto: limpiaTextoIA(txt), proveedor: ultimoProveedorIA };
+  }catch(e){
+    it.ia = { estado:'error', error: (e && e.message) || String(e) };
+  }
+  if(testsQuiz) renderTests();
+}
+function agregarBloqueIA(card, it){
+  const q = it.q;
+  if(!q.enunciado || !hayIAConfigurada()) return;
+  const box = document.createElement('div'); box.className = 'tq-ia';
+  const btn = (txt, fn)=>{ const b = document.createElement('button'); b.type = 'button'; b.className = 'tq-ia-btn'; b.textContent = txt; b.onclick = fn; return b; };
+  const ia = it.ia;
+  if(!ia){
+    box.appendChild(btn('🤖 Explícamelo', ()=>pedirExplicacionIA(it)));
+  } else if(ia.estado==='cargando'){
+    const h = document.createElement('div'); h.className = 'ia-head'; h.textContent = '🤖 Pensando…'; box.appendChild(h);
+  } else if(ia.estado==='error'){
+    const e = document.createElement('div'); e.className = 'ia-err'; e.textContent = ia.error; box.appendChild(e);
+    box.appendChild(btn('Reintentar', ()=>pedirExplicacionIA(it)));
+  } else {
+    const h = document.createElement('div'); h.className = 'ia-head';
+    h.textContent = '🤖 Explicación de la IA'+(ia.proveedor ? ' ('+ia.proveedor+')' : '')+' · contrástala con tu temario';
+    box.appendChild(h);
+    const body = document.createElement('div'); renderRich(ia.texto, body); box.appendChild(body);
+    if(isAdmin){
+      if(ia.guardada){
+        const ok = document.createElement('div'); ok.className = 'ia-head'; ok.style.marginTop = '6px'; ok.textContent = '✓ Guardada como explicación de la pregunta'; box.appendChild(ok);
+      } else {
+        box.appendChild(btn('💾 Guardar como explicación', ()=>{
+          if(q.explicacion && !confirm('Esta pregunta ya tiene explicación. ¿Reemplazarla por la de la IA?')) return;
+          q.explicacion = ia.texto; ia.guardada = true;
+          saveTestQuestionRemote(q); showToast('Explicación guardada ✓'); renderTests();
+        }));
+      }
+    }
+    box.appendChild(btn('Volver a pedirla', ()=>pedirExplicacionIA(it)));
+  }
+  card.appendChild(box);
+}
 function corregirQuizActual(){
   if(!testsQuiz || testsQuiz.corregido) return;
   const pendientes = testsQuiz.items.some(it=>!testItemFullyAnswered(it));
@@ -4813,13 +5686,11 @@ function corregirQuizActual(){
     // Las preguntas ya reveladas en modo instantáneo ya sumaron sus estadísticas al responder.
     if(it.revelado) return;
     const tipo = qTipo(it.q);
-    it.q.stats.veces = (it.q.stats.veces||0)+1;
-    let acierto;
-    if(tipo==='ortografia') acierto = ortografiaFallosCount(it)===0;
-    else acierto = it.respuesta===it.q.correcta;
-    if(acierto) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
-    saveTestQuestionRemote(it.q);
+    // Una pregunta de opción múltiple en blanco cuenta como intento fallado, pero no suma al objetivo diario.
+    const enBlanco = tipo==='multiple' && it.respuesta===null;
+    registrarResultadoPregunta(it, itemAcierto(it), !enBlanco);
   });
+  registrarResultadoDelTest();
   renderTests();
 }
 // Agrupa los resultados por categoría y aplica la fórmula de puntuación de cada una
@@ -4877,6 +5748,7 @@ function renderTestsQuizUI(body){
   if(testsQuiz.corregido){
     clearQuizTimer();
     panel.appendChild(buildScoreBanner());
+    panel.appendChild(buildResultadoCard());
   } else {
     const topBar = document.createElement('div'); topBar.style.cssText='display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:8px;z-index:10;margin-bottom:14px;';
     if(testsQuiz.temporizador){
@@ -4933,9 +5805,7 @@ function renderTestsQuizUI(body){
         function checkOrtoInstant(){
           if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado && it.respuesta.every(v=>v!==null)){
             it.revelado = true;
-            it.q.stats.veces = (it.q.stats.veces||0)+1;
-            if(ortografiaFallosCount(it)===0) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
-            saveTestQuestionRemote(it.q);
+            registrarResultadoPregunta(it, itemAcierto(it), true);
             renderTests();
           }
         }
@@ -4974,9 +5844,7 @@ function renderTestsQuizUI(body){
         checkBtn.textContent = 'Comprobar esta pregunta';
         checkBtn.onclick = ()=>{
           it.revelado = true;
-          it.q.stats.veces = (it.q.stats.veces||0)+1;
-          if(ortografiaFallosCount(it)===0) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
-          saveTestQuestionRemote(it.q);
+          registrarResultadoPregunta(it, itemAcierto(it), true);
           renderTests();
         };
         card.appendChild(checkBtn);
@@ -4996,12 +5864,12 @@ function renderTestsQuizUI(body){
       }
       btnBien.onclick = ()=>{
         if(revelada) return; it.respuesta = true;
-        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; it.q.stats.veces=(it.q.stats.veces||0)+1; if(it.respuesta===it.q.correcta) it.q.stats.aciertos=(it.q.stats.aciertos||0)+1; saveTestQuestionRemote(it.q); renderTests(); return; }
+        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; registrarResultadoPregunta(it, itemAcierto(it), true); renderTests(); return; }
         paintGramBtns(); updateQuizProgress();
       };
       btnMal.onclick = ()=>{
         if(revelada) return; it.respuesta = false;
-        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; it.q.stats.veces=(it.q.stats.veces||0)+1; if(it.respuesta===it.q.correcta) it.q.stats.aciertos=(it.q.stats.aciertos||0)+1; saveTestQuestionRemote(it.q); renderTests(); return; }
+        if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){ it.revelado=true; registrarResultadoPregunta(it, itemAcierto(it), true); renderTests(); return; }
         paintGramBtns(); updateQuizProgress();
       };
       paintGramBtns();
@@ -5020,9 +5888,7 @@ function renderTestsQuizUI(body){
           it.respuesta = oi;
           if(testsQuiz.instantaneo && !testsQuiz.corregido && !it.revelado){
             it.revelado = true;
-            it.q.stats.veces = (it.q.stats.veces||0)+1;
-            if(it.respuesta===it.q.correcta) it.q.stats.aciertos = (it.q.stats.aciertos||0)+1;
-            saveTestQuestionRemote(it.q);
+            registrarResultadoPregunta(it, itemAcierto(it), true);
             renderTests();
           } else {
             updateQuizProgress();
@@ -5035,9 +5901,10 @@ function renderTestsQuizUI(body){
       });
     }
     if(revelada && q.explicacion){
-      const ex = document.createElement('div'); ex.className='tq-explic'; ex.textContent = q.explicacion;
+      const ex = document.createElement('div'); ex.className='tq-explic'; renderRich(q.explicacion, ex);
       card.appendChild(ex);
     }
+    if(revelada) agregarBloqueIA(card, it);
     panel.appendChild(card);
   });
   const btnRow = document.createElement('div'); btnRow.className='quiz-actions-bar'; btnRow.style.cssText='display:flex;gap:8px;';
@@ -5046,7 +5913,14 @@ function renderTestsQuizUI(body){
     corrBtn.onclick = corregirQuizActual;
     btnRow.appendChild(corrBtn);
   } else {
-    const newBtn = document.createElement('button'); newBtn.type='button'; newBtn.className='btn'; newBtn.style.width='100%'; newBtn.textContent='Nuevo test';
+    const falladasFin = preguntasFalladasDelTest();
+    if(falladasFin.length){
+      const repBtn = document.createElement('button'); repBtn.type='button'; repBtn.className='btn'; repBtn.style.flex='1';
+      repBtn.textContent = '🔁 Repetir falladas ('+falladasFin.length+')';
+      repBtn.onclick = ()=> iniciarQuiz(falladasFin.slice(), { instantaneo:true, sinTiempo:true });
+      btnRow.appendChild(repBtn);
+    }
+    const newBtn = document.createElement('button'); newBtn.type='button'; newBtn.className='btn ghost'; newBtn.style.flex='1'; newBtn.textContent='Nuevo test';
     newBtn.onclick = ()=>{ clearQuizTimer(); testsQuiz = null; resetTestsWizard(); renderTests(); };
     btnRow.appendChild(newBtn);
   }
@@ -5239,6 +6113,7 @@ async function bootApprovedApp(){
   document.getElementById('approvedApp').style.display = 'block';
   await loadTestBank();
   await loadTemario();
+  await cargarProgreso();
   renderTests();
   renderBackupBox();
   renderAdminUsersBox();
@@ -5342,6 +6217,8 @@ if(firebaseOk){
         }
       }
     } else {
+      if(progresoTimer){ clearTimeout(progresoTimer); progresoTimer = null; }
+      progreso = progresoVacio();
       currentUid = null;
       isAdmin = false;
       isSuperAdmin = false;
