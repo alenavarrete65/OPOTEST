@@ -6,9 +6,17 @@
      parpadeo (flash) del tema oscuro por defecto al cargar en modo claro. */
   (function(){
     try {
-      var saved = localStorage.getItem('opotest-theme');
-      var theme = saved || 'dark';
+      var mode = localStorage.getItem('opotest-theme') || 'dark';
+      var theme;
+      if (mode === 'auto') {
+        var h = new Date().getHours();
+        // Oscuro de 21:00 a 07:59, claro el resto del día.
+        theme = (h >= 21 || h < 8) ? 'dark' : 'light';
+      } else {
+        theme = mode;
+      }
       document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.setAttribute('data-theme-mode', mode);
     } catch(e){}
   })();
 </script>
@@ -1196,24 +1204,52 @@
   const btn = document.getElementById('themeToggleBtn');
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   const THEME_COLORS = { dark: '#14211c', light: '#f4efe3' };
-  function applyThemeUI(theme){
-    if (btn) {
-      btn.textContent = theme === 'light' ? '☀️' : '🌙';
-      btn.title = theme === 'light' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro';
-    }
-    if (metaTheme) metaTheme.setAttribute('content', THEME_COLORS[theme] || THEME_COLORS.dark);
+  const MODES = ['dark', 'light', 'auto'];
+  const MODE_ICON = { dark: '🌙', light: '☀️', auto: '🕐' };
+  const MODE_LABEL = {
+    dark: 'Tema oscuro (pulsa para tema claro)',
+    light: 'Tema claro (pulsa para automático por horas)',
+    auto: 'Automático por horas (pulsa para tema oscuro)'
+  };
+
+  // De 21:00 a 07:59 oscuro, el resto del día claro.
+  function computeAutoTheme(){
+    const h = new Date().getHours();
+    return (h >= 21 || h < 8) ? 'dark' : 'light';
   }
-  const current = document.documentElement.getAttribute('data-theme') || 'dark';
-  applyThemeUI(current);
+
+  function applyMode(mode){
+    const effective = mode === 'auto' ? computeAutoTheme() : mode;
+    document.documentElement.setAttribute('data-theme', effective);
+    document.documentElement.setAttribute('data-theme-mode', mode);
+    if (btn) {
+      btn.textContent = MODE_ICON[mode] || MODE_ICON.dark;
+      btn.title = MODE_LABEL[mode] || MODE_LABEL.dark;
+      btn.setAttribute('aria-label', MODE_LABEL[mode] || MODE_LABEL.dark);
+    }
+    if (metaTheme) metaTheme.setAttribute('content', THEME_COLORS[effective] || THEME_COLORS.dark);
+    return effective;
+  }
+
+  let currentMode = document.documentElement.getAttribute('data-theme-mode') || 'dark';
+  if (!MODES.includes(currentMode)) currentMode = 'dark';
+  applyMode(currentMode);
+
   if (btn) {
     btn.addEventListener('click', () => {
-      const now = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-      const next = now === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      applyThemeUI(next);
-      try { localStorage.setItem('opotest-theme', next); } catch(e){}
+      const idx = MODES.indexOf(currentMode);
+      currentMode = MODES[(idx + 1) % MODES.length];
+      try { localStorage.setItem('opotest-theme', currentMode); } catch(e){}
+      applyMode(currentMode);
     });
   }
+
+  // En modo automático, revisa la hora periódicamente y al volver a la pestaña,
+  // para que el cambio día/noche se aplique sin necesidad de recargar la página.
+  setInterval(() => { if (currentMode === 'auto') applyMode('auto'); }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentMode === 'auto') applyMode('auto');
+  });
 })();
 
 /* ===================== CONFIGURACIÓN FIREBASE ===================== */
