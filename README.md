@@ -22,6 +22,8 @@ futuro hacia una plataforma de test multiusuario.
 | `manifest.json`        | Metadatos de la PWA (nombre, iconos, colores)                  |
 | `service-worker.js`    | Caché offline del "app shell"                                  |
 | `icon-192.png` / `icon-512.png` | Iconos de la app                                       |
+| `icon-maskable-192.png` / `icon-maskable-512.png` | Iconos «maskable» (Android los recorta en círculo u otras formas; sin marco) |
+| `apple-touch-icon.png` | Icono para la pantalla de inicio de iPhone/iPad          |
 | `firestore.rules`      | Reglas de seguridad de la base de datos (se pegan en la consola de Firebase, no en GitHub Pages) |
 | `firebase.json`        | Solo necesario si algún día despliegas con Firebase Hosting en vez de (o además de) GitHub Pages |
 
@@ -215,6 +217,73 @@ futuro hacia una plataforma de test multiusuario.
 - Limitación que ya existía: las estadísticas por pregunta (`stats`) las guarda solo la cuenta
   admin en el banco compartido. Una cuenta que solo practica ve sus fallos/nuevas durante la sesión,
   pero esos datos no se conservan al recargar; su racha, objetivo e historial sí se guardan.
+
+## 🎓 Simulacro de examen
+
+En la pantalla Hoy, botón **🎓 Simulacro de examen**. Copia la estructura del cuestionario oficial (Cabos y
+Guardias 2026, tipo A) y pone la nota como en el examen real:
+
+- **Examen de conocimientos**, por secciones y en este orden: Ortografía (5 frases = 20 palabras),
+  Gramática (20 frases), Conocimientos generales (100 preguntas, ordenadas por temario) y Lengua inglesa (20).
+  Los números y el **tiempo** son editables (el cuestionario oficial no indica el tiempo: pon el de tu
+  convocatoria; por defecto 100 min). Las preguntas de reserva no se incluyen.
+- **Psicotécnico**: 80 preguntas, 55 minutos.
+- **Nota**: acierto +1, blanco 0, fallo −0,33. Ortografía y gramática, cada una por separado, **aptas con 5
+  fallos o menos**. El psicotécnico es sobre 30: (aciertos − 0,33 × fallos) × 0,375. En conocimientos se
+  muestran los puntos de teoría e inglés y si ortografía y gramática son aptas.
+- **Reparto de teoría por temas**: por defecto el del examen oficial (las 100 preguntas de teoría del
+  cuestionario 2026 clasificadas por los 35 temas del temario: p. ej. Derechos Humanos 12, Derecho Procesal 9,
+  Guardia Civil 9, Constitución 5…). Con **Mi reparto en %** eliges el porcentaje de cada tema y el nº de
+  preguntas de teoría; el botón **⚖️ Reforzar mis puntos débiles** parte del reparto oficial y sube el peso de
+  los temas que peor llevas (flojo ×3, sin ver ×2, en camino ×1,8, dominado ×1) para que lo retoques a mano.
+  Cada tema muestra cuántas preguntas tienes en el banco frente a las que pide; si no hay suficientes, avisa y
+  completa con otros temas. Los temas se reconocen por su número (1., 4.1, 15…), así que reordenar el temario
+  no rompe el reparto.
+- Los simulacros no entran en la gráfica de evolución de los tests normales: tienen su propia lista en
+  **Progreso → Tus simulacros** (nota, máximo y apto/no apto, con comparación con el anterior).
+- En el **Banco → Salud del banco**, cada tema de teoría muestra «tu banco / lo que pide el examen oficial».
+- Si cierras la app a mitad de un simulacro, se recupera desde Hoy con el resto de tests a medias.
+
+## Salud del banco y preguntas por tema (Banco, solo admin)
+
+Arriba del **Banco de preguntas** hay un panel plegable **🩺 Salud del banco y preguntas por tema**:
+
+- **Cosas por arreglar**: cuántas preguntas no tienen tema asignado, no tienen explicación, no tienen
+  respuesta correcta definida o tienen menos de 2 opciones. Cada línea tiene un botón **Ver** que filtra
+  el banco por ese problema (con un aviso "Filtrando… ✕ Quitar filtro").
+- **Preguntas por tema**: para cada categoría con temario, una fila por tema con el número de preguntas y
+  una barra proporcional; los temas con 0 preguntas salen en rojo. Al tocar una fila se filtra el banco
+  por ese tema.
+- **🤖 Rellenar explicaciones** (botón de la cabecera del Banco): recorre las preguntas sin explicación
+  (con enunciado y respuesta correcta), hasta 30 por tanda, y pide a la IA una explicación de cada una.
+  Tú revisas y editas los textos y guardas solo las que te valgan; nada se guarda solo.
+
+## Más herramientas para estudiar
+
+- **Cuenta atrás al examen**: en la pantalla Hoy hay un selector de **Fecha del examen**. Con fecha puesta
+  muestra los días que faltan, cuántos temas llevas dominados y el ritmo de preguntas/día que necesitas
+  para ver todo lo nuevo y arreglar tus fallos a tiempo (y si tu objetivo diario se queda corto).
+- **Gráfica de evolución** (Progreso): % de acierto de tus últimos 20 tests, con la media de los últimos 5
+  frente a los 5 anteriores. Pasa el ratón (o mantén pulsado) sobre un punto para ver la fecha y la nota.
+- **🧩 Preguntas rebeldes**: las que has fallado 3 veces seguidas, o con 4+ intentos aciertas ≤ 25 % y
+  ahora estás fallando. Tienen atajo en Hoy, alcance en el asistente y filtro en el paso de temas. Al
+  responderlas en un test sale un aviso.
+- **⭐ Dudosas y 📝 notas personales**: cada pregunta del test tiene una estrella para marcarla como dudosa
+  (se repasan luego desde Hoy o el asistente) y, una vez respondida, un botón para escribir tu propia nota
+  o regla mnemotécnica (con el formato enriquecido). Son personales de cada cuenta y se guardan en tu
+  progreso, no en el banco compartido.
+- **Retomar un test a medias**: el test en curso se guarda en el dispositivo (respuestas, modo y tiempo
+  restante). Si cierras la app o cambias de pestaña, en Hoy aparece "Tienes un test a medias" con
+  Continuar / Descartar. Caduca a los 3 días.
+- **Durante el test**: 🎯 modo concentración (oculta cabecera y pestañas), A− / A+ para el tamaño de la
+  letra de las preguntas (se recuerda), 📳 vibración al responder en modo instantáneo (móviles
+  compatibles; los iPhone no la soportan) y atajos de teclado en escritorio: **1-4 o A-D** responden a la
+  pregunta sin contestar más alta que se ve en pantalla.
+- **📸 Hacer foto ahora** en el modo de varias fotos: abre la cámara del móvil directamente.
+
+Las notas, las dudosas y la fecha del examen viajan en `users/{tu uid}/progreso/resumen`, así que para
+que se sincronicen entre dispositivos hay que tener publicadas las reglas de `firestore.rules`
+(sin ellas funcionan igual, pero solo en cada dispositivo).
 
 ## Varias fotos → varias preguntas
 
