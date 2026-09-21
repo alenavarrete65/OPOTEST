@@ -18,7 +18,8 @@ futuro hacia una plataforma de test multiusuario.
 
 | Archivo               | Para qué sirve                                                |
 |------------------------|----------------------------------------------------------------|
-| `index.html`           | Toda la app (HTML + CSS + JS en un único archivo)              |
+| `index.html`           | Toda la app (HTML + JS); los estilos viven aparte en `style.css` |
+| `style.css`            | Todo el CSS de la app (separado de `index.html` para que sea más manejable) |
 | `manifest.json`        | Metadatos de la PWA (nombre, iconos, colores)                  |
 | `service-worker.js`    | Caché offline del "app shell"                                  |
 | `icon-192.png` / `icon-512.png` | Iconos de la app                                       |
