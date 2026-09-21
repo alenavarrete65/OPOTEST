@@ -6,17 +6,16 @@
      parpadeo (flash) del tema oscuro por defecto al cargar en modo claro. */
   (function(){
     try {
-      var mode = localStorage.getItem('opotest-theme') || 'dark';
+      var auto = localStorage.getItem('opotest-theme-auto') === '1';
       var theme;
-      if (mode === 'auto') {
+      if (auto) {
         var h = new Date().getHours();
         // Oscuro de 21:00 a 07:59, claro el resto del día.
         theme = (h >= 21 || h < 8) ? 'dark' : 'light';
       } else {
-        theme = mode;
+        theme = localStorage.getItem('opotest-theme') === 'light' ? 'light' : 'dark';
       }
       document.documentElement.setAttribute('data-theme', theme);
-      document.documentElement.setAttribute('data-theme-mode', mode);
     } catch(e){}
   })();
 </script>
@@ -314,6 +313,16 @@
     display:flex;align-items:center;justify-content:center;transition:border-color .15s ease;
   }
   .icon-btn:hover{border-color:var(--amber);color:var(--amber-ink);}
+  .auto-theme-toggle{
+    background:var(--bg-panel-2);border:1px solid var(--line);color:var(--cream-dim);
+    height:32px;padding:0 10px;border-radius:8px;cursor:pointer;font-family:var(--font-mono);
+    font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    display:inline-flex;align-items:center;gap:5px;transition:border-color .15s ease,color .15s ease,background .15s ease;
+  }
+  .auto-theme-toggle:hover{border-color:var(--amber);color:var(--amber-ink);}
+  .auto-theme-toggle.active{border-color:var(--amber);background:var(--amber);color:#1b2b1f;}
+  .icon-btn:disabled{opacity:.45;cursor:not-allowed;}
+  .icon-btn:disabled:hover{border-color:var(--line);color:var(--cream);}
   .btn{
     background:linear-gradient(180deg, #ddbb4d, var(--amber));color:#1b2b1f;border:none;font-family:var(--font-body);
     text-transform:uppercase;letter-spacing:.04em;font-weight:600;font-size:13px;
@@ -849,6 +858,8 @@
   .test-quiz-q .tq-enun{padding-right:32px;}
   .tq-star{position:absolute;top:8px;right:10px;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;padding:2px;color:var(--amber-ink);opacity:.6;}
   .tq-star.on{opacity:1;}
+  .tq-speak{position:absolute;top:8px;right:38px;background:none;border:none;font-size:18px;line-height:1;cursor:pointer;padding:2px;color:var(--amber-ink);opacity:.6;}
+  .tq-speak:hover, .tq-speak.on{opacity:1;}
   .tq-rebelde{margin-top:8px;padding:6px 10px;border-left:3px solid var(--red);background:rgba(182,84,63,0.13);font-size:12.5px;border-radius:4px;line-height:1.4;}
   .tq-nota{margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.45;background:rgba(227,167,82,0.07);}
   .quiz-tools{display:flex;gap:6px;flex:0 0 auto;}
@@ -1109,6 +1120,7 @@
   /* Pantallas táctiles: zonas de pulsación de ~44px sin descuadrar el diseño */
   @media (pointer:coarse){
     .icon-btn{width:44px;height:44px;}
+    .auto-theme-toggle{height:44px;padding:0 12px;}
     .view-toggle-btn, .test-subnav button, .tq-opt{min-height:44px;}
     .btn.small, .wizard-num-btn, .tq-word-btn, .tq-orto-chip{min-height:40px;}
     .tick-add{position:relative;}
@@ -1147,6 +1159,7 @@
     <div class="app-head-controls">
       <div class="plan-id" id="userEmailLabel"></div>
       <button type="button" class="icon-btn" id="themeToggleBtn" title="Cambiar a tema claro/oscuro" aria-label="Cambiar tema" style="font-size:14px;">🌙</button>
+      <button type="button" class="auto-theme-toggle" id="themeAutoBtn" aria-pressed="false" title="Cambio automático por hora: desactivado"><span aria-hidden="true">🕐</span><span>Auto</span></button>
       <div class="save-indicator" id="offlineIndicator" role="status" aria-live="polite" style="display:none;border-color:var(--red-text);color:var(--red-text);">
         <span class="dot" aria-hidden="true" style="background:var(--red-text);"></span><span>Sin conexión</span>
       </div>
@@ -1201,54 +1214,69 @@
 <script>
 /* ===================== TEMA CLARO / OSCURO ===================== */
 (function initTheme(){
-  const btn = document.getElementById('themeToggleBtn');
+  const btn = document.getElementById('themeToggleBtn');       // 🌙/☀️ manual
+  const autoBtn = document.getElementById('themeAutoBtn');     // botón "Auto" independiente
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   const THEME_COLORS = { dark: '#14211c', light: '#f4efe3' };
-  const MODES = ['dark', 'light', 'auto'];
-  const MODE_ICON = { dark: '🌙', light: '☀️', auto: '🕐' };
-  const MODE_LABEL = {
-    dark: 'Tema oscuro (pulsa para tema claro)',
-    light: 'Tema claro (pulsa para automático por horas)',
-    auto: 'Automático por horas (pulsa para tema oscuro)'
-  };
 
   // De 21:00 a 07:59 oscuro, el resto del día claro.
   function computeAutoTheme(){
     const h = new Date().getHours();
     return (h >= 21 || h < 8) ? 'dark' : 'light';
   }
-
-  function applyMode(mode){
-    const effective = mode === 'auto' ? computeAutoTheme() : mode;
-    document.documentElement.setAttribute('data-theme', effective);
-    document.documentElement.setAttribute('data-theme-mode', mode);
-    if (btn) {
-      btn.textContent = MODE_ICON[mode] || MODE_ICON.dark;
-      btn.title = MODE_LABEL[mode] || MODE_LABEL.dark;
-      btn.setAttribute('aria-label', MODE_LABEL[mode] || MODE_LABEL.dark);
-    }
-    if (metaTheme) metaTheme.setAttribute('content', THEME_COLORS[effective] || THEME_COLORS.dark);
-    return effective;
+  function getManualTheme(){
+    return localStorage.getItem('opotest-theme') === 'light' ? 'light' : 'dark';
+  }
+  function isAutoOn(){
+    return localStorage.getItem('opotest-theme-auto') === '1';
   }
 
-  let currentMode = document.documentElement.getAttribute('data-theme-mode') || 'dark';
-  if (!MODES.includes(currentMode)) currentMode = 'dark';
-  applyMode(currentMode);
+  function render(){
+    const auto = isAutoOn();
+    const effective = auto ? computeAutoTheme() : getManualTheme();
+    document.documentElement.setAttribute('data-theme', effective);
+    if (metaTheme) metaTheme.setAttribute('content', THEME_COLORS[effective] || THEME_COLORS.dark);
+
+    if (btn) {
+      btn.textContent = effective === 'light' ? '☀️' : '🌙';
+      btn.disabled = auto;
+      btn.title = auto
+        ? 'El tema lo decide el modo automático por hora (desactívalo para cambiarlo a mano)'
+        : (effective === 'light' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro');
+    }
+    if (autoBtn) {
+      autoBtn.classList.toggle('active', auto);
+      autoBtn.setAttribute('aria-pressed', auto ? 'true' : 'false');
+      autoBtn.title = auto
+        ? 'Cambio automático por hora: ACTIVADO (oscuro de 21:00 a 08:00, claro el resto del día). Pulsa para desactivarlo.'
+        : 'Cambio automático por hora: desactivado. Pulsa para activarlo (oscuro de 21:00 a 08:00, claro el resto del día).';
+    }
+  }
+
+  render();
 
   if (btn) {
     btn.addEventListener('click', () => {
-      const idx = MODES.indexOf(currentMode);
-      currentMode = MODES[(idx + 1) % MODES.length];
-      try { localStorage.setItem('opotest-theme', currentMode); } catch(e){}
-      applyMode(currentMode);
+      if (isAutoOn()) return; // mientras el modo automático está activo, el botón manual está bloqueado
+      const next = getManualTheme() === 'light' ? 'dark' : 'light';
+      try { localStorage.setItem('opotest-theme', next); } catch(e){}
+      render();
     });
   }
 
-  // En modo automático, revisa la hora periódicamente y al volver a la pestaña,
-  // para que el cambio día/noche se aplique sin necesidad de recargar la página.
-  setInterval(() => { if (currentMode === 'auto') applyMode('auto'); }, 60 * 1000);
+  if (autoBtn) {
+    autoBtn.addEventListener('click', () => {
+      const next = !isAutoOn();
+      try { localStorage.setItem('opotest-theme-auto', next ? '1' : '0'); } catch(e){}
+      render();
+    });
+  }
+
+  // Con el modo automático activo, revisa la hora cada minuto y al volver a la pestaña,
+  // para que el cambio día/noche se note sin tener que recargar la página.
+  setInterval(() => { if (isAutoOn()) render(); }, 60 * 1000);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && currentMode === 'auto') applyMode('auto');
+    if (!document.hidden && isAutoOn()) render();
   });
 })();
 
@@ -2527,8 +2555,11 @@ function cambiarObjetivo(v){
   marcaDiaSiCumplido(); // si con el nuevo objetivo ya has llegado hoy, cuenta; nunca se quita un día ya ganado
   programarGuardadoProgreso(false);
 }
-function calcularRachaActual(){
-  const dates = new Set(getStreakDates());
+// Genérica: calcula la racha de días seguidos a partir de cualquier lista de fechas
+// (claves 'YYYY-M-D'). La usan tanto el progreso propio como el panel de administración
+// para calcular la racha de otras cuentas.
+function calcularRachaDeDias(dias){
+  const dates = new Set(dias || []);
   const d = new Date();
   // Si hoy todavía no se ha cumplido el objetivo, se empieza a contar desde ayer para no
   // "romper" la racha visualmente antes de que acabe el día (aún puedes cumplirlo hoy).
@@ -2537,6 +2568,7 @@ function calcularRachaActual(){
   while(dates.has(fmtFechaKey(d))){ racha++; d.setDate(d.getDate()-1); }
   return racha;
 }
+function calcularRachaActual(){ return calcularRachaDeDias(getStreakDates()); }
 
 /* ===== Estado de cada pregunta según tus resultados (para "mis fallos", "nuevas" y el test rápido) ===== */
 function esNueva(q){ return !(q.stats && q.stats.veces>0); }
@@ -4596,10 +4628,202 @@ function buildMapaTemario(questions){
   resumen.textContent = conPreguntas ? dominados+' de '+conPreguntas+' temas dominados. Toca un tema para practicarlo.' : 'Aún no hay preguntas clasificadas por tema.';
   return wrap;
 }
+// Quita emojis y símbolos que la fuente estándar del PDF (Helvetica/WinAnsi) no puede
+// codificar, y normaliza comillas/guiones "raros" a su equivalente ASCII más cercano.
+function pdfSafe(s){
+  return String(s==null?'':s)
+    .replace(/\u2026/g, '...')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[^\x00-\xFF]/g, '');
+}
+// Recorta un texto con "…" si no cabe en el ancho disponible, para que las tablas del
+// informe no se descuadren con nombres de tema largos.
+function pdfTruncar(texto, font, size, maxWidth){
+  let t = texto;
+  if(font.widthOfTextAtSize(t, size) <= maxWidth) return t;
+  while(t.length>1 && font.widthOfTextAtSize(t+'...', size) > maxWidth) t = t.slice(0,-1);
+  return t+'...';
+}
+// Genera y descarga un informe en PDF con el resumen de progreso: pensado para llevarlo
+// impreso o en PDF a un preparador o academia. Usa pdf-lib (ya cargado para trocear PDFs).
+async function exportarProgresoPDF(){
+  if(!pdfLibDisponible()){ showToast('No se pudo generar el PDF: la librería no está disponible sin conexión.'); return; }
+  showToast('Generando el PDF…');
+  try{
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
+    const doc = await PDFDocument.create();
+    const fontR = await doc.embedFont(StandardFonts.Helvetica);
+    const fontB = await doc.embedFont(StandardFonts.HelveticaBold);
+    const pageW = 595.28, pageH = 841.89, margin = 50; // A4 en puntos
+    const contentW = pageW - margin*2;
+    let page = doc.addPage([pageW, pageH]);
+    let y = pageH - margin;
+    const cAmber = rgb(0.72, 0.53, 0.16), cText = rgb(0.13,0.13,0.13), cMuted = rgb(0.45,0.45,0.45), cLine = rgb(0.82,0.82,0.82);
+
+    function ensureSpace(h){
+      if(y - h < margin){ page = doc.addPage([pageW, pageH]); y = pageH - margin; }
+    }
+    function heading(texto){
+      ensureSpace(26);
+      page.drawText(pdfSafe(texto), { x:margin, y, size:17, font:fontB, color:cAmber });
+      y -= 24;
+    }
+    function subheading(texto){
+      ensureSpace(28);
+      y -= 6;
+      page.drawText(pdfSafe(texto), { x:margin, y, size:12, font:fontB, color:cText });
+      y -= 16;
+    }
+    function parrafo(texto, opts={}){
+      const size = opts.size || 10, color = opts.color || cMuted;
+      const palabras = pdfSafe(texto).split(' ');
+      let linea = '';
+      const lineas = [];
+      palabras.forEach(w=>{
+        const prueba = linea ? linea+' '+w : w;
+        if(fontR.widthOfTextAtSize(prueba, size) > contentW && linea){ lineas.push(linea); linea = w; }
+        else linea = prueba;
+      });
+      if(linea) lineas.push(linea);
+      lineas.forEach(l=>{
+        ensureSpace(size+5);
+        page.drawText(l, { x:margin, y, size, font:fontR, color });
+        y -= size+5;
+      });
+    }
+    const ANCHOS_TABLA = [contentW-220, 110, 110];
+    function filaTabla(cols, opts={}){
+      ensureSpace(16);
+      let x = margin;
+      const size = opts.size || 10, font = opts.bold ? fontB : fontR, color = opts.color || cText;
+      cols.forEach((c, i)=>{
+        const w = ANCHOS_TABLA[i] - 8;
+        const texto = i===0 ? pdfTruncar(pdfSafe(c), font, size, w) : pdfSafe(c);
+        page.drawText(texto, { x, y, size, font, color });
+        x += ANCHOS_TABLA[i];
+      });
+      y -= size + 7;
+    }
+    function linea(){
+      ensureSpace(10);
+      page.drawLine({ start:{x:margin,y}, end:{x:pageW-margin,y}, thickness:0.6, color:cLine });
+      y -= 12;
+    }
+
+    const questions = state.testBank.questions || [];
+
+    // ---- Cabecera ----
+    heading('OpoTest - Informe de progreso');
+    const email = (auth.currentUser && auth.currentUser.email) || 'cuenta sin email';
+    parrafo(email + '  ·  generado el ' + new Date().toLocaleString('es-ES'));
+    linea();
+
+    // ---- Resumen general ----
+    const totalPreguntas = questions.length;
+    const practicadas = questions.filter(q=>q.stats && q.stats.veces>0);
+    const totalIntentos = questions.reduce((s,q)=> s+(q.stats && q.stats.veces||0), 0);
+    const totalAciertos = questions.reduce((s,q)=> s+(q.stats && q.stats.aciertos||0), 0);
+    const precisionGlobal = totalIntentos ? Math.round((totalAciertos/totalIntentos)*100) : null;
+    const racha = calcularRachaActual();
+    subheading('Resumen general');
+    parrafo(totalPreguntas+' preguntas en el banco, '+practicadas.length+' practicadas alguna vez, '+totalIntentos+' intentos en total'
+      + (precisionGlobal!==null ? ', '+precisionGlobal+'% de acierto global.' : '.'), {color:cText});
+    if(racha>0) parrafo('Racha actual: '+racha+' dia'+(racha===1?'':'s')+' seguido'+(racha===1?'':'s')+' practicando.', {color:cText});
+    if(progreso && progreso.examenFecha) parrafo('Fecha de examen marcada: '+progreso.examenFecha+'.', {color:cText});
+
+    // ---- Mapa del temario ----
+    let dominados = 0, conPreguntas = 0;
+    TEST_CATEGORIAS.filter(c=>testCatTemas(c.key)>0).forEach(c=>{
+      testCatTemario(c.key).forEach((t,i)=>{
+        const e = estadoTemaMapa(questions.filter(q=>q.categoria===c.key && Number(q.tema)===i+1));
+        if(e.total) conPreguntas++;
+        if(e.clave==='dominado') dominados++;
+      });
+    });
+    subheading('Mapa del temario');
+    parrafo(conPreguntas ? (dominados+' de '+conPreguntas+' temas dominados.') : 'Aun no hay preguntas clasificadas por tema.', {color:cText});
+
+    // ---- Acierto por categoria ----
+    const porCategoria = {};
+    questions.forEach(q=>{
+      const st = q.stats||{};
+      if(!st.veces) return;
+      const c = porCategoria[q.categoria] = porCategoria[q.categoria] || {intentos:0, aciertos:0, preguntas:0};
+      c.intentos += st.veces; c.aciertos += st.aciertos||0; c.preguntas++;
+    });
+    const catRows = TEST_CATEGORIAS.filter(c=>porCategoria[c.key]);
+    subheading('Acierto por categoria');
+    if(!catRows.length) parrafo('Todavia no hay categorias con intentos registrados.');
+    else{
+      filaTabla(['Categoria','Acierto','Intentos'], {bold:true, color:cMuted});
+      catRows.forEach(c=>{
+        const d = porCategoria[c.key];
+        const pct = d.intentos ? Math.round((d.aciertos/d.intentos)*100) : 0;
+        filaTabla([c.label, pct+'%', String(d.intentos)]);
+      });
+    }
+
+    // ---- Temas donde mas falla ----
+    const UMBRAL_INTENTOS = 3;
+    const porTemaPre = {};
+    questions.forEach(q=>{
+      const st = q.stats||{};
+      if(!st.veces || !q.tema) return;
+      const key = q.categoria+'|'+q.tema;
+      const t = porTemaPre[key] = porTemaPre[key] || {categoria:q.categoria, tema:q.tema, intentos:0, aciertos:0};
+      t.intentos += st.veces; t.aciertos += st.aciertos||0;
+    });
+    const temasArr = Object.values(porTemaPre).filter(t=>t.intentos>=UMBRAL_INTENTOS);
+    temasArr.sort((a,b)=> (a.aciertos/a.intentos) - (b.aciertos/b.intentos));
+    subheading('Temas donde mas falla (min. '+UMBRAL_INTENTOS+' intentos)');
+    if(!temasArr.length) parrafo('Todavia no hay temas con suficientes intentos para compararlos.');
+    else{
+      filaTabla(['Tema','Acierto','Intentos'], {bold:true, color:cMuted});
+      temasArr.slice(0,12).forEach(t=>{
+        const temaObj = testCatTemaObj(t.categoria, t.tema);
+        const nombre = testCatLabel(t.categoria)+' - '+(temaObj ? temaObj.nombre : 'Tema '+t.tema);
+        const pct = Math.round((t.aciertos/t.intentos)*100);
+        filaTabla([nombre, pct+'%', String(t.intentos)]);
+      });
+    }
+
+    // ---- Ultimos tests realizados ----
+    subheading('Ultimos tests realizados');
+    const historial = (progreso && Array.isArray(progreso.historial)) ? progreso.historial.slice(-15).reverse() : [];
+    if(!historial.length) parrafo('Todavia no hay tests guardados en el historial.');
+    else{
+      filaTabla(['Fecha','Aciertos','%'], {bold:true, color:cMuted});
+      historial.forEach(h=>{
+        const pct = h.n ? Math.round((h.ac/h.n)*100) : 0;
+        filaTabla([new Date(h.t).toLocaleString('es-ES'), h.ac+'/'+h.n, pct+'%']);
+      });
+    }
+
+    const bytes = await doc.save();
+    const blob = new Blob([bytes], { type:'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'opotest-progreso-'+fmtFechaKey(new Date())+'.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 15000);
+    showToast('PDF generado ✓');
+  }catch(e){
+    console.error(e);
+    showToast('No se pudo generar el PDF.');
+  }
+}
 function renderTestsProgreso(body){
   const questions = state.testBank.questions || [];
   const panel = document.createElement('div'); panel.className='test-panel';
   panel.innerHTML = '<h4>📊 Progreso</h4>';
+  const exportBtn = document.createElement('button');
+  exportBtn.type = 'button'; exportBtn.className = 'btn ghost small';
+  exportBtn.style.cssText = 'margin:-6px 0 16px;';
+  exportBtn.textContent = '📄 Exportar informe (PDF)';
+  exportBtn.onclick = exportarProgresoPDF;
+  panel.appendChild(exportBtn);
 
   const totalPreguntas = questions.length;
   const practicadas = questions.filter(q=>q.stats && q.stats.veces>0);
@@ -5411,6 +5635,26 @@ function renderWizardPortada(wrap, questions){
   }
   renderPortadaHoy(wrap, questions);
 }
+// Recordatorio inteligente: busca, entre los temas que ya has practicado alguna vez,
+// el que lleva más tiempo sin tocarse (según la fecha del último intento guardado en
+// cada pregunta). Los temas que nunca has tocado no entran aquí: esos ya se ven
+// destacados como "sin ver" en el mapa del temario.
+function temaMasOlvidado(questions){
+  const porTema = {};
+  questions.forEach(q=>{
+    if(!q.tema || !q.categoria) return;
+    const st = q.stats;
+    if(!st || !st.veces || !st.fecha) return;
+    const key = q.categoria+'|'+q.tema;
+    const t = porTema[key] = porTema[key] || { catKey:q.categoria, num:Number(q.tema), ultimaFecha:0 };
+    if(st.fecha > t.ultimaFecha) t.ultimaFecha = st.fecha;
+  });
+  const arr = Object.values(porTema);
+  if(!arr.length) return null;
+  arr.sort((a,b)=> a.ultimaFecha - b.ultimaFecha);
+  const peor = arr[0];
+  return Object.assign({}, peor, { dias: Math.floor((Date.now()-peor.ultimaFecha)/86400000) });
+}
 // Portada de Practicar: qué llevas hoy, tu racha y un botón grande para empezar sin pensar.
 function renderPortadaHoy(wrap, questions){
   const hoyN = practicadasHoy(), meta = objetivoDiario();
@@ -5433,6 +5677,19 @@ function renderPortadaHoy(wrap, questions){
     bd.onclick = ()=>{ if(confirm('¿Descartar el test a medias? Se pierden las respuestas de esa tanda.')){ borrarTestEnCurso(); renderTests(); } };
     rb.appendChild(tx); rb.appendChild(bc); rb.appendChild(bd);
     wrap.appendChild(rb);
+  }
+  const UMBRAL_OLVIDO_DIAS = 3;
+  const olvidado = temaMasOlvidado(questions);
+  if(olvidado && olvidado.dias >= UMBRAL_OLVIDO_DIAS){
+    const temaObj = testCatTemaObj(olvidado.catKey, olvidado.num);
+    const nombreTema = testCatLabel(olvidado.catKey) + (temaObj ? ' · '+temaObj.nombre : ' · Tema '+olvidado.num);
+    const rb2 = document.createElement('div'); rb2.className = 'hoy-resume';
+    const tx2 = document.createElement('div'); tx2.className = 'hr-txt';
+    tx2.textContent = '⏰ Llevas '+olvidado.dias+' día'+(olvidado.dias===1?'':'s')+' sin tocar '+nombreTema+'.';
+    const bp = document.createElement('button'); bp.type = 'button'; bp.className = 'btn small'; bp.textContent = 'Repasarlo ahora';
+    bp.onclick = ()=> practicarTema(olvidado.catKey, olvidado.num);
+    rb2.appendChild(tx2); rb2.appendChild(bp);
+    wrap.appendChild(rb2);
   }
   const card = document.createElement('div'); card.className = 'hoy-card';
   const ring = document.createElement('div'); ring.className = 'hoy-ring'+(cumplido?' done':'');
@@ -5740,12 +5997,47 @@ function renderWizardResumen(wrap, questions){
 }
 function clearQuizTimer(){
   if(testsQuizTimerHandle){ clearInterval(testsQuizTimerHandle); testsQuizTimerHandle = null; }
+  detenerModoAudio();
 }
 function formatQuizTime(segTotales){
   const s = Math.max(0, segTotales);
   const m = Math.floor(s/60);
   const r = s%60;
   return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
+}
+// Segundos restantes a partir de los cuales se avisa en un simulacro cronometrado.
+const SIM_AVISO_SEGUNDOS = 5*60;
+let avisoAudioCtx = null;
+// Dos pitidos cortos (Web Audio, sin archivos externos: funciona también sin conexión).
+function reproducirAvisoSonoro(){
+  try{
+    if(!avisoAudioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return;
+      avisoAudioCtx = new AC();
+    }
+    if(avisoAudioCtx.state === 'suspended') avisoAudioCtx.resume();
+    const t0 = avisoAudioCtx.currentTime;
+    [0, 0.35].forEach(offset=>{
+      const osc = avisoAudioCtx.createOscillator();
+      const gain = avisoAudioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, t0+offset);
+      gain.gain.exponentialRampToValueAtTime(0.28, t0+offset+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+offset+0.28);
+      osc.connect(gain); gain.connect(avisoAudioCtx.destination);
+      osc.start(t0+offset);
+      osc.stop(t0+offset+0.3);
+    });
+  }catch(e){}
+}
+// Aviso de "quedan 5 minutos" en un simulacro: sonido + vibración (si el dispositivo la
+// admite) + toast en pantalla, para notarlo aunque no estés mirando el temporizador.
+function avisarUltimosMinutosSimulacro(){
+  reproducirAvisoSonoro();
+  try{ if(typeof navigator.vibrate === 'function') navigator.vibrate([250,120,250,120,250]); }catch(e){}
+  showToast('⏰ Quedan 5 minutos de simulacro');
 }
 // Nº de fallos (a nivel de palabra) de un ítem de ortografía ya respondido por completo.
 function ortografiaFallosCount(it){
@@ -5978,7 +6270,7 @@ function guardarTestEnCurso(){
   try{
     localStorage.setItem(testEnCursoKey(), JSON.stringify({
       v:1, t:Date.now(), instantaneo:!!testsQuiz.instantaneo, sim:testsQuiz.simulacro||null,
-      temporizador: testsQuiz.temporizador ? { totalSegundos:testsQuiz.temporizador.totalSegundos, restante:testsQuiz.temporizador.restante } : null,
+      temporizador: testsQuiz.temporizador ? { totalSegundos:testsQuiz.temporizador.totalSegundos, restante:testsQuiz.temporizador.restante, avisoDado:!!testsQuiz.temporizador.avisoDado } : null,
       diaCumplidoAntes: !!testsQuiz.diaCumplidoAntes,
       items: testsQuiz.items.map(it=>({ id:it.q.id, r:it.respuesta, v:!!it.revelado, pf:!!it.prevFallada, pn:!!it.prevNueva }))
     }));
@@ -6003,7 +6295,7 @@ function reanudarTestEnCurso(){
   clearQuizTimer();
   testsQuiz = {
     items: d.items, corregido:false, instantaneo:d.raw.instantaneo,
-    temporizador: d.raw.temporizador ? { totalSegundos:d.raw.temporizador.totalSegundos, restante:Math.max(30, d.raw.temporizador.restante) } : null,
+    temporizador: d.raw.temporizador ? { totalSegundos:d.raw.temporizador.totalSegundos, restante:Math.max(30, d.raw.temporizador.restante), avisoDado:!!d.raw.temporizador.avisoDado } : null,
     diaCumplidoAntes: d.raw.diaCumplidoAntes, simulacro: d.raw.sim || null
   };
   renderTests();
@@ -6030,6 +6322,7 @@ function buildQuizTools(){
   mk('A−', 'Letra más pequeña', ()=>cambiarZoom(-0.1));
   mk('A+', 'Letra más grande', ()=>cambiarZoom(0.1));
   mk('📳', 'Vibración al responder (solo móviles compatibles)', ()=>{ vibracionOn = !vibracionOn; try{ localStorage.setItem('opotest-vib', vibracionOn?'1':'0'); }catch(e){} if(vibracionOn) vibrar(true); renderTests(); }, vibracionOn);
+  mk('🔊', audioModoActivo ? 'Modo audio activo: leyendo las preguntas en voz alta. Pulsa para detener.' : 'Modo audio: lee en voz alta, una tras otra, las preguntas de este test (para repasar sin mirar la pantalla)', toggleModoAudio, audioModoActivo);
   return box;
 }
 // Atajos de teclado en escritorio: 1-4 o A-D responden a la pregunta sin contestar más alta que se ve en pantalla.
@@ -6057,6 +6350,75 @@ document.addEventListener('keydown', ev=>{
   radios[idx].click();
 });
 // Herramientas de cada pregunta del test: ⭐ (siempre) y, ya respondida, aviso de rebelde + nota personal.
+/* ===================== MODO AUDIO: lee las preguntas en voz alta (Web Speech API) =====================
+   Pensado para repasar sin mirar la pantalla. Hay dos formas de usarlo:
+   - El botón 🔊 de cada pregunta la lee solo a ella, suelta.
+   - El botón 🔊 de la barra de herramientas activa el "modo audio": lee todas las preguntas
+     del test, una tras otra, con una pequeña pausa entre cada una, hasta el final o hasta
+     que lo detengas. Va encadenando utterances por su evento "onend", no con temporizadores
+     fijos, así que respeta la velocidad real de la voz del dispositivo. */
+let audioModoActivo = false;
+let audioModoIdxActual = 0;
+// Texto a leer para una pregunta: enunciado y, si es de opción múltiple, sus opciones.
+function textoParaLeerAudio(it){
+  const q = it.q, tipo = qTipo(q);
+  const LETRAS_AUDIO = 'ABCDEFGHIJ';
+  let t = q.enunciado || '';
+  if(tipo==='multiple' && Array.isArray(q.opciones) && q.opciones.length){
+    t += '. ' + q.opciones.map((o,i)=> 'Opción '+LETRAS_AUDIO[i]+': '+o).join('. ');
+  } else if(tipo==='gramatica'){
+    t += '. ¿Está bien escrita esta frase?';
+  }
+  return t.trim();
+}
+function detenerModoAudio(){
+  audioModoActivo = false;
+  try{ if('speechSynthesis' in window) speechSynthesis.cancel(); }catch(e){}
+}
+function leerSiguientePreguntaAudio(){
+  if(!audioModoActivo || !testsQuiz) return;
+  while(audioModoIdxActual < testsQuiz.items.length){
+    const it = testsQuiz.items[audioModoIdxActual];
+    audioModoIdxActual++;
+    const texto = textoParaLeerAudio(it);
+    // Las de ortografía con formato de palabras sueltas no se narran bien en voz alta: se saltan.
+    if(!texto || (qTipo(it.q)==='ortografia' && !ortoEsFormatoNuevo(it.q.enunciado, it.q.palabras))) continue;
+    try{
+      const u = new SpeechSynthesisUtterance(texto);
+      u.lang = 'es-ES';
+      u.onend = ()=>{ if(audioModoActivo) setTimeout(leerSiguientePreguntaAudio, 900); };
+      u.onerror = ()=>{ if(audioModoActivo) setTimeout(leerSiguientePreguntaAudio, 300); };
+      speechSynthesis.speak(u);
+    }catch(e){}
+    return;
+  }
+  audioModoActivo = false;
+  showToast('Modo audio: fin del test.');
+}
+function toggleModoAudio(){
+  if(!('speechSynthesis' in window)){ showToast('Este navegador no admite lectura en voz alta.'); return; }
+  if(audioModoActivo){ detenerModoAudio(); renderTests(); return; }
+  audioModoActivo = true;
+  audioModoIdxActual = 0;
+  leerSiguientePreguntaAudio();
+  renderTests();
+}
+// Botón 🔊 de una pregunta suelta: lee solo esa pregunta, sin activar el modo audio general.
+function botonAudio(it){
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'tq-speak';
+  b.textContent = '🔊'; b.title = 'Escuchar esta pregunta en voz alta';
+  b.onclick = ()=>{
+    if(!('speechSynthesis' in window)){ showToast('Este navegador no admite lectura en voz alta.'); return; }
+    try{ speechSynthesis.cancel(); }catch(e){}
+    audioModoActivo = false; // una lectura suelta corta el modo audio secuencial si estaba activo
+    try{
+      const u = new SpeechSynthesisUtterance(textoParaLeerAudio(it));
+      u.lang = 'es-ES';
+      speechSynthesis.speak(u);
+    }catch(e){}
+  };
+  return b;
+}
 function botonEstrella(it){
   const b = document.createElement('button'); b.type = 'button'; b.className = 'tq-star'+(esMarcada(it.q)?' on':'');
   const pinta = ()=>{ b.textContent = esMarcada(it.q) ? '⭐' : '☆'; b.title = esMarcada(it.q) ? 'Quitar de dudosas' : 'Marcar como dudosa para repasarla luego'; b.classList.toggle('on', esMarcada(it.q)); };
@@ -6311,7 +6673,7 @@ function openRellenarExplicacionesModal(){
    El reparto de teoría por temas es el del examen oficial (editable) o uno propio en %. */
 const REPARTO_OFICIAL_CONOC = { '1':12,'2':1,'3':3,'4.1':5,'4.2':1,'4.3':1,'5.1':2,'5.2':2,'6':5,'7':4,'8':5,'9':9,'10.1':2,'10.2':2,'11':2,'12.1':2,'12.2':1,'13.1':3,'13.2':1,'14.1':2,'14.2':2,'15':9,'16.1':2,'16.2':1,'16.3':0,'17':4,'18':2,'19.1':1,'19.2':2,'20':1,'21':2,'22.1':2,'22.2':2,'23.1':2,'23.2':3 };
 const SIM_TITULOS = { ortografia:'PRUEBA DE ORTOGRAFÍA', gramatica:'PRUEBA DE GRAMÁTICA', conocimientos:'PRUEBA DE CONOCIMIENTOS GENERALES', ingles:'PRUEBA DE LENGUA INGLESA', psico:'PRUEBA PSICOTÉCNICA' };
-const SIM_DEFECTO = { orto:5, gram:20, ingles:20, minCon:100, psico:80, minPsico:55, modo:'oficial', total:100 };
+const SIM_DEFECTO = { orto:5, gram:20, ingles:20, minCon:140, psico:80, minPsico:55, modo:'oficial', total:100 };
 let simCfg = null;
 function getSimCfg(){
   if(simCfg) return simCfg;
@@ -6711,6 +7073,7 @@ function renderTestsQuizUI(body){
     const revelada = testsQuiz.corregido || (testsQuiz.instantaneo && it.revelado);
     const card = document.createElement('div'); card.className='test-quiz-q'+(revelada?' corregida':'');
     card.appendChild(botonEstrella(it));
+    card.appendChild(botonAudio(it));
     const esOrtoNuevo = tipo==='ortografia' && ortoEsFormatoNuevo(q.enunciado, q.palabras);
     const enun = document.createElement('div'); enun.className='tq-enun';
     if(esOrtoNuevo){
@@ -6876,6 +7239,10 @@ function renderTestsQuizUI(body){
       if(!testsQuiz || testsQuiz.corregido || !testsQuiz.temporizador){ clearQuizTimer(); return; }
       testsQuiz.temporizador.restante -= 1;
       if(testsQuiz.temporizador.restante % 10 === 0) guardarTestEnCurso();
+      if(testsQuiz.simulacro && !testsQuiz.temporizador.avisoDado && testsQuiz.temporizador.restante > 0 && testsQuiz.temporizador.restante <= SIM_AVISO_SEGUNDOS){
+        testsQuiz.temporizador.avisoDado = true;
+        avisarUltimosMinutosSimulacro();
+      }
       const badgeEl = document.getElementById('quizTimerBadge');
       if(badgeEl){
         badgeEl.textContent = '⏱ '+formatQuizTime(testsQuiz.temporizador.restante);
@@ -6993,13 +7360,21 @@ function renderPendingBox(){
     else showToast('Todavía pendiente de aprobación.');
   };
 }
+// Fecha corta (dd/mm/aaaa) a partir de un timestamp en ms, para "fecha de alta" en el panel.
+function fmtFechaCorta(ts){
+  if(!ts) return '—';
+  try{ return new Date(ts).toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'}); }
+  catch(e){ return '—'; }
+}
 async function renderAdminUsersBox(){
   const host = document.getElementById('adminUsersBox');
   if(!host) return;
   if(!isSuperAdmin){ host.innerHTML=''; host.style.display='none'; return; }
   host.style.display = 'block';
   host.innerHTML = `<div style="font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">Panel de administración</div>
+    <div id="adminUsersSummary" style="font-size:12px;color:var(--cream-dim);margin-bottom:10px;">Cargando…</div>
     <div id="adminUsersList" style="font-size:13px;color:var(--cream-dim);">Cargando…</div>`;
+  const summaryEl = document.getElementById('adminUsersSummary');
   const listEl = document.getElementById('adminUsersList');
   try{
     const snap = await db.collection('users').get();
@@ -7008,15 +7383,34 @@ async function renderAdminUsersBox(){
       if(doc.id === ADMIN_UID) return;
       rows.push({ uid: doc.id, ...doc.data() });
     });
+
+    // Resumen: cuántas cuentas hay, en qué estado, y el tamaño del banco compartido.
+    const nAdmin = rows.filter(r=>r.aprobado && r.rol==='admin').length;
+    const nLectura = rows.filter(r=>r.aprobado && r.rol!=='admin').length;
+    const nPendiente = rows.filter(r=>!r.aprobado).length;
+    summaryEl.innerHTML = [
+      ['Cuentas', rows.length],
+      ['Aprobadas (admin)', nAdmin],
+      ['Aprobadas (lectura)', nLectura],
+      ['Pendientes', nPendiente],
+      ['Preguntas en el banco', (Array.isArray(questions) ? questions.length : '—')]
+    ].map(([label, val]) => `<span style="display:inline-block;margin:0 12px 6px 0;"><b style="color:var(--amber-ink);">${val}</b> ${label}</span>`).join('');
+
     if(!rows.length){ listEl.textContent = 'Todavía no se ha registrado ninguna cuenta.'; return; }
     listEl.innerHTML = '';
     rows.forEach(r=>{
       const rol = r.rol === 'admin' ? 'admin' : 'lectura';
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;';
-      const label = document.createElement('span');
+      const infoCol = document.createElement('div');
+      const label = document.createElement('div');
       label.textContent = (r.email || r.uid) + '  ·  ' + (r.aprobado ? ('aprobado (' + rol + ')') : 'pendiente');
-      row.appendChild(label);
+      infoCol.appendChild(label);
+      const statsLine = document.createElement('div');
+      statsLine.style.cssText = 'font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:2px;';
+      statsLine.textContent = 'Alta: ' + fmtFechaCorta(r.creado) + ' · actividad: cargando…';
+      infoCol.appendChild(statsLine);
+      row.appendChild(infoCol);
       const btnRow = document.createElement('div');
       btnRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
       const setProfile = async (patch, msg)=>{
@@ -7048,6 +7442,21 @@ async function renderAdminUsersBox(){
       }
       row.appendChild(btnRow);
       listEl.appendChild(row);
+
+      // La actividad (tests guardados / racha) se pide aparte y no bloquea el resto del
+      // panel: si la cuenta nunca ha guardado progreso, o las reglas de Firestore de este
+      // proyecto todavía no se han actualizado con el permiso de lectura para la cuenta
+      // dueña, simplemente se muestra "sin datos" en vez de romper el panel.
+      db.collection('users').doc(r.uid).collection('progreso').doc('resumen').get()
+        .then(pSnap=>{
+          if(!pSnap.exists){ statsLine.textContent = 'Alta: ' + fmtFechaCorta(r.creado) + ' · sin actividad guardada todavía'; return; }
+          const p = pSnap.data() || {};
+          const nTests = Array.isArray(p.historial) ? p.historial.length : 0;
+          const racha = calcularRachaDeDias(Array.isArray(p.dias) ? p.dias : []);
+          statsLine.textContent = 'Alta: ' + fmtFechaCorta(r.creado) + ' · ' + nTests + ' test' + (nTests===1?'':'s') + ' guardado' + (nTests===1?'':'s')
+            + (racha>0 ? ' · 🔥 ' + racha + ' día' + (racha===1?'':'s') + ' seguido' + (racha===1?'':'s') : '');
+        })
+        .catch(()=>{ statsLine.textContent = 'Alta: ' + fmtFechaCorta(r.creado) + ' · actividad no disponible'; });
     });
   }catch(e){
     console.error(e);

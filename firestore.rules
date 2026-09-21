@@ -61,11 +61,14 @@ service cloud.firestore {
     }
 
     // Progreso personal de cada cuenta (racha, objetivo diario, historial de tests):
-    // users/{uid}/progreso/{docId}. Cada cuenta lee y escribe SOLO el suyo, y únicamente si
-    // es la cuenta dueña o una cuenta aprobada.
+    // users/{uid}/progreso/{docId}. Cada cuenta escribe SOLO el suyo, y únicamente si es
+    // la cuenta dueña o una cuenta aprobada. La cuenta dueña del proyecto puede además
+    // LEER (nunca escribir) el progreso de cualquier cuenta, para el panel de administración.
     match /users/{uid}/progreso/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid
-                         && (esSuperAdmin() || estaAprobado(uid));
+      allow read: if esSuperAdmin() ||
+                  (request.auth != null && request.auth.uid == uid && estaAprobado(uid));
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && (esSuperAdmin() || estaAprobado(uid));
     }
 
     // Cualquier otra ruta queda bloqueada por defecto.
