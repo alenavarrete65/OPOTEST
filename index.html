@@ -2433,6 +2433,24 @@ function progresoVacio(){ return { dias:[], porDia:{}, objetivo:OBJETIVO_DEFECTO
 let progreso = progresoVacio();
 let progresoTimer = null, progresoSinPermiso = false;
 function progresoKey(){ return 'opotest_progreso_'+(currentUid||'anon'); }
+// Nombre de ESTE dispositivo (para la comparativa entre dispositivos). Se guarda solo en
+// este navegador (no se sincroniza): cada aparato puede tener su propio nombre. Si nunca
+// se ha puesto uno, se propone un nombre por defecto según el tamaño de pantalla.
+function dispositivoKey(){ return 'opotest-device-name'; }
+function nombreDispositivoPorDefecto(){
+  try{ return (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 'Móvil' : 'Ordenador'; }
+  catch(e){ return 'Este dispositivo'; }
+}
+function nombreDispositivo(){
+  try{
+    const v = localStorage.getItem(dispositivoKey());
+    if(v && v.trim()) return v.trim().slice(0,30);
+  }catch(e){}
+  return nombreDispositivoPorDefecto();
+}
+function cambiarNombreDispositivo(v){
+  try{ localStorage.setItem(dispositivoKey(), String(v||'').trim().slice(0,30) || nombreDispositivoPorDefecto()); }catch(e){}
+}
 function normalizaProgreso(p){
   const o = progresoVacio();
   if(!p || typeof p!=='object') return o;
@@ -2440,13 +2458,13 @@ function normalizaProgreso(p){
   if(p.porDia && typeof p.porDia==='object') Object.keys(p.porDia).forEach(k=>{ const v = Number(p.porDia[k]); if(isFinite(v) && v>0) o.porDia[k] = v; });
   const ob = Number(p.objetivo); if(isFinite(ob) && ob>=1) o.objetivo = Math.min(500, Math.round(ob));
   o.objetivoTs = Number(p.objetivoTs)||0;
-  if(Array.isArray(p.historial)) o.historial = p.historial.filter(h=>h && h.id && isFinite(Number(h.t))).map(h=>({id:String(h.id), t:Number(h.t), n:Number(h.n)||0, ac:Number(h.ac)||0}));
+  if(Array.isArray(p.historial)) o.historial = p.historial.filter(h=>h && h.id && isFinite(Number(h.t))).map(h=>({id:String(h.id), t:Number(h.t), n:Number(h.n)||0, ac:Number(h.ac)||0, dv:(typeof h.dv==='string' ? h.dv.slice(0,30) : '')}));
   if(typeof p.examenFecha==='string' && /^\d{4}-\d{2}-\d{2}$/.test(p.examenFecha)) o.examenFecha = p.examenFecha;
   o.examenTs = Number(p.examenTs)||0;
   // Notas personales y preguntas marcadas ⭐: por pregunta, con marca de tiempo para poder fusionar dispositivos.
   if(p.notas && typeof p.notas==='object') Object.keys(p.notas).forEach(k=>{ const v = p.notas[k]; if(v && typeof v==='object') o.notas[k] = { x:String(v.x||'').slice(0,1500), t:Number(v.t)||0 }; });
   if(p.marcadas && typeof p.marcadas==='object') Object.keys(p.marcadas).forEach(k=>{ const v = p.marcadas[k]; if(v && typeof v==='object') o.marcadas[k] = { m:!!v.m, t:Number(v.t)||0 }; });
-  if(Array.isArray(p.simulacros)) o.simulacros = p.simulacros.filter(x=>x && x.id && isFinite(Number(x.t))).map(x=>({ id:String(x.id), t:Number(x.t), tipo:(x.tipo==='psico'?'psico':'con'), nota:Number(x.nota)||0, max:Number(x.max)||0, apto:(x.apto===true?true:(x.apto===false?false:null)) }));
+  if(Array.isArray(p.simulacros)) o.simulacros = p.simulacros.filter(x=>x && x.id && isFinite(Number(x.t))).map(x=>({ id:String(x.id), t:Number(x.t), tipo:(x.tipo==='psico'?'psico':'con'), nota:Number(x.nota)||0, max:Number(x.max)||0, apto:(x.apto===true?true:(x.apto===false?false:null)), dv:(typeof x.dv==='string' ? x.dv.slice(0,30) : '') }));
   o.actualizado = Number(p.actualizado)||0;
   return o;
 }
@@ -4814,6 +4832,68 @@ async function exportarProgresoPDF(){
     showToast('No se pudo generar el PDF.');
   }
 }
+// Comparativa entre los dispositivos desde los que has practicado (móvil, ordenador...),
+// a partir de la etiqueta "dv" que se guarda en cada test/simulacro nuevo. Los tests
+// hechos antes de esta mejora no llevan esa etiqueta y no se pueden repartir por aparato.
+function buildComparativaDispositivos(){
+  const historial = (progreso && Array.isArray(progreso.historial)) ? progreso.historial : [];
+  const simulacros = (progreso && Array.isArray(progreso.simulacros)) ? progreso.simulacros : [];
+  const porDv = {};
+  const getDv = (dv)=> porDv[dv] = porDv[dv] || { tests:0, intentos:0, aciertos:0, simulacros:0, notaSuma:0 };
+  historial.forEach(h=>{
+    if(!h.dv) return;
+    const d = getDv(h.dv);
+    d.tests++; d.intentos += h.n; d.aciertos += h.ac;
+  });
+  simulacros.forEach(s=>{
+    if(!s.dv) return;
+    const d = getDv(s.dv);
+    d.simulacros++; if(s.max) d.notaSuma += s.nota/s.max;
+  });
+  const dvKeys = Object.keys(porDv);
+
+  const wrap = document.createElement('div'); wrap.style.marginTop = '20px';
+  const title = document.createElement('h5');
+  title.style.cssText = 'margin:0 0 8px;font-family:var(--font-display);color:var(--amber-ink);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
+  title.textContent = 'Comparativa entre tus dispositivos';
+  wrap.appendChild(title);
+
+  const nameRow = document.createElement('div'); nameRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;';
+  const nameLabel = document.createElement('span'); nameLabel.style.cssText = 'font-size:12px;color:var(--cream-dim);'; nameLabel.textContent = 'Nombre de este dispositivo:';
+  const nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.value = nombreDispositivo(); nameInput.maxLength = 30;
+  nameInput.style.cssText = 'background:var(--bg-panel-2);color:var(--cream);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-family:var(--font-mono);font-size:12px;max-width:160px;';
+  nameInput.onchange = ()=>{ cambiarNombreDispositivo(nameInput.value); showToast('Nombre del dispositivo guardado ✓'); renderTests(); };
+  nameRow.appendChild(nameLabel); nameRow.appendChild(nameInput);
+  wrap.appendChild(nameRow);
+
+  if(!dvKeys.length){
+    const empty = document.createElement('div'); empty.className = 'test-empty';
+    empty.textContent = 'Todavía no hay tests con el dispositivo identificado: en cuanto termines alguno desde aquí, aparecerá en esta comparativa.';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+  dvKeys.sort((a,b)=> (porDv[b].tests+porDv[b].simulacros) - (porDv[a].tests+porDv[a].simulacros));
+  const esEste = nombreDispositivo();
+  dvKeys.forEach(dv=>{
+    const d = porDv[dv];
+    const pct = d.intentos ? Math.round((d.aciertos/d.intentos)*100) : null;
+    const notaMedia = d.simulacros ? Math.round((d.notaSuma/d.simulacros)*100) : null;
+    let sub = d.tests+' test'+(d.tests===1?'':'s')+(pct!==null ? ' · '+pct+'% de acierto' : '');
+    if(d.simulacros) sub += ' · '+d.simulacros+' simulacro'+(d.simulacros===1?'':'s')+(notaMedia!==null ? ' ('+notaMedia+'% de nota media)' : '');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:6px;';
+    const nameSpan = document.createElement('span'); nameSpan.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--cream);';
+    nameSpan.textContent = dv + (dv===esEste ? ' (este)' : '');
+    const subSpan = document.createElement('span'); subSpan.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);';
+    subSpan.textContent = sub;
+    row.appendChild(nameSpan); row.appendChild(subSpan);
+    wrap.appendChild(row);
+  });
+  const nota = document.createElement('div'); nota.style.cssText = 'font-size:11px;color:var(--muted);margin-top:6px;';
+  nota.textContent = 'Solo cuenta lo que hagas de aquí en adelante: los tests guardados antes de esta mejora no llevan el dispositivo apuntado.';
+  wrap.appendChild(nota);
+  return wrap;
+}
 function renderTestsProgreso(body){
   const questions = state.testBank.questions || [];
   const panel = document.createElement('div'); panel.className='test-panel';
@@ -4921,6 +5001,8 @@ function renderTestsProgreso(body){
       panel.appendChild(buildStatBarRow(nombre, t.aciertos, t.intentos, t.preguntas+' pregunta(s) de este tema practicadas'));
     });
   }
+
+  panel.appendChild(buildComparativaDispositivos());
 
   body.appendChild(panel);
 }
@@ -6108,10 +6190,10 @@ function registrarResultadoDelTest(){
     const r = calcularNotaSimulacro(items, testsQuiz.simulacro.tipo);
     r.prev = progreso.simulacros.filter(x=>x.tipo===r.tipo).slice(-1)[0] || null;
     testsQuiz.resultadoSim = r;
-    progreso.simulacros.push({ id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), tipo:r.tipo, nota:r.nota, max:r.max, apto:r.apto });
+    progreso.simulacros.push({ id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), tipo:r.tipo, nota:r.nota, max:r.max, apto:r.apto, dv:nombreDispositivo() });
     progreso.simulacros = progreso.simulacros.slice(-30);
   } else {
-    progreso.historial.push({ id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), n:total, ac:aciertos });
+    progreso.historial.push({ id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), n:total, ac:aciertos, dv:nombreDispositivo() });
     progreso.historial = progreso.historial.slice(-40);
   }
   programarGuardadoProgreso(true);
@@ -7393,7 +7475,7 @@ async function renderAdminUsersBox(){
       ['Aprobadas (admin)', nAdmin],
       ['Aprobadas (lectura)', nLectura],
       ['Pendientes', nPendiente],
-      ['Preguntas en el banco', (Array.isArray(questions) ? questions.length : '—')]
+      ['Preguntas en el banco', (state.testBank && Array.isArray(state.testBank.questions) ? state.testBank.questions.length : '—')]
     ].map(([label, val]) => `<span style="display:inline-block;margin:0 12px 6px 0;"><b style="color:var(--amber-ink);">${val}</b> ${label}</span>`).join('');
 
     if(!rows.length){ listEl.textContent = 'Todavía no se ha registrado ninguna cuenta.'; return; }
@@ -7460,6 +7542,7 @@ async function renderAdminUsersBox(){
     });
   }catch(e){
     console.error(e);
+    summaryEl.textContent = '';
     listEl.textContent = 'No se pudo cargar la lista de cuentas.';
   }
 }
