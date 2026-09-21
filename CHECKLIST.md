@@ -48,6 +48,13 @@ que las note un usuario.
 - [ ] El buscador por email y el filtro por estado funcionan.
 - [ ] Aprobar/revocar una cuenta de prueba se refleja al momento.
 
+## Tamaño de tus datos
+- [ ] El bloque "Tamaño de tus datos" aparece (encima de "Copia de seguridad") con las
+      barras y sin errores en la consola.
+- [ ] Con la cuenta admin salen 3 barras y la lista "Lo que más ocupa"; con una cuenta de
+      lectura salen solo 2 barras y sin lista.
+- [ ] Tras guardar una pregunta con imagen, las cifras se actualizan solas en un par de segundos.
+
 ## Copia de seguridad
 - [ ] "Exportar copia (JSON)" descarga un archivo con las preguntas.
 - [ ] Importar esa misma copia no cambia el número de preguntas del banco.

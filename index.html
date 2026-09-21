@@ -105,6 +105,7 @@
         <div id="testsHost"></div>
       </div>
 
+      <div class="empty-state" id="storageBox" style="text-align:left;margin-top:24px;"></div>
       <div class="empty-state" id="backupBox" style="text-align:left;margin-top:24px;"></div>
       <div class="empty-state" id="adminUsersBox" style="text-align:left;margin-top:24px;"></div>
     </div>
@@ -118,27 +119,28 @@
    El número de línea es una foto de este momento: se desactualiza según
    se edite el archivo, así que ante la duda busca por el texto.
    =====================================================================
-   TEMA CLARO / OSCURO ......................................... línea ~143
-   CONFIGURACIÓN FIREBASE ...................................... línea ~211
-   ESTADO ...................................................... línea ~244
-   BANCO DE TESTS (Firestore: users/{uid}/testQuestions) ....... línea ~446
-   TEMARIO (temas y subtemas por categoría) .................... línea ~639
-   CATEGORÍAS .................................................. línea ~984
-   TEMARIO: persistencia (Firestore: users/{ADMIN_UID}/config/temario) .. línea ~1017
-   PROGRESO PERSONAL: racha, objetivo diario e historial de tests .. línea ~1351
-   TIPOS DE PREGUNTA ........................................... línea ~1579
-   IMÁGENES DE ENUNCIADO (comprimidas a JPEG antes de guardarlas) .. línea ~1590
-   IA multi-proveedor (Gemini + OpenRouter + proveedor extra) .. línea ~1649
-   COMPARTIR PREGUNTA (PNG / Telegram) ......................... línea ~1802
-   IA para generar preguntas masivas desde un PDF .............. línea ~2169
-   VARIAS FOTOS → VARIAS PREGUNTAS ............................. línea ~2627
-   MEJORAS: rebeldes, notas, retomar test, examen, salud del banco… .. línea ~5318
-   MODO AUDIO: lee las preguntas en voz alta (Web Speech API) .. línea ~5442
-   SIMULACRO DE EXAMEN ......................................... línea ~5777
-   COPIA DE SEGURIDAD (JSON) ................................... línea ~6368
-   PERFILES Y APROBACIÓN (Firestore: users/{uid}) .............. línea ~6453
-   PWA: registro del service worker ............................ línea ~6744
-   ACCESIBILIDAD: navegación, etiquetas, aciertos/fallos y diálogos .. línea ~6752
+   TEMA CLARO / OSCURO ......................................... línea ~145
+   CONFIGURACIÓN FIREBASE ...................................... línea ~213
+   ESTADO ...................................................... línea ~246
+   BANCO DE TESTS (Firestore: users/{uid}/testQuestions) ....... línea ~448
+   TEMARIO (temas y subtemas por categoría) .................... línea ~642
+   CATEGORÍAS .................................................. línea ~987
+   TEMARIO: persistencia (Firestore: users/{ADMIN_UID}/config/temario) .. línea ~1020
+   PROGRESO PERSONAL: racha, objetivo diario e historial de tests .. línea ~1354
+   TIPOS DE PREGUNTA ........................................... línea ~1585
+   IMÁGENES DE ENUNCIADO (comprimidas a JPEG antes de guardarlas) .. línea ~1596
+   IA multi-proveedor (Gemini + OpenRouter + proveedor extra) .. línea ~1655
+   COMPARTIR PREGUNTA (PNG / Telegram) ......................... línea ~1808
+   IA para generar preguntas masivas desde un PDF .............. línea ~2175
+   VARIAS FOTOS → VARIAS PREGUNTAS ............................. línea ~2633
+   MEJORAS: rebeldes, notas, retomar test, examen, salud del banco… .. línea ~5324
+   MODO AUDIO: lee las preguntas en voz alta (Web Speech API) .. línea ~5448
+   SIMULACRO DE EXAMEN ......................................... línea ~5783
+   TAMAÑO DE TUS DATOS (medidor de espacio) .................... línea ~6374
+   COPIA DE SEGURIDAD (JSON) ................................... línea ~6535
+   PERFILES Y APROBACIÓN (Firestore: users/{uid}) .............. línea ~6620
+   PWA: registro del service worker ............................ línea ~6912
+   ACCESIBILIDAD: navegación, etiquetas, aciertos/fallos y diálogos .. línea ~6920
    ===================================================================== */
 /* ===================== TEMA CLARO / OSCURO ===================== */
 (function initTheme(){
@@ -489,6 +491,7 @@ function cacheTestBankLocally(){
     localCacheWriteFailed = false; // p.ej. tras liberar espacio o cambiar de dispositivo
   }
   refreshLocalCacheWarnBadge();
+  if(typeof programarRefrescoTamano === 'function') programarRefrescoTamano();
   return ok;
 }
 function getTestBankLastSync(){ try{ const v = localStorage.getItem(testBankLastSyncKey()); return v ? Number(v) : 0; }catch(e){ return 0; } }
@@ -1433,7 +1436,10 @@ function cargarProgresoLocal(){
   }catch(e){}
   return p;
 }
-function guardarProgresoLocal(){ try{ localStorage.setItem(progresoKey(), JSON.stringify(progreso)); }catch(e){} }
+function guardarProgresoLocal(){
+  try{ localStorage.setItem(progresoKey(), JSON.stringify(progreso)); }catch(e){}
+  if(typeof programarRefrescoTamano === 'function') programarRefrescoTamano();
+}
 function progresoDifiere(fusionado, remoto){
   if(!remoto) return true;
   return fusionado.dias.length!==remoto.dias.length || fusionado.historial.length!==remoto.historial.length
@@ -6365,6 +6371,167 @@ function renderTestsQuizUI(body){
   }
 }
 
+/* ===================== TAMAÑO DE TUS DATOS (medidor de espacio) ===================== */
+// Aquí cada pregunta vive en su PROPIO documento de Firestore (límite: 1 MiB por documento), así
+// que el banco entero no choca con ese techo aunque tenga miles de preguntas. Lo que sí puede
+// llenarse, y por eso se mide:
+//  1) el almacenamiento local del dispositivo (localStorage, ~5 MB según el navegador): guarda una
+//     copia completa del banco, con las imágenes en base64, para poder abrir la app sin conexión;
+//  2) una pregunta concreta con muchas imágenes (su documento tampoco puede pasar de 1 MiB);
+//  3) el documento de progreso personal (users/{uid}/progreso/resumen, también 1 MiB).
+// Las cifras de Firestore son una estimación (el JSON en UTF-8): en la práctica se le suman unos
+// cientos de bytes de nombres de campo, así que se avisa con margen (60 % y 85 %).
+const TAM_DOC_LIMITE   = 1024*1024;  // 1 MiB por documento de Firestore
+const TAM_LOCAL_LIMITE = 5000000;    // ~5 MB de localStorage (en caracteres; varía según navegador)
+const TAM_AVISO = 0.60, TAM_PELIGRO = 0.85;
+var tamTimer = null; // var (no let) para que los "hooks" puedan llamarla sin importar el orden de carga
+
+function tamBytes(v){
+  try{ const s = JSON.stringify(v); return s===undefined ? 0 : new Blob([s]).size; }catch(e){ return 0; }
+}
+// Caracteres que ocupa TODO el localStorage de este dominio (claves + valores).
+function tamUsoLocal(){
+  let n = 0;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      n += k.length + (localStorage.getItem(k)||'').length;
+    }
+  }catch(e){}
+  return n;
+}
+function tamFmt(bytes){
+  if(bytes >= 1048576) return (bytes/1048576).toLocaleString('es-ES',{maximumFractionDigits:1})+' MB';
+  return (bytes/1024).toLocaleString('es-ES',{maximumFractionDigits: bytes<10240 ? 1 : 0})+' KB';
+}
+function tamPct(r){ return (r*100).toLocaleString('es-ES',{maximumFractionDigits:1})+' %'; }
+function tamNivel(r){ return r>=TAM_PELIGRO ? 'peligro' : (r>=TAM_AVISO ? 'aviso' : 'ok'); }
+function tamEl(tag, cls, txt){
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(txt!==undefined) e.textContent = txt;
+  return e;
+}
+function tamMedir(){
+  const qs = (state.testBank && Array.isArray(state.testBank.questions)) ? state.testBank.questions : [];
+  let total = 0, conImg = 0, pesoImg = 0;
+  const filas = qs.map(q=>{
+    const b = tamBytes(q);
+    const nImg = (q.imagenes && q.imagenes.length) || 0;
+    total += b;
+    if(nImg){ conImg++; pesoImg += b; }
+    return { q, b, nImg };
+  });
+  filas.sort((x,y)=>y.b-x.b);
+  return { n: qs.length, total, conImg, pesoImg, top: filas.slice(0,5), local: tamUsoLocal(), progreso: tamBytes(progreso) };
+}
+function tamEtiquetaPregunta(q){
+  const t = String(q.enunciado||'').replace(/\s+/g,' ').trim();
+  if(!t) return '(pregunta sin texto: solo imagen)';
+  return t.length>70 ? t.slice(0,70)+'…' : t;
+}
+function tamFilaBarra(f){
+  const ratio = f.usado / f.limite;
+  const nivel = f.forzar || tamNivel(ratio);
+  const fila = tamEl('div','tam-fila');
+  const cab = tamEl('div','tam-fila-cab');
+  cab.appendChild(tamEl('span','tam-fila-titulo', f.titulo));
+  cab.appendChild(tamEl('span','tam-fila-valor', tamFmt(f.usado)+' de '+f.limiteTxt+' · '+tamPct(ratio)));
+  fila.appendChild(cab);
+  const bar = tamEl('div','tam-bar tam-'+nivel);
+  bar.setAttribute('role','progressbar');
+  bar.setAttribute('aria-label', f.titulo);
+  bar.setAttribute('aria-valuemin','0');
+  bar.setAttribute('aria-valuemax','100');
+  bar.setAttribute('aria-valuenow', String(Math.min(100, Math.round(ratio*100))));
+  const fill = document.createElement('i');
+  fill.style.width = Math.min(100, ratio>0 ? Math.max(ratio*100, 1.5) : 0)+'%';
+  bar.appendChild(fill);
+  fila.appendChild(bar);
+  if(f.nota) fila.appendChild(tamEl('div','tam-nota', f.nota));
+  return { fila, ratio, nivel };
+}
+function renderStorageBox(){
+  const host = document.getElementById('storageBox');
+  if(!host) return;
+  const m = tamMedir();
+  const filas = [];
+  const filaLocal = {
+    titulo:'Almacenamiento de este dispositivo', usado:m.local, limite:TAM_LOCAL_LIMITE, limiteTxt:'~5 MB',
+    nota:'Aquí se guarda una copia del banco para poder abrir la app sin conexión. El límite exacto varía según el navegador.',
+    consejo: isAdmin
+      ? 'Descarga una copia de seguridad (JSON) y revisa abajo las preguntas que más pesan.'
+      : 'Avisa al administrador: el banco casi no cabe ya en este dispositivo.'
+  };
+  if(typeof localCacheWriteFailed !== 'undefined' && localCacheWriteFailed){
+    // El propio navegador ya ha rechazado guardar la copia: aquí no hay estimación que valga.
+    filaLocal.forzar = 'peligro';
+    filaLocal.nota = 'Este dispositivo ya no puede guardar la copia completa del banco (sin conexión te faltarían preguntas).';
+  } else if(m.local > TAM_LOCAL_LIMITE){
+    // Pasa de la referencia de 5 MB y aun así funciona: tu navegador admite más, pero otro (sobre todo un móvil) quizá no.
+    filaLocal.forzar = 'aviso';
+    filaLocal.nota = 'Supera los ~5 MB de referencia y de momento sigue funcionando (tu navegador admite más), pero otros dispositivos —sobre todo móviles— podrían no llegar a guardarlo.';
+  }
+  filas.push(filaLocal);
+  if(isAdmin && m.top.length){
+    filas.push({
+      titulo:'Pregunta más pesada', usado:m.top[0].b, limite:TAM_DOC_LIMITE, limiteTxt:'1024 KB',
+      nota:'Cada pregunta es un documento de Firestore aparte: pasado 1 MiB no se puede guardar. «'+tamEtiquetaPregunta(m.top[0].q)+'»',
+      consejo:'Quita o reduce las imágenes de esa pregunta (la lista de abajo te dice cuáles son).'
+    });
+  }
+  filas.push({
+    titulo:'Tu progreso (racha, notas, simulacros)', usado:m.progreso, limite:TAM_DOC_LIMITE, limiteTxt:'1024 KB',
+    nota:'', consejo:'Borra notas personales antiguas o muy largas.'
+  });
+
+  host.textContent = '';
+  host.appendChild(tamEl('div','tam-titulo','Tamaño de tus datos'));
+  host.appendChild(tamEl('div','tam-intro','Cada pregunta se guarda en su propio documento de Firestore (máximo 1 MiB cada uno), así que el banco entero no tiene ese techo. Esto es lo que sí puede llenarse:'));
+
+  const RANGO = { ok:0, aviso:1, peligro:2 };
+  let peor = null;
+  filas.forEach(f=>{
+    const r = tamFilaBarra(f);
+    host.appendChild(r.fila);
+    if(!peor || RANGO[r.nivel] > RANGO[peor.nivel] || (RANGO[r.nivel]===RANGO[peor.nivel] && r.ratio > peor.ratio)){
+      peor = { ratio:r.ratio, nivel:r.nivel, consejo:f.consejo };
+    }
+  });
+  const estado = tamEl('div','tam-estado '+peor.nivel);
+  estado.setAttribute('role','status');
+  estado.textContent = peor.nivel==='ok'
+    ? '✓ Vas sobrado: tienes mucho margen.'
+    : (peor.nivel==='aviso' ? '⚠ Empieza a llenarse. ' : '⛔ Casi lleno. ') + peor.consejo;
+  host.appendChild(estado);
+
+  // Solo el admin gestiona el banco, así que solo él ve qué preguntas pesan más.
+  if(isAdmin && m.n){
+    const pctImg = m.total ? m.pesoImg/m.total : 0;
+    host.appendChild(tamEl('div','tam-lista-titulo',
+      'Banco: '+m.n.toLocaleString('es-ES')+' pregunta'+(m.n===1?'':'s')+' · '+m.conImg.toLocaleString('es-ES')+' con imágenes'
+      +(m.conImg ? ' (el '+tamPct(pctImg)+' del peso)' : '')+'. Lo que más ocupa:'));
+    m.top.forEach(x=>{
+      const item = tamEl('div','tam-item');
+      const txt = tamEl('div','tam-item-txt', tamEtiquetaPregunta(x.q));
+      const meta = [];
+      if(x.q.categoria) meta.push(String(x.q.categoria));
+      if(x.nImg) meta.push('🖼 '+x.nImg+(x.nImg===1?' imagen':' imágenes'));
+      if(meta.length) txt.appendChild(tamEl('small','',meta.join(' · ')));
+      item.appendChild(txt);
+      item.appendChild(tamEl('div','tam-item-val', tamFmt(x.b)+' · '+tamPct(m.total ? x.b/m.total : 0)));
+      host.appendChild(item);
+    });
+  }
+}
+// Se vuelve a medir sola poco después de que cambie la copia local del banco o el progreso
+// (con retardo, para no medir en cada tecla ni en cada pregunta respondida).
+function programarRefrescoTamano(){
+  if(!document.getElementById('storageBox')) return;
+  clearTimeout(tamTimer);
+  tamTimer = setTimeout(()=>{ try{ renderStorageBox(); }catch(e){ console.error(e); } }, 1500);
+}
+
 /* ===================== COPIA DE SEGURIDAD (JSON) ===================== */
 // Recuerda cuándo se hizo la última copia manual, para poder avisar si ha pasado ya una
 // semana. OpoTest no tiene servidor propio para mandar backups automáticos por email o
@@ -6622,6 +6789,7 @@ async function bootApprovedApp(){
   await loadTemario();
   await cargarProgreso();
   renderTests();
+  try{ renderStorageBox(); }catch(e){ console.error('Medidor de tamaño', e); }
   renderBackupBox();
   renderAdminUsersBox();
   trySyncTestBankPending();

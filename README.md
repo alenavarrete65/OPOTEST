@@ -337,6 +337,31 @@ con marcas: `**negrita**`, `__subrayado__`, `==resaltado==`, `{rojo:texto}` (tam
 `azul`). Las explicaciones antiguas se ven igual. En Telegram se conservan negrita y subrayado; el
 resto de formatos se envía como texto normal.
 
+## Tamaño de tus datos (medidor de espacio)
+
+En la parte de abajo de la app (encima de "Copia de seguridad") hay un bloque **"Tamaño de tus
+datos"**. A diferencia de Operación Baeza, aquí **no hay un único documento gigante**: cada pregunta
+se guarda en su propio documento de Firestore (`users/{admin}/testQuestions/{id}`), y el límite de
+Firestore es de **1 MiB por documento**, no por colección. Por eso el banco entero (3.000-4.000
+preguntas o más) no choca con ese techo. Lo que sí puede llenarse, y lo que mide el bloque:
+
+- **Almacenamiento de este dispositivo** (`localStorage`, ~5 MB según el navegador): la app guarda
+  en él una copia completa del banco, con las imágenes de Psicotécnicos en base64, para abrir sin
+  conexión. Es el límite más probable si el banco crece con muchas imágenes. Si se llena, la app ya
+  mostraba un aviso (⚠); ahora además ves el porcentaje **antes** de llegar ahí.
+- **Pregunta más pesada** (solo admin): una pregunta con muchas imágenes podría acercarse a 1 MiB,
+  y entonces Firestore no la guardaría. Debajo aparece la lista de las 5 preguntas que más pesan.
+- **Tu progreso** (`users/{uid}/progreso/resumen`, también 1 MiB): racha, notas personales,
+  simulacros… Tiene topes internos, pero el de las notas (hasta 1.000 notas de hasta 1.500
+  caracteres) es más holgado que 1 MiB, así que en teoría podría llegar; en la práctica queda lejos.
+  Es el único documento "personal" que crece.
+
+Los avisos pasan a **ámbar al 60 %** y a **rojo al 85 %**, con un consejo según lo que se llene. Las
+cifras de Firestore son una estimación (el JSON en UTF-8, sin contar unos cientos de bytes de nombres
+de campo). Se recalcula solo poco después de cambiar el banco o el progreso.
+Código: sección «TAMAÑO DE TUS DATOS» de `index.html` (`renderStorageBox()`), estilos `.tam-*`
+en `style.css`.
+
 ## Cómo publicar un cambio
 
 1. Edita los archivos que necesites (normalmente `index.html`).
