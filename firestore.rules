@@ -2,11 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // UID de la cuenta admin "dueña" del proyecto (Authentication > Users > columna
-    // "User UID"). Debe ser EXACTAMENTE el mismo valor que ADMIN_UID en index.html.
-    // Esta cuenta es la única que puede aprobar/revocar cuentas y asignar roles.
+    // UIDs de las cuentas "dueñas" del proyecto (Authentication > Users > columna
+    // "User UID"). Debe ser EXACTAMENTE la misma lista que SUPER_ADMIN_UIDS en index.html.
+    // Estas cuentas son las únicas que pueden aprobar/revocar cuentas y asignar roles.
+    // Por defecto solo la cuenta original; añade un segundo UID de respaldo aquí (y en
+    // index.html) si quieres una cuenta de emergencia por si pierdes el acceso a la primera.
     function esSuperAdmin() {
-      return request.auth != null && request.auth.uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2";
+      return request.auth != null && request.auth.uid in [
+        "teAS34tRMVeWGi6qJ0EW59YVV1W2"
+        // , "UID_DE_TU_CUENTA_DE_RESPALDO_AQUI"
+      ];
     }
 
     function perfil(uid) {
@@ -69,6 +74,24 @@ service cloud.firestore {
                   (request.auth != null && request.auth.uid == uid && estaAprobado(uid));
       allow write: if request.auth != null && request.auth.uid == uid
                    && (esSuperAdmin() || estaAprobado(uid));
+    }
+
+    // Documentos legales guardados por el admin (leyes, reglamento, temario…) para el asistente de
+    // dudas: metadatos en users/{ADMIN_UID}/legalDocs/{docId}, y el texto extraído (troceado para no
+    // superar el límite de 1 MB por documento) en la subcolección .../legalDocs/{docId}/chunks/{n}.
+    // Mismo criterio de permisos que el banco de preguntas: cualquier cuenta aprobada puede leerlos
+    // (para preguntar dudas); solo la cuenta dueña o una cuenta con rol "admin" puede subir/borrar.
+    match /users/{uid}/legalDocs/{docId} {
+      allow read: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                  (esSuperAdmin() || estaAprobado(request.auth.uid));
+      allow write: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                   (esSuperAdmin() || esEditor(request.auth.uid));
+    }
+    match /users/{uid}/legalDocs/{docId}/chunks/{chunkId} {
+      allow read: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                  (esSuperAdmin() || estaAprobado(request.auth.uid));
+      allow write: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                   (esSuperAdmin() || esEditor(request.auth.uid));
     }
 
     // Cualquier otra ruta queda bloqueada por defecto.

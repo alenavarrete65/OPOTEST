@@ -47,6 +47,31 @@ que las note un usuario.
       carga sin quedarse en "Cargando…".
 - [ ] El buscador por email y el filtro por estado funcionan.
 - [ ] Aprobar/revocar una cuenta de prueba se refleja al momento.
+- [ ] Si has añadido un segundo UID a `SUPER_ADMIN_UIDS` (en `index.html` y en
+      `firestore.rules`), esa cuenta de respaldo también puede aprobar/revocar
+      cuentas y dar el rol admin, no solo la cuenta original.
+
+## Asistente legal ("⚖️ Asistente legal", dentro de Tests)
+- [ ] Como admin, subir un PDF pequeño con título: la IA lo transcribe y aparece
+      en la lista de "Documentos guardados" con su nº de caracteres/trozos.
+- [ ] Con una cuenta de lectura (con su propia clave de Gemini pegada), elegir
+      ese documento guardado y hacer una pregunta sobre su contenido: la
+      respuesta se ciñe al texto del documento (y dice que no lo sabe si
+      preguntas algo que no está en él, en vez de inventar).
+- [ ] Con "Subir mi propio PDF" (sin guardarlo), preguntar algo sobre un PDF
+      cualquiera y comprobar que responde sin necesidad de que el admin lo suba
+      antes.
+- [ ] Borrar un documento guardado como admin: desaparece de la lista y ya no
+      sale como opción al preguntar.
+- [ ] Probar con un PDF largo (bastantes páginas): se sube por trozos (verás el
+      contador "Trozo X/Y") en vez de fallar o cortarse a mitad.
+
+## Revisar pregunta con IA (solo admin)
+- [ ] Abrir la vista previa de una pregunta desde el Banco y pulsar
+      "🤖 Revisar con IA": aparece una respuesta corta debajo, sin bloquear el
+      resto del modal.
+- [ ] Probar con una pregunta a la que le cambias la correcta a una opción
+      equivocada a propósito: la IA debería avisar de que algo no cuadra.
 
 ## Tamaño de tus datos
 - [ ] El bloque "Tamaño de tus datos" aparece (encima de "Copia de seguridad") con las
@@ -54,6 +79,11 @@ que las note un usuario.
 - [ ] Con la cuenta admin salen 3 barras y la lista "Lo que más ocupa"; con una cuenta de
       lectura salen solo 2 barras y sin lista.
 - [ ] Tras guardar una pregunta con imagen, las cifras se actualizan solas en un par de segundos.
+- [ ] "🧹 Vaciar caché y liberar espacio": tras confirmar, recarga sola y el banco/temario se
+      vuelven a descargar bien (con conexión). Tu progreso, un test a medias y las claves de
+      IA/Telegram siguen intactos después de usarlo.
+- [ ] Con algún cambio sin sincronizar a propósito (edita una pregunta estando en avión), el
+      botón avisa del riesgo antes de dejarte continuar.
 
 ## Copia de seguridad
 - [ ] "Exportar copia (JSON)" descarga un archivo con las preguntas.
@@ -69,4 +99,5 @@ que las note un usuario.
 ## Firestore
 - [ ] Si has tocado `firestore.rules`, las has vuelto a desplegar
       (`firebase deploy --only firestore:rules` o pegadas en la consola) — un
-      cambio de reglas no sirve de nada hasta que se publica.
+      cambio de reglas no sirve de nada hasta que se publica. Esto incluye las
+      reglas nuevas de `legalDocs` la primera vez que las subas.

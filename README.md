@@ -68,6 +68,9 @@ futuro hacia una plataforma de test multiusuario.
   Firestore, dentro de `users/{tu uid}/testQuestions/`. Esto es importante porque
   Firestore limita cada documento a 1 MB — guardando cada pregunta por separado,
   el banco puede crecer a miles de preguntas sin problema.
+- Con el mismo criterio, los documentos legales del asistente de IA (ver más abajo)
+  viven en `users/{tu uid}/legalDocs/` (metadatos) + `.../legalDocs/{docId}/chunks/`
+  (el texto, troceado igual que las preguntas para no chocar con ese límite de 1 MB).
 - Para transcribir fotos automáticamente con IA usa Google Gemini (modelo
   `gemini-3.6-flash` por defecto). Necesitas tu propia clave API gratuita de
   https://aistudio.google.com/apikey.
@@ -329,6 +332,40 @@ la app y muestra una explicación breve, marcada como generada por IA para que l
 temario. Si eres admin, **💾 Guardar como explicación** la guarda en la pregunta (pide confirmación
 si ya tenía una) y desde ese momento se ve con el formato enriquecido como cualquier otra.
 
+## Asistente de dudas legales (pestaña "⚖️ Asistente legal")
+
+Disponible tanto para el admin como para cualquier cuenta aprobada, con dos formas de usarlo:
+
+- **Documento guardado**: el admin sube un PDF (una ley, el reglamento, un tema del temario…) desde
+  esta misma pestaña; la IA lo transcribe una única vez a texto plano (troceando el PDF por rango de
+  páginas si es largo, igual que "Generar con IA", para no toparse con el límite de tokens de salida
+  de una sola llamada) y lo guarda en Firestore, troceado a su vez en documentos por debajo de 1 MiB
+  cada uno (`users/{ADMIN_UID}/legalDocs/{docId}` + subcolección `chunks/`). Cualquier cuenta
+  aprobada puede entonces elegir ese documento de una lista y preguntarle dudas, sin volver a gastar
+  cuota transcribiendo el PDF cada vez. **Recomendado subir un documento por ley/tema en vez de uno
+  solo gigante con todo junto**: cada pregunta manda el texto completo del documento elegido como
+  contexto a la IA, así que documentos más pequeños gastan menos tokens por pregunta.
+- **Subir mi propio PDF**: cualquier usuario puede en su lugar subir un PDF puntual y preguntar sobre
+  ese archivo concreto; no se guarda en ningún sitio, se manda directo a la IA como en "Añadir
+  pregunta → Varias desde PDF".
+
+Cada cuenta necesita su propia clave de IA (Gemini/OpenRouter) pegada en el mismo panel de siempre —
+así el consumo de cada usuario no depende de la cuota del admin. El admin puede borrar un documento
+guardado desde la misma pestaña (borrado permanente, sin papelera).
+
+Como puede haber más de una cuenta con permiso para subir documentos (la tuya y, si la has añadido,
+la de `SUPER_ADMIN_UIDS`), la lista de "Documentos guardados" muestra quién subió cada uno (su email)
+y un resumen arriba con el total y cuántos ha subido cada cuenta. Los documentos guardados antes de
+este cambio aparecen como "sin registrar", porque ese dato no existía todavía cuando se subieron.
+
+## Revisar una pregunta con IA (control de calidad, solo admin)
+
+En la vista previa de cualquier pregunta del banco, el botón **🤖 Revisar con IA** manda el
+enunciado, las opciones, la marcada como correcta y la explicación a la IA, y le pide que señale
+posibles fallos: respuesta mal marcada, enunciado ambiguo, dos opciones que podrían ser válidas a la
+vez, o que falte información para responder. Es solo una segunda opinión — no cambia nada
+automáticamente, el admin decide si corrige algo tras leer la respuesta.
+
 ## Explicaciones con formato
 
 Al escribir la explicación de una pregunta hay una barra con **negrita**, <u>subrayado</u>,
@@ -361,6 +398,14 @@ cifras de Firestore son una estimación (el JSON en UTF-8, sin contar unos cient
 de campo). Se recalcula solo poco después de cambiar el banco o el progreso.
 Código: sección «TAMAÑO DE TUS DATOS» de `index.html` (`renderStorageBox()`), estilos `.tam-*`
 en `style.css`.
+
+Debajo del aviso hay un botón **"🧹 Vaciar caché y liberar espacio"**, disponible para cualquier
+cuenta (es un ajuste de este dispositivo, no del banco compartido). Borra la copia local del banco y
+del temario más la caché de archivos de la app (`caches` + desregistra el service worker), y recarga
+la página; todo eso se vuelve a descargar solo en cuanto haya conexión. **No** toca tu progreso, un
+test a medias, un borrador de preguntas generadas por IA sin guardar, ni tus claves de IA/Telegram. Si
+hay cambios del banco sin sincronizar todavía, avisa del riesgo de perderlos antes de dejarte
+continuar. Código: `limpiarCacheApp()` en `index.html`.
 
 ## Cómo publicar un cambio
 
