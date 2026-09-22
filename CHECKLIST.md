@@ -61,6 +61,8 @@ que las note un usuario.
 - [ ] Con "Subir mi propio PDF" (sin guardarlo), preguntar algo sobre un PDF
       cualquiera y comprobar que responde sin necesidad de que el admin lo suba
       antes.
+- [ ] Cada respuesta del asistente muestra arriba "📄 Documento: …" con el
+      título guardado (o el nombre del PDF, en modo "Subir mi propio PDF").
 - [ ] Borrar un documento guardado como admin: desaparece de la lista y ya no
       sale como opción al preguntar.
 - [ ] Probar con un PDF largo (bastantes páginas): se sube por trozos (verás el

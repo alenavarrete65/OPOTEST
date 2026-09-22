@@ -1852,9 +1852,9 @@ let legalDocsState = {
   chunksCache: {},
   modoFuente: 'guardado', // 'guardado' | 'propio'
   seleccionId: null,
-  pregunta: '', respuesta: '', preguntando: false, errorPregunta: null,
+  pregunta: '', respuesta: '', respuestaFuente: '', preguntando: false, errorPregunta: null,
   nuevoTitulo: '', nuevoFile: null, subiendo: false, subidaProgreso: null, subidaError: null,
-  adhocFile: null, adhocPreguntando: false, adhocRespuesta: '', adhocError: null
+  adhocFile: null, adhocPreguntando: false, adhocRespuesta: '', adhocRespuestaFuente: '', adhocError: null
 };
 function legalDocsCollection(){ return db.collection('users').doc(bankOwnerUid()).collection('legalDocs'); }
 function legalDocChunksCollection(docId){ return legalDocsCollection().doc(docId).collection('chunks'); }
@@ -1974,6 +1974,7 @@ async function preguntarSobreLegalDoc(){
     const contenido = [{tipo:'texto', texto:prompt}];
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.respuesta = respuesta.trim();
+    legalDocsState.respuestaFuente = doc ? doc.titulo : '';
   }catch(err){
     console.error(err);
     legalDocsState.errorPregunta = err.message || 'No se pudo obtener respuesta.';
@@ -1993,6 +1994,7 @@ async function preguntarSobreLegalAdhoc(){
     const contenido = [{tipo:'pdf', b64, nombre: legalDocsState.adhocFile.name || 'documento.pdf'}, {tipo:'texto', texto:prompt}];
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.adhocRespuesta = respuesta.trim();
+    legalDocsState.adhocRespuestaFuente = legalDocsState.adhocFile.name || 'documento.pdf';
   }catch(err){
     console.error(err);
     legalDocsState.adhocError = err.message || 'No se pudo obtener respuesta (si el PDF es muy largo, pide al admin que lo guarde permanentemente en vez de subirlo aquí cada vez).';
@@ -2154,9 +2156,16 @@ function renderTestsLegal(body){
     qPanel.appendChild(e);
   }
   const respuestaTxt = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuesta : legalDocsState.adhocRespuesta;
+  const respuestaFuente = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuestaFuente : legalDocsState.adhocRespuestaFuente;
   if(respuestaTxt){
+    if(respuestaFuente){
+      const fuenteEl = document.createElement('div');
+      fuenteEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:10px;font-weight:600;';
+      fuenteEl.textContent = '📄 Documento: '+respuestaFuente;
+      qPanel.appendChild(fuenteEl);
+    }
     const respBox = document.createElement('div');
-    respBox.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);line-height:1.5;';
+    respBox.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);'+(respuestaFuente?'margin-top:6px;':'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);')+'line-height:1.5;';
     renderRich(respuestaTxt, respBox);
     qPanel.appendChild(respBox);
   }
