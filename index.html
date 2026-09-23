@@ -1926,11 +1926,13 @@ let legalDocsState = {
   uiKeyOpen: false,
   lista: [], cargado: false, cargando: false, error: null,
   chunksCache: {},
-  modoFuente: 'guardado', // 'guardado' | 'propio'
+  modoFuente: 'guardado', // 'guardado' | 'propio' | 'ninguna'
   seleccionId: null,
-  pregunta: '', respuesta: '', preguntando: false, errorPregunta: null,
-  nuevoTitulo: '', nuevoFile: null, subiendo: false, subidaProgreso: null, subidaError: null,
-  adhocFile: null, adhocPreguntando: false, adhocRespuesta: '', adhocError: null
+  imagenAdjunta: null,
+  pregunta: '', respuesta: '', respuestaFuente: '', preguntando: false, errorPregunta: null,
+  nuevoTitulo: '', nuevoFile: null, modoSubida: 'pdf', nuevoTexto: '', subiendo: false, subidaProgreso: null, subidaError: null,
+  adhocFile: null, adhocPreguntando: false, adhocRespuesta: '', adhocRespuestaFuente: '', adhocError: null,
+  ningunaPreguntando: false, ningunaRespuesta: '', ningunaError: null
 };
 function legalDocsCollection(){ return db.collection('users').doc(bankOwnerUid()).collection('legalDocs'); }
 function legalDocChunksCollection(docId){ return legalDocsCollection().doc(docId).collection('chunks'); }
@@ -2038,6 +2040,38 @@ async function ejecutarSubidaLegalDoc(){
     renderTests();
   }
 }
+// Guarda directamente un texto ya transcrito (por ejemplo, pegado desde una conversación con
+// Claude u otra IA, o copiado de un Word): NO llama a Gemini en ningún momento, así que no gasta
+// nada de esa cuota. Útil precisamente para documentos largos que se prefieren transcribir fuera
+// de la app y traer ya hechos.
+async function ejecutarSubidaLegalDocDesdeTexto(){
+  const texto = (legalDocsState.nuevoTexto||'').trim();
+  if(!texto){ showToast('Pega primero el texto del documento.'); return; }
+  legalDocsState.subiendo = true; legalDocsState.subidaError = null;
+  renderTests();
+  try{
+    const tituloFinal = legalDocsState.nuevoTitulo || 'Documento sin título';
+    await guardarLegalDocNuevo(tituloFinal, texto);
+    showToast('Documento guardado ✓ ('+Math.round(texto.length/1000)+' mil caracteres)');
+    legalDocsState.nuevoTexto = ''; legalDocsState.nuevoTitulo = '';
+    legalDocsState.cargado = false;
+    await cargarLegalDocsLista();
+  }catch(err){
+    console.error(err);
+    legalDocsState.subidaError = err.message || 'No se pudo guardar el documento.';
+  }finally{
+    legalDocsState.subiendo = false;
+    renderTests();
+  }
+}
+// Convierte la captura adjunta (si hay alguna) al formato de "contenido" que ya entiende
+// llamarIAConFallback, para poder mandarla junto al texto o al PDF en cualquiera de los 3 modos.
+async function imagenAdjuntaComoContenido(){
+  if(!legalDocsState.imagenAdjunta) return null;
+  const b64 = await fileToBase64(legalDocsState.imagenAdjunta);
+  return { tipo:'imagen', mime: legalDocsState.imagenAdjunta.type || 'image/jpeg', b64 };
+}
+const NOTA_IMAGEN_ADJUNTA = '\n\nAdemás te adjunto una captura de pantalla (puede ser una pregunta que has fallado, un error de la app, o cualquier otra cosa relacionada con tu estudio o con OpoTest); ténla en cuenta para responder.';
 async function preguntarSobreLegalDoc(){
   if(!legalDocsState.seleccionId){ showToast('Elige primero un documento guardado.'); return; }
   if(!legalDocsState.pregunta.trim()){ showToast('Escribe tu pregunta.'); return; }
@@ -2046,10 +2080,13 @@ async function preguntarSobreLegalDoc(){
   try{
     const texto = await obtenerTextoLegalDoc(legalDocsState.seleccionId);
     const doc = legalDocsState.lista.find(d=>d.id===legalDocsState.seleccionId);
-    const prompt = 'Eres un asistente que ayuda a estudiar para una oposición española (Guardia Civil). A continuación tienes el texto completo de un documento legal/temario llamado "'+(doc?doc.titulo:'documento')+'". Responde SOLO con información que esté en ese texto; si la respuesta no aparece en el documento, dilo claramente en vez de inventarla. Sé conciso (máximo 6-8 líneas) y cita el artículo o apartado exacto si el documento lo indica.\n\n--- DOCUMENTO ---\n'+texto+'\n--- FIN DEL DOCUMENTO ---\n\nPregunta: '+legalDocsState.pregunta.trim();
+    const imgParte = await imagenAdjuntaComoContenido();
+    const prompt = 'Eres un asistente que ayuda a estudiar para una oposición española (Guardia Civil). A continuación tienes el texto completo de un documento legal/temario llamado "'+(doc?doc.titulo:'documento')+'". Responde SOLO con información que esté en ese texto; si la respuesta no aparece en el documento, dilo claramente en vez de inventarla. Sé conciso (máximo 6-8 líneas) y cita el artículo o apartado exacto si el documento lo indica.'+(imgParte?NOTA_IMAGEN_ADJUNTA:'')+'\n\n--- DOCUMENTO ---\n'+texto+'\n--- FIN DEL DOCUMENTO ---\n\nPregunta: '+legalDocsState.pregunta.trim();
     const contenido = [{tipo:'texto', texto:prompt}];
+    if(imgParte) contenido.push(imgParte);
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.respuesta = respuesta.trim();
+    legalDocsState.respuestaFuente = doc ? doc.titulo : '';
   }catch(err){
     console.error(err);
     legalDocsState.errorPregunta = err.message || 'No se pudo obtener respuesta.';
@@ -2065,10 +2102,13 @@ async function preguntarSobreLegalAdhoc(){
   renderTests();
   try{
     const b64 = await fileToBase64(legalDocsState.adhocFile);
-    const prompt = 'Eres un asistente que ayuda a estudiar para una oposición española (Guardia Civil). Te adjunto un documento PDF. Responde SOLO con información que esté en ese documento; si la respuesta no aparece, dilo claramente en vez de inventarla. Sé conciso (máximo 6-8 líneas).\n\nPregunta: '+legalDocsState.pregunta.trim();
+    const imgParte = await imagenAdjuntaComoContenido();
+    const prompt = 'Eres un asistente que ayuda a estudiar para una oposición española (Guardia Civil). Te adjunto un documento PDF. Responde SOLO con información que esté en ese documento; si la respuesta no aparece, dilo claramente en vez de inventarla. Sé conciso (máximo 6-8 líneas).'+(imgParte?NOTA_IMAGEN_ADJUNTA:'')+'\n\nPregunta: '+legalDocsState.pregunta.trim();
     const contenido = [{tipo:'pdf', b64, nombre: legalDocsState.adhocFile.name || 'documento.pdf'}, {tipo:'texto', texto:prompt}];
+    if(imgParte) contenido.push(imgParte);
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.adhocRespuesta = respuesta.trim();
+    legalDocsState.adhocRespuestaFuente = legalDocsState.adhocFile.name || 'documento.pdf';
   }catch(err){
     console.error(err);
     legalDocsState.adhocError = err.message || 'No se pudo obtener respuesta (si el PDF es muy largo, pide al admin que lo guarde permanentemente en vez de subirlo aquí cada vez).';
@@ -2077,9 +2117,30 @@ async function preguntarSobreLegalAdhoc(){
     renderTests();
   }
 }
+// Modo "sin documento": para cuando solo quieres enseñarle una captura (una pregunta fallada en
+// otro sitio, una duda suelta...) sin que tenga que ver con ningún documento guardado.
+async function preguntarSinDocumento(){
+  if(!legalDocsState.pregunta.trim() && !legalDocsState.imagenAdjunta){ showToast('Escribe tu pregunta o adjunta una captura.'); return; }
+  legalDocsState.ningunaPreguntando = true; legalDocsState.ningunaError = null; legalDocsState.ningunaRespuesta = '';
+  renderTests();
+  try{
+    const imgParte = await imagenAdjuntaComoContenido();
+    const prompt = 'Eres el asistente de estudio de OpoTest, una app para preparar una oposición española (Guardia Civil). Ayuda con lo que te pregunte el usuario: puede ser una duda de temario, una pregunta de examen que ha fallado (a veces en una captura de pantalla adjunta), o cualquier cosa relacionada con su estudio. Si no tienes información suficiente para estar seguro, dilo en vez de inventar. Sé conciso (máximo 6-8 líneas).'+(imgParte?NOTA_IMAGEN_ADJUNTA:'')+'\n\nPregunta: '+(legalDocsState.pregunta.trim()||'(sin texto, solo la captura adjunta)');
+    const contenido = [{tipo:'texto', texto:prompt}];
+    if(imgParte) contenido.push(imgParte);
+    const respuesta = await llamarIAConFallback(contenido, {temperature:0.3, maxTokens:1200}, false);
+    legalDocsState.ningunaRespuesta = respuesta.trim();
+  }catch(err){
+    console.error(err);
+    legalDocsState.ningunaError = err.message || 'No se pudo obtener respuesta.';
+  }finally{
+    legalDocsState.ningunaPreguntando = false;
+    renderTests();
+  }
+}
 function renderTestsLegal(body){
   const info = document.createElement('p'); info.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 14px;';
-  info.textContent = 'Pregúntale a la IA dudas sobre el temario legal. Puedes usar un documento ya guardado (si el admin ha subido alguno) o subir tu propio PDF solo para esta pregunta, sin que se guarde en ningún sitio.';
+  info.textContent = 'Pregúntale a la IA: dudas del temario legal (con un documento guardado o un PDF tuyo), o cualquier otra cosa de tu estudio — puedes adjuntar una captura de pantalla, por ejemplo de una pregunta que hayas fallado en otro sitio.';
   body.appendChild(info);
 
   renderIAKeyPanel(body, legalDocsState, {conExtra:false});
@@ -2144,28 +2205,50 @@ function renderTestsLegal(body){
     body.appendChild(panel);
 
     const upPanel = document.createElement('div'); upPanel.className='test-panel';
-    upPanel.innerHTML = '<h4>Añadir documento nuevo</h4><p style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;">Sube un PDF (una ley, un tema del temario…): la IA transcribe su texto y se guarda para que cualquier cuenta aprobada pueda preguntarle dudas. Mejor un documento por ley/tema que uno gigante con todo junto: los documentos más pequeños gastan menos cuota en cada pregunta.</p>';
+    upPanel.innerHTML = '<h4>Añadir documento nuevo</h4><p style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;">Un documento por ley/tema, no uno gigante con todo junto: así cada pregunta gasta menos cuota.</p>';
+    const modoField = document.createElement('div'); modoField.className='test-field';
+    modoField.innerHTML = '<label>Cómo lo añades</label>';
+    const modoSel = document.createElement('select');
+    [['pdf','Subir un PDF (la IA lo transcribe, gasta cuota de Gemini)'], ['texto','Pegar texto ya transcrito (no gasta nada de cuota)']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; modoSel.appendChild(o); });
+    modoSel.value = legalDocsState.modoSubida;
+    modoSel.onchange = ()=>{ legalDocsState.modoSubida = modoSel.value; renderTests(); };
+    modoField.appendChild(modoSel);
+    upPanel.appendChild(modoField);
     const tituloField = document.createElement('div'); tituloField.className='test-field';
     tituloField.innerHTML = '<label>Título (ej. "Ley Orgánica 2/1986, de Fuerzas y Cuerpos de Seguridad")</label>';
     const tituloInput = document.createElement('input'); tituloInput.type='text'; tituloInput.value = legalDocsState.nuevoTitulo;
     tituloInput.oninput = ()=> legalDocsState.nuevoTitulo = tituloInput.value;
     tituloField.appendChild(tituloInput);
     upPanel.appendChild(tituloField);
-    const fileField = document.createElement('div'); fileField.className='test-field';
-    fileField.innerHTML = '<label>PDF del documento</label>';
-    const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf';
-    fileInput.onchange = ()=>{ legalDocsState.nuevoFile = fileInput.files[0] || null; };
-    fileField.appendChild(fileInput);
-    upPanel.appendChild(fileField);
-    const subirBtn = document.createElement('button'); subirBtn.type='button'; subirBtn.className='btn'; subirBtn.style.marginTop='4px';
-    subirBtn.textContent = legalDocsState.subiendo ? 'Extrayendo y guardando…' : 'Extraer y guardar';
-    subirBtn.disabled = legalDocsState.subiendo;
-    subirBtn.onclick = ejecutarSubidaLegalDoc;
-    upPanel.appendChild(subirBtn);
-    if(legalDocsState.subidaProgreso){
-      const pr = document.createElement('div'); pr.className='tc-stat'; pr.style.marginTop='6px';
-      pr.textContent = 'Trozo '+legalDocsState.subidaProgreso.actual+'/'+legalDocsState.subidaProgreso.total+(legalDocsState.subidaProgreso.paginas ? (' (páginas '+legalDocsState.subidaProgreso.paginas+')') : '');
-      upPanel.appendChild(pr);
+    if(legalDocsState.modoSubida === 'pdf'){
+      const fileField = document.createElement('div'); fileField.className='test-field';
+      fileField.innerHTML = '<label>PDF del documento</label>';
+      const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf';
+      fileInput.onchange = ()=>{ legalDocsState.nuevoFile = fileInput.files[0] || null; };
+      fileField.appendChild(fileInput);
+      upPanel.appendChild(fileField);
+      const subirBtn = document.createElement('button'); subirBtn.type='button'; subirBtn.className='btn'; subirBtn.style.marginTop='4px';
+      subirBtn.textContent = legalDocsState.subiendo ? 'Extrayendo y guardando…' : 'Extraer y guardar';
+      subirBtn.disabled = legalDocsState.subiendo;
+      subirBtn.onclick = ejecutarSubidaLegalDoc;
+      upPanel.appendChild(subirBtn);
+      if(legalDocsState.subidaProgreso){
+        const pr = document.createElement('div'); pr.className='tc-stat'; pr.style.marginTop='6px';
+        pr.textContent = 'Trozo '+legalDocsState.subidaProgreso.actual+'/'+legalDocsState.subidaProgreso.total+(legalDocsState.subidaProgreso.paginas ? (' (páginas '+legalDocsState.subidaProgreso.paginas+')') : '');
+        upPanel.appendChild(pr);
+      }
+    } else {
+      const textoField = document.createElement('div'); textoField.className='test-field';
+      textoField.innerHTML = '<label>Pega aquí el texto ya transcrito</label>';
+      const textoTa = createOptionTextarea(legalDocsState.nuevoTexto, 'Pega aquí el texto completo del documento (por ejemplo, transcrito por Claude en el chat)', (v)=> legalDocsState.nuevoTexto = v);
+      textoTa.style.minHeight = '160px';
+      textoField.appendChild(textoTa);
+      upPanel.appendChild(textoField);
+      const guardarTextoBtn = document.createElement('button'); guardarTextoBtn.type='button'; guardarTextoBtn.className='btn'; guardarTextoBtn.style.marginTop='4px';
+      guardarTextoBtn.textContent = legalDocsState.subiendo ? 'Guardando…' : 'Guardar texto';
+      guardarTextoBtn.disabled = legalDocsState.subiendo;
+      guardarTextoBtn.onclick = ejecutarSubidaLegalDocDesdeTexto;
+      upPanel.appendChild(guardarTextoBtn);
     }
     if(legalDocsState.subidaError){
       const e = document.createElement('div'); e.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin-top:6px;'; e.textContent = legalDocsState.subidaError;
@@ -2180,7 +2263,7 @@ function renderTestsLegal(body){
   const fuenteField = document.createElement('div'); fuenteField.className='test-field';
   fuenteField.innerHTML = '<label>Fuente</label>';
   const fuenteSel = document.createElement('select');
-  [['guardado','Un documento guardado'], ['propio','Subir mi propio PDF (no se guarda)']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; fuenteSel.appendChild(o); });
+  [['guardado','Un documento guardado'], ['propio','Subir mi propio PDF (no se guarda)'], ['ninguna','Sin documento (solo mi pregunta o una captura)']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; fuenteSel.appendChild(o); });
   fuenteSel.value = legalDocsState.modoFuente;
   fuenteSel.onchange = ()=>{ legalDocsState.modoFuente = fuenteSel.value; renderTests(); };
   fuenteField.appendChild(fuenteSel);
@@ -2189,7 +2272,7 @@ function renderTestsLegal(body){
   if(legalDocsState.modoFuente === 'guardado'){
     if(!legalDocsState.lista.length){
       const p = document.createElement('div'); p.className='test-empty';
-      p.textContent = isAdmin ? 'Sube antes algún documento arriba.' : 'Todavía no hay ningún documento guardado; pídele al admin que suba alguno, o usa "Subir mi propio PDF".';
+      p.textContent = isAdmin ? 'Sube antes algún documento arriba.' : 'Todavía no hay ningún documento guardado; pídele al admin que suba alguno, o cambia la fuente arriba.';
       qPanel.appendChild(p);
     } else {
       const selField = document.createElement('div'); selField.className='test-field';
@@ -2202,37 +2285,65 @@ function renderTestsLegal(body){
       selField.appendChild(sel);
       qPanel.appendChild(selField);
     }
-  } else {
+  } else if(legalDocsState.modoFuente === 'propio'){
     const fileField = document.createElement('div'); fileField.className='test-field';
     fileField.innerHTML = '<label>PDF (solo para esta pregunta)</label>';
     const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf';
     fileInput.onchange = ()=>{ legalDocsState.adhocFile = fileInput.files[0] || null; };
     fileField.appendChild(fileInput);
     qPanel.appendChild(fileField);
+  } else {
+    const p = document.createElement('p'); p.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin:0 0 12px;';
+    p.textContent = 'Para dudas sueltas o para enseñarle una pregunta que hayas fallado (adjunta la captura abajo).';
+    qPanel.appendChild(p);
   }
+
+  const imgField = document.createElement('div'); imgField.className='test-field';
+  imgField.innerHTML = '<label>Adjuntar una captura (opcional — ej. una pregunta fallada)</label>';
+  const imgInput = document.createElement('input'); imgInput.type='file'; imgInput.accept='image/*';
+  imgInput.onchange = ()=>{ legalDocsState.imagenAdjunta = imgInput.files[0] || null; };
+  imgField.appendChild(imgInput);
+  if(legalDocsState.imagenAdjunta){
+    const quitar = document.createElement('button'); quitar.type='button'; quitar.className='btn small ghost'; quitar.style.marginLeft='8px';
+    quitar.textContent = 'Quitar imagen';
+    quitar.onclick = ()=>{ legalDocsState.imagenAdjunta = null; renderTests(); };
+    imgField.appendChild(quitar);
+  }
+  qPanel.appendChild(imgField);
 
   const pregField = document.createElement('div'); pregField.className='test-field';
   pregField.innerHTML = '<label>Tu pregunta</label>';
-  const pregTa = createOptionTextarea(legalDocsState.pregunta, 'Ej. ¿Qué dice el artículo 5 sobre...?', (v)=> legalDocsState.pregunta = v);
+  const pregTa = createOptionTextarea(legalDocsState.pregunta, 'Ej. ¿Qué dice el artículo 5 sobre...? o cuéntame qué falla en la captura', (v)=> legalDocsState.pregunta = v);
   pregField.appendChild(pregTa);
   qPanel.appendChild(pregField);
 
-  const preguntandoAhora = legalDocsState.modoFuente==='guardado' ? legalDocsState.preguntando : legalDocsState.adhocPreguntando;
+  const preguntandoAhora = legalDocsState.modoFuente==='guardado' ? legalDocsState.preguntando : (legalDocsState.modoFuente==='propio' ? legalDocsState.adhocPreguntando : legalDocsState.ningunaPreguntando);
   const askBtn = document.createElement('button'); askBtn.type='button'; askBtn.className='btn'; askBtn.style.marginTop='4px';
   askBtn.textContent = preguntandoAhora ? 'Preguntando…' : 'Preguntar';
   askBtn.disabled = preguntandoAhora;
-  askBtn.onclick = ()=> legalDocsState.modoFuente==='guardado' ? preguntarSobreLegalDoc() : preguntarSobreLegalAdhoc();
+  askBtn.onclick = ()=>{
+    if(legalDocsState.modoFuente==='guardado') preguntarSobreLegalDoc();
+    else if(legalDocsState.modoFuente==='propio') preguntarSobreLegalAdhoc();
+    else preguntarSinDocumento();
+  };
   qPanel.appendChild(askBtn);
 
-  const errMsg = legalDocsState.modoFuente==='guardado' ? legalDocsState.errorPregunta : legalDocsState.adhocError;
+  const errMsg = legalDocsState.modoFuente==='guardado' ? legalDocsState.errorPregunta : (legalDocsState.modoFuente==='propio' ? legalDocsState.adhocError : legalDocsState.ningunaError);
   if(errMsg){
     const e = document.createElement('div'); e.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin-top:8px;'; e.textContent = '⚠ '+errMsg;
     qPanel.appendChild(e);
   }
-  const respuestaTxt = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuesta : legalDocsState.adhocRespuesta;
+  const respuestaTxt = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuesta : (legalDocsState.modoFuente==='propio' ? legalDocsState.adhocRespuesta : legalDocsState.ningunaRespuesta);
+  const respuestaFuente = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuestaFuente : (legalDocsState.modoFuente==='propio' ? legalDocsState.adhocRespuestaFuente : '');
   if(respuestaTxt){
+    if(respuestaFuente){
+      const fuenteEl = document.createElement('div');
+      fuenteEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:10px;font-weight:600;';
+      fuenteEl.textContent = '📄 Documento: '+respuestaFuente;
+      qPanel.appendChild(fuenteEl);
+    }
     const respBox = document.createElement('div');
-    respBox.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);line-height:1.5;';
+    respBox.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);'+(respuestaFuente?'margin-top:6px;':'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);')+'line-height:1.5;';
     renderRich(respuestaTxt, respBox);
     qPanel.appendChild(respBox);
   }
@@ -3026,8 +3137,8 @@ function renderTests(){
   if(testsActiveSubtab==='generarIA') testsActiveSubtab = 'anadir';
   const TAB_ICONS = { practicar:'📝', banco:'📚', anadir:'➕', temario:'📖', legal:'⚖️', progreso:'📊' };
   const tabs = isAdmin
-    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario'],['legal','Asistente legal'],['progreso','Progreso']]
-    : [['practicar','Practicar'],['legal','Asistente legal'],['progreso','Progreso']];
+    ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario'],['legal','Asistente IA'],['progreso','Progreso']]
+    : [['practicar','Practicar'],['legal','Asistente IA'],['progreso','Progreso']];
   // Franja de resumen: da un primer vistazo tipo "panel de control" antes de las pestañas, con
   // los números que más importan (tamaño del banco y precisión global de quien practica).
   const questions = state.testBank.questions || [];
@@ -5740,9 +5851,25 @@ function buildResultadoCard(){
   else if(r.hoyN>=r.meta) linea('🎯 Objetivo de hoy ya cumplido ('+r.hoyN+'/'+r.meta+').');
   else linea('🎯 Hoy llevas '+r.hoyN+' de '+r.meta+' preguntas: te faltan '+(r.meta-r.hoyN)+'.');
   const acts = document.createElement('div'); acts.className = 'res-actions';
+  const revisar = document.createElement('button'); revisar.type = 'button'; revisar.className = 'btn ghost';
+  revisar.textContent = '📋 Revisar resultados';
+  revisar.onclick = ()=>{
+    const primera = document.querySelector('.test-quiz-q');
+    if(primera) primera.scrollIntoView({ behavior:'smooth', block:'start' });
+  };
+  acts.appendChild(revisar);
+  const denuevo = document.createElement('button'); denuevo.type = 'button'; denuevo.className = 'btn';
+  denuevo.textContent = '🔁 Hacer este test de nuevo';
+  denuevo.title = 'Repite exactamente las mismas preguntas, en el mismo orden, para afianzar lo que acabas de ver';
+  denuevo.onclick = ()=>{
+    const mismasPreguntas = testsQuiz.items.map(it=>it.q);
+    const cfgIgual = { instantaneo: testsQuiz.instantaneo, sinTiempo: !testsQuiz.temporizador, totalSegundos: testsQuiz.temporizador ? testsQuiz.temporizador.totalSegundos : undefined };
+    iniciarQuiz(mismasPreguntas, cfgIgual);
+  };
+  acts.appendChild(denuevo);
   const falladas = preguntasFalladasDelTest();
   if(falladas.length){
-    const rep = document.createElement('button'); rep.type = 'button'; rep.className = 'btn';
+    const rep = document.createElement('button'); rep.type = 'button'; rep.className = 'btn ghost';
     rep.textContent = '🔁 Repetir solo las falladas ('+falladas.length+')';
     rep.onclick = ()=> iniciarQuiz(falladas.slice(), { instantaneo:true, sinTiempo:true });
     acts.appendChild(rep);
