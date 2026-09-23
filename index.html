@@ -2395,7 +2395,18 @@ function renderTelegramConfigPanel(container){
 // pensado para generar una segunda imagen de "solución" que se manda después.
 function buildQuestionExportNode(q, withAnswer){
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:#1b2b24;border:1px solid #34493d;border-radius:6px;padding:22px;font-family:var(--font-body);color:#ece4d3;box-sizing:border-box;';
+  // OJO: las clases .tq-* (tq-enun, tq-opt, tq-explic, tq-palabra...) usan var(--bg-panel-2),
+  // var(--cream), var(--line), etc., que cambian de valor según el tema claro/oscuro que tengas
+  // activo AHORA MISMO en la app (:root vs html[data-theme="light"]). Como esta tarjeta se monta
+  // fuera de pantalla pero sigue colgando del <html> real, heredaba esas variables — así que con
+  // el tema claro puesto salía texto claro sobre fondo claro (ilegible) en enunciado y opciones,
+  // aunque el pie sí se veía bien por tener su color fijado aparte. Fijamos aquí TODAS las
+  // variables que usan esas clases a la paleta oscura de siempre, para que la imagen exportada
+  // se vea igual sin importar qué tema tengas puesto en ese momento.
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:#1b2b24;border:1px solid #34493d;border-radius:6px;padding:22px;font-family:var(--font-body);color:#ece4d3;box-sizing:border-box;'
+    + '--bg:#16302a;--bg-panel:#1c3d34;--bg-panel-2:#234a3f;--line:#3d6255;--line-strong:#78a595;'
+    + '--cream:#f4ecd6;--cream-dim:#c3bda3;--amber:#c9a227;--amber-dim:#8f7a2f;--amber-ink:#d8b53a;'
+    + '--red:#b6543f;--red-text:#f4a08d;--green:#6f9a6a;--green-ink:#8fc08a;--blue:#8ec0cf;--muted:#aeb5a9;';
   const top = document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
   const brand = document.createElement('div'); brand.style.cssText='font-family:var(--font-display);letter-spacing:.14em;text-transform:uppercase;color:var(--amber-ink);font-size:13px;'; brand.textContent='OpoTest';
   const tag = document.createElement('div'); tag.style.cssText='font-family:var(--font-mono);font-size:12px;color:#b9baa8;text-transform:uppercase;letter-spacing:.05em;'; tag.textContent = questionTemaTag(q);
