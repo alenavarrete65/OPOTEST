@@ -2014,7 +2014,27 @@ async function extraerTextoLegalDePdf(file, onProgreso){
     const b64 = await fileToBase64(filePart);
     const prompt = 'Transcribe TODO el texto de este documento PDF, literalmente y completo, en español, sin resumir, sin omitir artículos ni apartados, sin añadir comentarios ni encabezados que no estén en el original. Devuelve SOLO el texto transcrito, sin backticks ni explicaciones adicionales.';
     const contenido = [{tipo:'pdf', b64, nombre}, {tipo:'texto', texto:prompt}];
-    const texto = await llamarIAConFallback(contenido, {temperature:0, maxTokens:32768}, false);
+    // Reintenta un par de veces cada trozo antes de rendirse: los fallos aquí suelen ser un límite
+    // de peticiones por minuto de la IA, algo pasajero, no un problema real con este trozo de PDF.
+    let texto = null, ultimoError = null;
+    for(let intento=1; intento<=3 && texto===null; intento++){
+      try{
+        texto = await llamarIAConFallback(contenido, {temperature:0, maxTokens:32768}, false);
+      }catch(err){
+        ultimoError = err;
+        if(intento<3) await new Promise(r=>setTimeout(r, 4000*intento));
+      }
+    }
+    if(texto===null){
+      // No perdemos lo ya conseguido: se lo pasamos al que llamó a esta función para que decida
+      // si lo guarda tal cual (marcado como incompleto) en vez de tirarlo todo a la basura.
+      const err = new Error((ultimoError&&ultimoError.message)||'Fallo al transcribir un trozo del PDF.');
+      err.textoParcial = textoTotal;
+      err.trozosCompletados = i;
+      err.trozosTotal = rangos.length;
+      err.ultimoRango = start!=null ? (start+'–'+end) : null;
+      throw err;
+    }
     textoTotal += (textoTotal ? '\n\n' : '') + texto.trim();
   }
   return textoTotal;
@@ -2034,6 +2054,35 @@ async function ejecutarSubidaLegalDoc(){
     await cargarLegalDocsLista();
   }catch(err){
     console.error(err);
+    // Si ya se había transcrito algo antes de que fallara, no lo tiramos: lo ofrecemos guardar tal
+    // cual (marcado como incompleto en el título) para no repetir desde la página 1.
+    if(err.textoParcial && err.textoParcial.trim()){
+      const seguir = confirm(
+        'Fallo al transcribir el trozo '+(err.trozosCompletados+1)+' de '+err.trozosTotal+
+        (err.ultimoRango ? (' (páginas '+err.ultimoRango+')') : '') + ': ' + (err.message||'') +
+        '\n\nYa se transcribieron '+err.trozosCompletados+' trozo(s) antes de fallar ('+Math.round(err.textoParcial.length/1000)+' mil caracteres). '+
+        '¿Guardarlos ahora como documento "incompleto" para no perderlos? Luego puedes subir aparte, como otro documento, el resto de páginas que falten.'
+      );
+      if(seguir){
+        try{
+          const tituloFinal = (legalDocsState.nuevoTitulo || legalDocsState.nuevoFile.name.replace(/\.pdf$/i,'')) + ' (incompleto, trozos 1–'+err.trozosCompletados+' de '+err.trozosTotal+')';
+          await guardarLegalDocNuevo(tituloFinal, err.textoParcial);
+          showToast('Guardado lo transcrito hasta el fallo ✓');
+          legalDocsState.nuevoFile = null; legalDocsState.nuevoTitulo = '';
+          legalDocsState.cargado = false;
+          await cargarLegalDocsLista();
+          legalDocsState.subiendo = false; legalDocsState.subidaProgreso = null;
+          renderTests();
+          return;
+        }catch(err2){
+          console.error(err2);
+          legalDocsState.subidaError = 'Tampoco se pudo guardar la parte ya transcrita: '+(err2.message||'');
+          legalDocsState.subiendo = false; legalDocsState.subidaProgreso = null;
+          renderTests();
+          return;
+        }
+      }
+    }
     legalDocsState.subidaError = err.message || 'No se pudo extraer/guardar el documento.';
   }finally{
     legalDocsState.subiendo = false; legalDocsState.subidaProgreso = null;
@@ -2207,24 +2256,30 @@ function renderTestsLegal(body){
     const upPanel = document.createElement('div'); upPanel.className='test-panel';
     upPanel.innerHTML = '<h4>Añadir documento nuevo</h4><p style="font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;">Un documento por ley/tema, no uno gigante con todo junto: así cada pregunta gasta menos cuota.</p>';
     const modoField = document.createElement('div'); modoField.className='test-field';
-    modoField.innerHTML = '<label>Cómo lo añades</label>';
-    const modoSel = document.createElement('select');
+    modoField.innerHTML = '<label for="legaldoc-modo-subida">Cómo lo añades</label>';
+    const modoSel = document.createElement('select'); modoSel.id = 'legaldoc-modo-subida';
     [['pdf','Subir un PDF (la IA lo transcribe, gasta cuota de Gemini)'], ['texto','Pegar texto ya transcrito (no gasta nada de cuota)']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; modoSel.appendChild(o); });
     modoSel.value = legalDocsState.modoSubida;
     modoSel.onchange = ()=>{ legalDocsState.modoSubida = modoSel.value; renderTests(); };
     modoField.appendChild(modoSel);
     upPanel.appendChild(modoField);
     const tituloField = document.createElement('div'); tituloField.className='test-field';
-    tituloField.innerHTML = '<label>Título (ej. "Ley Orgánica 2/1986, de Fuerzas y Cuerpos de Seguridad")</label>';
-    const tituloInput = document.createElement('input'); tituloInput.type='text'; tituloInput.value = legalDocsState.nuevoTitulo;
+    tituloField.innerHTML = '<label for="legaldoc-titulo">Título (ej. "Ley Orgánica 2/1986, de Fuerzas y Cuerpos de Seguridad")</label>';
+    const tituloInput = document.createElement('input'); tituloInput.id = 'legaldoc-titulo'; tituloInput.type='text'; tituloInput.value = legalDocsState.nuevoTitulo;
     tituloInput.oninput = ()=> legalDocsState.nuevoTitulo = tituloInput.value;
     tituloField.appendChild(tituloInput);
     upPanel.appendChild(tituloField);
     if(legalDocsState.modoSubida === 'pdf'){
       const fileField = document.createElement('div'); fileField.className='test-field';
-      fileField.innerHTML = '<label>PDF del documento</label>';
-      const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf';
-      fileInput.onchange = ()=>{ legalDocsState.nuevoFile = fileInput.files[0] || null; };
+      fileField.innerHTML = '<label for="legaldoc-nuevo-pdf">PDF del documento</label>';
+      const fileInput = document.createElement('input'); fileInput.id = 'legaldoc-nuevo-pdf'; fileInput.type='file'; fileInput.accept='application/pdf';
+      fileInput.onchange = ()=>{
+        legalDocsState.nuevoFile = fileInput.files[0] || null;
+        if(legalDocsState.nuevoFile && legalDocsState.nuevoFile.size > 20*1024*1024){
+          showToast('⚠ PDF de '+(legalDocsState.nuevoFile.size/1024/1024).toFixed(1)+' MB: puede tardar bastante y fallar más fácilmente. Si puedes, prueba a subir ley por ley en vez de un documento tan grande de una vez.');
+        }
+        renderTests();
+      };
       fileField.appendChild(fileInput);
       upPanel.appendChild(fileField);
       const subirBtn = document.createElement('button'); subirBtn.type='button'; subirBtn.className='btn'; subirBtn.style.marginTop='4px';
@@ -2239,8 +2294,9 @@ function renderTestsLegal(body){
       }
     } else {
       const textoField = document.createElement('div'); textoField.className='test-field';
-      textoField.innerHTML = '<label>Pega aquí el texto ya transcrito</label>';
+      textoField.innerHTML = '<label for="legaldoc-nuevo-texto">Pega aquí el texto ya transcrito</label>';
       const textoTa = createOptionTextarea(legalDocsState.nuevoTexto, 'Pega aquí el texto completo del documento (por ejemplo, transcrito por Claude en el chat)', (v)=> legalDocsState.nuevoTexto = v);
+      textoTa.id = 'legaldoc-nuevo-texto';
       textoTa.style.minHeight = '160px';
       textoField.appendChild(textoTa);
       upPanel.appendChild(textoField);
@@ -2261,8 +2317,8 @@ function renderTestsLegal(body){
   qPanel.innerHTML = '<h4>Pregunta</h4>';
 
   const fuenteField = document.createElement('div'); fuenteField.className='test-field';
-  fuenteField.innerHTML = '<label>Fuente</label>';
-  const fuenteSel = document.createElement('select');
+  fuenteField.innerHTML = '<label for="legaldoc-fuente">Fuente</label>';
+  const fuenteSel = document.createElement('select'); fuenteSel.id = 'legaldoc-fuente';
   [['guardado','Un documento guardado'], ['propio','Subir mi propio PDF (no se guarda)'], ['ninguna','Sin documento (solo mi pregunta o una captura)']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; fuenteSel.appendChild(o); });
   fuenteSel.value = legalDocsState.modoFuente;
   fuenteSel.onchange = ()=>{ legalDocsState.modoFuente = fuenteSel.value; renderTests(); };
@@ -2276,20 +2332,38 @@ function renderTestsLegal(body){
       qPanel.appendChild(p);
     } else {
       const selField = document.createElement('div'); selField.className='test-field';
-      selField.innerHTML = '<label>Documento</label>';
-      const sel = document.createElement('select');
-      legalDocsState.lista.forEach(d=>{ const o=document.createElement('option'); o.value=d.id; o.textContent=d.titulo; sel.appendChild(o); });
+      selField.innerHTML = '<label for="legaldoc-doc-select">Documento</label>';
+      const sel = document.createElement('select'); sel.id = 'legaldoc-doc-select';
+      legalDocsState.lista.forEach(d=>{
+        const o=document.createElement('option'); o.value=d.id;
+        o.textContent = d.titulo + (d.caracteres ? ' ('+Math.round(d.caracteres/1000)+' mil caracteres)' : '');
+        sel.appendChild(o);
+      });
       sel.value = legalDocsState.seleccionId || legalDocsState.lista[0].id;
       legalDocsState.seleccionId = sel.value;
-      sel.onchange = ()=> legalDocsState.seleccionId = sel.value;
+      sel.onchange = ()=>{ legalDocsState.seleccionId = sel.value; renderTests(); };
       selField.appendChild(sel);
       qPanel.appendChild(selField);
+      // Documentos muy grandes se mandan ENTEROS como contexto en cada pregunta: aviso para que no
+      // sea una sorpresa que tarde más o gaste más cuota de la esperada.
+      const docSel = legalDocsState.lista.find(d=>d.id===legalDocsState.seleccionId);
+      if(docSel && docSel.caracteres > 1500000){
+        const avisoGrande = document.createElement('div');
+        avisoGrande.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin-top:6px;';
+        avisoGrande.textContent = '⚠ Este documento es grande ('+Math.round(docSel.caracteres/1000)+' mil caracteres): cada pregunta lo manda entero como contexto, así que puede tardar más y gastar más cuota de lo normal.';
+        qPanel.appendChild(avisoGrande);
+      }
     }
   } else if(legalDocsState.modoFuente === 'propio'){
     const fileField = document.createElement('div'); fileField.className='test-field';
-    fileField.innerHTML = '<label>PDF (solo para esta pregunta)</label>';
-    const fileInput = document.createElement('input'); fileInput.type='file'; fileInput.accept='application/pdf';
-    fileInput.onchange = ()=>{ legalDocsState.adhocFile = fileInput.files[0] || null; };
+    fileField.innerHTML = '<label for="legaldoc-adhoc-pdf">PDF (solo para esta pregunta)</label>';
+    const fileInput = document.createElement('input'); fileInput.id = 'legaldoc-adhoc-pdf'; fileInput.type='file'; fileInput.accept='application/pdf';
+    fileInput.onchange = ()=>{
+      legalDocsState.adhocFile = fileInput.files[0] || null;
+      if(legalDocsState.adhocFile && legalDocsState.adhocFile.size > 20*1024*1024){
+        showToast('⚠ PDF de '+(legalDocsState.adhocFile.size/1024/1024).toFixed(1)+' MB: puede tardar bastante o fallar. Si el admin puede guardarlo permanentemente por partes, será más fiable que subirlo entero aquí cada vez.');
+      }
+    };
     fileField.appendChild(fileInput);
     qPanel.appendChild(fileField);
   } else {
@@ -2299,8 +2373,8 @@ function renderTestsLegal(body){
   }
 
   const imgField = document.createElement('div'); imgField.className='test-field';
-  imgField.innerHTML = '<label>Adjuntar una captura (opcional — ej. una pregunta fallada)</label>';
-  const imgInput = document.createElement('input'); imgInput.type='file'; imgInput.accept='image/*';
+  imgField.innerHTML = '<label for="legaldoc-imagen">Adjuntar una captura (opcional — ej. una pregunta fallada)</label>';
+  const imgInput = document.createElement('input'); imgInput.id = 'legaldoc-imagen'; imgInput.type='file'; imgInput.accept='image/*';
   imgInput.onchange = ()=>{ legalDocsState.imagenAdjunta = imgInput.files[0] || null; };
   imgField.appendChild(imgInput);
   if(legalDocsState.imagenAdjunta){
@@ -2312,8 +2386,9 @@ function renderTestsLegal(body){
   qPanel.appendChild(imgField);
 
   const pregField = document.createElement('div'); pregField.className='test-field';
-  pregField.innerHTML = '<label>Tu pregunta</label>';
+  pregField.innerHTML = '<label for="legaldoc-pregunta">Tu pregunta</label>';
   const pregTa = createOptionTextarea(legalDocsState.pregunta, 'Ej. ¿Qué dice el artículo 5 sobre...? o cuéntame qué falla en la captura', (v)=> legalDocsState.pregunta = v);
+  pregTa.id = 'legaldoc-pregunta';
   pregField.appendChild(pregTa);
   qPanel.appendChild(pregField);
 
