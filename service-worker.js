@@ -2,7 +2,7 @@
    Objetivo: que la app siempre abra (aunque no haya internet) y que puedas ver
    la última versión de tu banco de preguntas sincronizada, aunque no puedas guardar
    cambios nuevos hasta que vuelva la conexión (eso lo gestiona Firebase). */
-const CACHE_NAME = 'opotest-v34';
+const CACHE_NAME = 'opotest-v35';
 const FONT_CACHE = 'opotest-fonts-v1'; // fuentes de Google: se guardan aparte y sobreviven a las versiones de la app
 const APP_SHELL = [
   './',

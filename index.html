@@ -984,6 +984,43 @@ const DEFAULT_TEMARIO = {
     {nombre:`VOCABULARIO: Minimal pairs`, subtemas:[]},
     {nombre:`VOCABULARIO: Telling the time`, subtemas:[]}
   ],
+  // Bloque de test de la profesora Pilar, independiente del temario de gramática de "Test inglés":
+  // 32 lecciones con 4 test cada una. Cada subtema ("Test 1"..."Test 4") se considera superado al
+  // sacar UMBRAL_SUPERADO_PILAR aciertos o más en un intento (ver más abajo, sección PROGRESO).
+  ingles_pilar: [
+    {nombre:`Lección 1`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 2`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 3`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 4`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 5`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 6`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 7`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 8`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 9`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 10`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 11`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 12`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 13`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 14`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 15`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 16`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 17`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 18`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 19`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 20`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 21`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 22`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 23`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 24`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 25`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 26`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 27`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 28`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 29`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 30`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 31`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]},
+    {nombre:`Lección 32`, subtemas:[`Test 1`,`Test 2`,`Test 3`,`Test 4`]}
+  ],
   psico: [],
   ortografia: [],
   gramatica: []
@@ -994,6 +1031,7 @@ function cloneTemario(t){ return JSON.parse(JSON.stringify(t)); }
 const TEST_CATEGORIAS = [
   {key:'conocimientos', label:'Test teoría'},
   {key:'ingles', label:'Test inglés'},
+  {key:'ingles_pilar', label:'Inglés con Pilar'},
   {key:'psico', label:'Psicotécnicos'},
   {key:'ortografia', label:'Ortografía'},
   {key:'gramatica', label:'Gramática'}
@@ -1002,7 +1040,7 @@ function testCatLabel(key){ const c = TEST_CATEGORIAS.find(c=>c.key===key); retu
 // Color de acento por categoría (reutiliza la paleta ya existente en la app, sin añadir colores
 // nuevos): ayuda a identificar de qué categoría es una pregunta de un vistazo en el Banco.
 function testCatColor(key){
-  return ({ conocimientos:'var(--amber)', ingles:'var(--blue)', psico:'var(--green)', ortografia:'var(--red)', gramatica:'var(--cream-dim)' })[key] || 'var(--muted)';
+  return ({ conocimientos:'var(--amber)', ingles:'var(--blue)', ingles_pilar:'var(--amber-ink)', psico:'var(--green)', ortografia:'var(--red)', gramatica:'var(--cream-dim)' })[key] || 'var(--muted)';
 }
 // Nº de temas de una categoría: viene del temario cargado (editable por el admin), no de un
 // número fijo, así que si se añade o quita un tema el resto de la app se entera automáticamente.
@@ -1044,7 +1082,18 @@ async function loadTemario(){
     const snap = await db.collection('users').doc(bankOwnerUid()).collection('config').doc('temario').get();
     if(snap.exists && snap.data() && snap.data().categorias){
       state.temario = snap.data().categorias;
+      // Si el código de la app ha añadido una categoría nueva desde la última vez que se guardó
+      // el temario en Firestore (p.ej. "Inglés con Pilar"), se rellena aquí con el temario por
+      // defecto de esa categoría, para no depender de que alguien la teclee entera a mano.
+      let faltaAlguna = false;
+      Object.keys(DEFAULT_TEMARIO).forEach(cat=>{
+        if(!Array.isArray(state.temario[cat]) || !state.temario[cat].length){
+          state.temario[cat] = cloneTemario(DEFAULT_TEMARIO)[cat];
+          faltaAlguna = true;
+        }
+      });
       cacheTemarioLocally();
+      if(faltaAlguna && isAdmin) await saveTemarioRemote();
     } else if(isAdmin){
       // Primera vez que se usa esta cuenta: sembramos el temario por defecto en Firestore
       // para que también lo vean el resto de cuentas que practican con este banco.
@@ -1365,8 +1414,20 @@ let testsWizardCfg = { numPreguntas:10, modo:null, sinTiempo:false }; // config 
    Un día suma a la racha cuando respondes al menos tantas preguntas como tu objetivo diario. */
 const OBJETIVO_DEFECTO = 10;
 const TEST_RAPIDO_N = 10;
+// Umbral de aciertos para dar por "superado" un subtema, por categoría. Se usa en el bloque
+// "Inglés con Pilar" (32 lecciones × 4 test de 20 preguntas cada uno): con 18 aciertos o más
+// en un intento, ese test se marca en verde en el selector de temas. Categorías sin entrada
+// aquí no muestran ninguna marca (comportamiento igual que antes de añadir esto).
+const UMBRAL_SUPERADO = { ingles_pilar: 18 };
+function claveSuperado(categoria, tema, subtema){ return categoria+'|'+tema+'|'+subtema; }
+function mejorAciertosSubtema(categoria, tema, subtema){ const e = progreso.superados[claveSuperado(categoria,tema,subtema)]; return e ? e.ac : 0; }
+function subtemaSuperado(categoria, tema, subtema){
+  const umbral = UMBRAL_SUPERADO[categoria];
+  if(!umbral) return false;
+  return mejorAciertosSubtema(categoria, tema, subtema) >= umbral;
+}
 function fmtFechaKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function progresoVacio(){ return { dias:[], porDia:{}, objetivo:OBJETIVO_DEFECTO, objetivoTs:0, historial:[], examenFecha:'', examenTs:0, notas:{}, marcadas:{}, simulacros:[], actualizado:0 }; }
+function progresoVacio(){ return { dias:[], porDia:{}, objetivo:OBJETIVO_DEFECTO, objetivoTs:0, historial:[], examenFecha:'', examenTs:0, notas:{}, marcadas:{}, simulacros:[], superados:{}, actualizado:0 }; }
 let progreso = progresoVacio();
 let progresoTimer = null, progresoSinPermiso = false;
 function progresoKey(){ return 'opotest_progreso_'+(currentUid||'anon'); }
@@ -1401,6 +1462,9 @@ function normalizaProgreso(p){
   // Notas personales y preguntas marcadas ⭐: por pregunta, con marca de tiempo para poder fusionar dispositivos.
   if(p.notas && typeof p.notas==='object') Object.keys(p.notas).forEach(k=>{ const v = p.notas[k]; if(v && typeof v==='object') o.notas[k] = { x:String(v.x||'').slice(0,1500), t:Number(v.t)||0 }; });
   if(p.marcadas && typeof p.marcadas==='object') Object.keys(p.marcadas).forEach(k=>{ const v = p.marcadas[k]; if(v && typeof v==='object') o.marcadas[k] = { m:!!v.m, t:Number(v.t)||0 }; });
+  // Mejor intento por subtema (p.ej. "ingles_pilar|3|2" = Lección 3, Test 2): para marcar en verde
+  // en el selector de temas los test ya superados (ver UMBRAL_SUPERADO).
+  if(p.superados && typeof p.superados==='object') Object.keys(p.superados).forEach(k=>{ const v = p.superados[k]; if(v && typeof v==='object'){ const ac=Number(v.ac), n=Number(v.n); if(isFinite(ac) && ac>=0) o.superados[k] = { ac, n:(isFinite(n)?n:0), t:Number(v.t)||0 }; } });
   if(Array.isArray(p.simulacros)) o.simulacros = p.simulacros.filter(x=>x && x.id && isFinite(Number(x.t))).map(x=>({ id:String(x.id), t:Number(x.t), tipo:(x.tipo==='psico'?'psico':'con'), nota:Number(x.nota)||0, max:Number(x.max)||0, apto:(x.apto===true?true:(x.apto===false?false:null)), dv:(typeof x.dv==='string' ? x.dv.slice(0,30) : '') }));
   o.actualizado = Number(p.actualizado)||0;
   return o;
@@ -1410,6 +1474,16 @@ function mergeMapaConTs(ma, mb){
   new Set(Object.keys(ma).concat(Object.keys(mb))).forEach(k=>{ const x = ma[k], y = mb[k]; o[k] = (!y || (x && x.t>=y.t)) ? x : y; });
   const keys = Object.keys(o);
   if(keys.length>1000){ keys.sort((k1,k2)=>o[k2].t-o[k1].t).slice(1000).forEach(k=>{ delete o[k]; }); }
+  return o;
+}
+// A diferencia de mergeMapaConTs (que se queda con lo más reciente), aquí interesa quedarse
+// siempre con el MEJOR intento (más aciertos) de cada subtema, venga del dispositivo que venga.
+function mergeSuperados(ma, mb){
+  const o = {};
+  new Set(Object.keys(ma).concat(Object.keys(mb))).forEach(k=>{
+    const x = ma[k], y = mb[k];
+    o[k] = (!y || (x && x.ac>=y.ac)) ? x : y;
+  });
   return o;
 }
 // Une dos versiones del progreso sin perder nada de ninguna (móvil + ordenador).
@@ -1430,6 +1504,7 @@ function mergeProgreso(a, b){
   const ex = (b.examenTs > a.examenTs) ? b : a;           // igual con la fecha del examen
   return { dias, porDia, objetivo:ganador.objetivo, objetivoTs:ganador.objetivoTs, historial,
            examenFecha:ex.examenFecha, examenTs:ex.examenTs, notas:mergeMapaConTs(a.notas, b.notas), marcadas:mergeMapaConTs(a.marcadas, b.marcadas), simulacros,
+           superados:mergeSuperados(a.superados, b.superados),
            actualizado:Math.max(a.actualizado, b.actualizado) };
 }
 function cargarProgresoLocal(){
@@ -1451,7 +1526,8 @@ function progresoDifiere(fusionado, remoto){
   return fusionado.dias.length!==remoto.dias.length || fusionado.historial.length!==remoto.historial.length
     || fusionado.objetivo!==remoto.objetivo || Object.keys(fusionado.porDia).length!==Object.keys(remoto.porDia).length
     || fusionado.examenFecha!==remoto.examenFecha || Object.keys(fusionado.notas).length!==Object.keys(remoto.notas).length
-    || Object.keys(fusionado.marcadas).length!==Object.keys(remoto.marcadas).length || fusionado.simulacros.length!==remoto.simulacros.length;
+    || Object.keys(fusionado.marcadas).length!==Object.keys(remoto.marcadas).length || fusionado.simulacros.length!==remoto.simulacros.length
+    || Object.keys(fusionado.superados).length!==Object.keys(remoto.superados).length;
 }
 async function cargarProgreso(){
   progresoSinPermiso = false;
@@ -1852,9 +1928,9 @@ let legalDocsState = {
   chunksCache: {},
   modoFuente: 'guardado', // 'guardado' | 'propio'
   seleccionId: null,
-  pregunta: '', respuesta: '', respuestaFuente: '', preguntando: false, errorPregunta: null,
+  pregunta: '', respuesta: '', preguntando: false, errorPregunta: null,
   nuevoTitulo: '', nuevoFile: null, subiendo: false, subidaProgreso: null, subidaError: null,
-  adhocFile: null, adhocPreguntando: false, adhocRespuesta: '', adhocRespuestaFuente: '', adhocError: null
+  adhocFile: null, adhocPreguntando: false, adhocRespuesta: '', adhocError: null
 };
 function legalDocsCollection(){ return db.collection('users').doc(bankOwnerUid()).collection('legalDocs'); }
 function legalDocChunksCollection(docId){ return legalDocsCollection().doc(docId).collection('chunks'); }
@@ -1974,7 +2050,6 @@ async function preguntarSobreLegalDoc(){
     const contenido = [{tipo:'texto', texto:prompt}];
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.respuesta = respuesta.trim();
-    legalDocsState.respuestaFuente = doc ? doc.titulo : '';
   }catch(err){
     console.error(err);
     legalDocsState.errorPregunta = err.message || 'No se pudo obtener respuesta.';
@@ -1994,7 +2069,6 @@ async function preguntarSobreLegalAdhoc(){
     const contenido = [{tipo:'pdf', b64, nombre: legalDocsState.adhocFile.name || 'documento.pdf'}, {tipo:'texto', texto:prompt}];
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.adhocRespuesta = respuesta.trim();
-    legalDocsState.adhocRespuestaFuente = legalDocsState.adhocFile.name || 'documento.pdf';
   }catch(err){
     console.error(err);
     legalDocsState.adhocError = err.message || 'No se pudo obtener respuesta (si el PDF es muy largo, pide al admin que lo guarde permanentemente en vez de subirlo aquí cada vez).';
@@ -2156,16 +2230,9 @@ function renderTestsLegal(body){
     qPanel.appendChild(e);
   }
   const respuestaTxt = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuesta : legalDocsState.adhocRespuesta;
-  const respuestaFuente = legalDocsState.modoFuente==='guardado' ? legalDocsState.respuestaFuente : legalDocsState.adhocRespuestaFuente;
   if(respuestaTxt){
-    if(respuestaFuente){
-      const fuenteEl = document.createElement('div');
-      fuenteEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:10px;font-weight:600;';
-      fuenteEl.textContent = '📄 Documento: '+respuestaFuente;
-      qPanel.appendChild(fuenteEl);
-    }
     const respBox = document.createElement('div');
-    respBox.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);'+(respuestaFuente?'margin-top:6px;':'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);')+'line-height:1.5;';
+    respBox.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);line-height:1.5;';
     renderRich(respuestaTxt, respBox);
     qPanel.appendChild(respBox);
   }
@@ -5031,9 +5098,23 @@ function renderTemaPicker(host, pick, onChange){
         };
         subRow.appendChild(subCheck);
         subRow.appendChild(document.createTextNode(nombre));
+        if(subtemaSuperado(pick.categoria, i, subNum)){
+          const ok = document.createElement('span');
+          ok.textContent = ' ✅';
+          ok.title = 'Superado (mejor intento: '+mejorAciertosSubtema(pick.categoria,i,subNum)+'/'+UMBRAL_SUPERADO[pick.categoria]+' o más)';
+          ok.style.color = 'var(--green)';
+          subRow.appendChild(ok);
+        }
         bodyEl.appendChild(subRow);
       });
       node.appendChild(bodyEl);
+      if(subs.length && subs.every((_,si)=>subtemaSuperado(pick.categoria, i, si+1))){
+        const okAll = document.createElement('span');
+        okAll.textContent = ' ✅';
+        okAll.title = 'Lección superada: los '+subs.length+' test están en verde';
+        okAll.style.color = 'var(--green)';
+        label.appendChild(okAll);
+      }
     }
     wrap.appendChild(node);
   }
@@ -5612,6 +5693,19 @@ function registrarResultadoDelTest(){
   } else {
     progreso.historial.push({ id:'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:Date.now(), n:total, ac:aciertos, dv:nombreDispositivo() });
     progreso.historial = progreso.historial.slice(-40);
+  }
+  // Si el test cubre un único tema+subtema (p.ej. un "Test" de una lección de "Inglés con Pilar"),
+  // guarda el mejor intento (más aciertos) para poder marcarlo en verde en el selector de temas.
+  if(!testsQuiz.simulacro && total){
+    const qs = items.map(it=>it.q);
+    const cat = qs[0].categoria, tema = qs[0].tema, subtema = qs[0].subtema;
+    if(cat && tema!=null && subtema!=null && qs.every(q=>q.categoria===cat && q.tema===tema && q.subtema===subtema)){
+      const clave = claveSuperado(cat, tema, subtema);
+      const anterior = progreso.superados[clave];
+      if(!anterior || aciertos > anterior.ac){
+        progreso.superados[clave] = { ac: aciertos, n: total, t: Date.now() };
+      }
+    }
   }
   programarGuardadoProgreso(true);
 }
@@ -7008,11 +7102,15 @@ function renderBackupBox(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn ghost small" id="exportBackupBtn">Exportar copia (JSON)</button>
       <label class="btn ghost small" style="cursor:pointer;">Importar copia (JSON)<input type="file" accept="application/json" id="importBackupInput" style="display:none;"></label>
+      <label class="btn ghost small" style="cursor:pointer;">Añadir preguntas (JSON)<input type="file" accept="application/json" id="addQuestionsInput" style="display:none;"></label>
     </div>
+    <div style="font-size:11px;color:var(--cream-dim);margin-top:6px;">"Añadir preguntas" NO borra nada: solo añade preguntas nuevas (o actualiza, por id, las que ya existieran con ese mismo id) al banco actual. Es la opción segura para meter de golpe un bloque nuevo de preguntas sin tocar el resto.</div>
   `;
   document.getElementById('exportBackupBtn').onclick = ()=> exportBackup(false);
   const importInput = document.getElementById('importBackupInput');
   if(importInput) importInput.onchange = importBackup;
+  const addInput = document.getElementById('addQuestionsInput');
+  if(addInput) addInput.onchange = addQuestionsFromFile;
 }
 // auto=true: se usa como red de seguridad justo antes de "Importar copia" (que sustituye TODO
 // el banco), así que no descarga con el mismo nombre que una exportación manual (para no
@@ -7051,6 +7149,42 @@ function importBackup(e){
       for(const q of qs){ await saveTestQuestionRemote(q); }
       setTestBankLastSync(Date.now());
       showToast('Copia importada ✓ (se descargó antes una copia de seguridad del banco anterior)');
+      renderTests();
+    }catch(err){
+      console.error(err);
+      showToast('No se pudo leer el archivo.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+// A diferencia de "Importar copia" (que SUSTITUYE todo el banco), esto solo AÑADE: las preguntas
+// cuyo id ya existe en el banco se actualizan (así una reimportación tras corregir algo no duplica
+// nada), y el resto de preguntas existentes no se tocan. Pensado para meter de golpe un bloque
+// nuevo (p.ej. un archivo exportado desde el script que genera "Inglés con Pilar") sin arriesgarse
+// a borrar el resto del banco por accidente.
+function addQuestionsFromFile(e){
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      const qs = Array.isArray(data) ? data : (Array.isArray(data.questions) ? data.questions : []);
+      if(!qs.length){ showToast('El archivo no contiene preguntas.'); return; }
+      const malformadas = qs.filter(q=>!q || !q.id || !q.categoria || !Array.isArray(q.opciones) || q.opciones.length!==4 || !(q.correcta>=0 && q.correcta<=3));
+      if(malformadas.length){ showToast('El archivo tiene '+malformadas.length+' pregunta(s) con formato inválido; no se ha importado nada.'); return; }
+      const existentes = new Set((state.testBank.questions||[]).map(q=>q.id));
+      const nuevas = qs.filter(q=>!existentes.has(q.id)).length;
+      const actualizadas = qs.length - nuevas;
+      if(!confirm('Se van a añadir '+nuevas+' pregunta(s) nueva(s)'+(actualizadas?' y actualizar '+actualizadas+' ya existente(s) (mismo id)':'')+' al banco actual. No se borra ni se toca ninguna otra pregunta. ¿Continuar?')) return;
+      const porId = new Map((state.testBank.questions||[]).map(q=>[q.id,q]));
+      qs.forEach(q=>porId.set(q.id, q));
+      state.testBank.questions = Array.from(porId.values());
+      cacheTestBankLocally();
+      for(const q of qs){ await saveTestQuestionRemote(q); }
+      setTestBankLastSync(Date.now());
+      showToast('Preguntas añadidas ✓ ('+nuevas+' nuevas'+(actualizadas?', '+actualizadas+' actualizadas':'')+')');
       renderTests();
     }catch(err){
       console.error(err);
