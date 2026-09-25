@@ -1280,6 +1280,12 @@ function renderIAKeyPanel(container, stateObj, opts){
   const intro = document.createElement('p'); intro.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;';
   intro.innerHTML = 'Todas se guardan solo en este dispositivo (no viajan a Firebase). Basta con rellenar UNA. Si rellenas varias, la app las prueba en este orden y salta a la siguiente en cuanto una falla o se le agota la cuota gratuita del día: <b>Gemini → OpenRouter'+(opts.conExtra?' → proveedor extra':'')+'</b>.';
   bodyDiv.appendChild(intro);
+  const usoHoy = usoIAHoy();
+  if(usoHoy > 0){
+    const usoEl = document.createElement('p'); usoEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin:0 0 12px;';
+    usoEl.textContent = '📊 Hoy has hecho '+usoHoy+' llamada'+(usoHoy===1?'':'s')+' a la IA desde este dispositivo (asistente, revisar, generar preguntas...).';
+    bodyDiv.appendChild(usoEl);
+  }
 
   const modoField = document.createElement('div'); modoField.className='test-field'; modoField.style.margin='0 0 14px';
   modoField.innerHTML = '<label>¿Cuál usar?</label>';
@@ -1858,6 +1864,27 @@ async function llamarProveedorExtra(contenido, opts){
 let ultimoProveedorIA = '';
 // contenido: ver formato neutro de arriba. opts:{temperature,maxTokens}. incluirExtra: si se debe
 // probar también el proveedor extra (solo tiene sentido para fotos, no para PDFs).
+// Contador de uso de IA de hoy (solo en este dispositivo): cuenta una vez por cada "pregunta"
+// hecha a la IA desde cualquier sitio de la app (asistente, revisar, generar preguntas,
+// explicaciones...), para hacerte una idea de cuánta cuota llevas gastada sin tener que ir a
+// mirar el panel del proveedor. No cuenta reintentos de un mismo proveedor, ni el segundo/tercer
+// proveedor si el primero falla: eso sigue siendo la misma "pregunta" para el usuario.
+function iaUsoHoyKey(){
+  const d = new Date();
+  const ymd = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return 'opotest_ia_uso_'+currentUid+'_'+ymd;
+}
+function registrarUsoIA(){
+  try{
+    const k = iaUsoHoyKey();
+    const n = parseInt(localStorage.getItem(k)||'0',10) + 1;
+    localStorage.setItem(k, String(n));
+  }catch(e){ /* si falla, no pasa nada grave: es solo un contador informativo */ }
+}
+function usoIAHoy(){
+  try{ return parseInt(localStorage.getItem(iaUsoHoyKey())||'0',10); }
+  catch(e){ return 0; }
+}
 async function llamarIAConFallback(contenido, opts, incluirExtra){
   const intentos = [
     { id:'gemini', nombre:'Google Gemini', activo: !!getGeminiKey(), fn: ()=> llamarGemini(contenido, opts) },
@@ -1873,6 +1900,7 @@ async function llamarIAConFallback(contenido, opts, incluirExtra){
     activos = [forzado];
   }
   if(!activos.length) throw new Error('No has configurado ninguna clave de IA (Gemini, OpenRouter'+(incluirExtra?' u otro proveedor':'')+'). Configúrala arriba.');
+  registrarUsoIA();
   const errores = [];
   for(const intento of activos){
     try{
@@ -1909,6 +1937,17 @@ async function revisarPreguntaConIA(q){
   const texto = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:500}, false);
   return texto.trim();
 }
+// Igual que revisarPreguntaConIA, pero además apunta cuándo se revisó por última vez (para que
+// "Revisar en bloque" pueda priorizar las que nunca han pasado por la IA en vez de repetir siempre
+// las primeras de la lista). Si el guardado falla (por ejemplo, sin conexión), no pasa nada grave:
+// se pierde solo el dato de "cuándo", no el veredicto que se acaba de dar.
+async function revisarYMarcar(q){
+  const veredicto = await revisarPreguntaConIA(q);
+  q.revisadoIAFecha = Date.now();
+  try{ await saveTestQuestionRemote(q); }
+  catch(e){ console.error('No se pudo guardar la fecha de revisión de IA:', e); }
+  return veredicto;
+}
 
 /* ===================== ASISTENTE DE DUDAS SOBRE DOCUMENTOS LEGALES =====================
    Dos modos, disponibles para cualquier cuenta aprobada (no solo admin):
@@ -1927,7 +1966,7 @@ let legalDocsState = {
   lista: [], cargado: false, cargando: false, error: null,
   chunksCache: {},
   modoFuente: 'guardado', // 'guardado' | 'propio' | 'ninguna'
-  seleccionId: null,
+  seleccionIds: [],
   imagenAdjunta: null,
   pregunta: '', respuesta: '', respuestaFuente: '', preguntando: false, errorPregunta: null,
   nuevoTitulo: '', nuevoFile: null, modoSubida: 'pdf', nuevoTexto: '', subiendo: false, subidaProgreso: null, subidaError: null,
@@ -1943,8 +1982,10 @@ async function cargarLegalDocsLista(){
   try{
     const snap = await legalDocsCollection().get();
     legalDocsState.lista = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>!d.borrado).sort((a,b)=>(b.actualizado||0)-(a.actualizado||0));
-    if(legalDocsState.lista.length && !legalDocsState.lista.some(d=>d.id===legalDocsState.seleccionId)){
-      legalDocsState.seleccionId = legalDocsState.lista[0].id;
+    const idsValidos = new Set(legalDocsState.lista.map(d=>d.id));
+    legalDocsState.seleccionIds = (legalDocsState.seleccionIds||[]).filter(id=>idsValidos.has(id));
+    if(legalDocsState.lista.length && !legalDocsState.seleccionIds.length){
+      legalDocsState.seleccionIds = [legalDocsState.lista[0].id];
     }
     legalDocsState.cargado = true;
   }catch(e){
@@ -2115,6 +2156,25 @@ async function ejecutarSubidaLegalDocDesdeTexto(){
 }
 // Convierte la captura adjunta (si hay alguna) al formato de "contenido" que ya entiende
 // llamarIAConFallback, para poder mandarla junto al texto o al PDF en cualquiera de los 3 modos.
+// Historial reciente del asistente (solo en este dispositivo, no se sincroniza): guarda las
+// últimas preguntas/respuestas para poder repasarlas sin tener que volver a preguntar lo mismo.
+const LEGAL_HISTORIAL_MAX = 20;
+function legalHistorialKey(){ return 'opotest_legal_historial_'+currentUid; }
+function cargarLegalHistorial(){
+  try{ return JSON.parse(localStorage.getItem(legalHistorialKey())||'[]'); }
+  catch(e){ return []; }
+}
+function guardarEnLegalHistorial(entry){
+  try{
+    const lista = cargarLegalHistorial();
+    lista.unshift(entry);
+    while(lista.length > LEGAL_HISTORIAL_MAX) lista.pop();
+    localStorage.setItem(legalHistorialKey(), JSON.stringify(lista));
+  }catch(e){ console.error('No se pudo guardar en el historial local:', e); }
+}
+function borrarLegalHistorial(){
+  try{ localStorage.removeItem(legalHistorialKey()); }catch(e){ console.error(e); }
+}
 async function imagenAdjuntaComoContenido(){
   if(!legalDocsState.imagenAdjunta) return null;
   const b64 = await fileToBase64(legalDocsState.imagenAdjunta);
@@ -2122,20 +2182,25 @@ async function imagenAdjuntaComoContenido(){
 }
 const NOTA_IMAGEN_ADJUNTA = '\n\nAdemás te adjunto una captura de pantalla (puede ser una pregunta que has fallado, un error de la app, o cualquier otra cosa relacionada con tu estudio o con OpoTest); ténla en cuenta para responder.';
 async function preguntarSobreLegalDoc(){
-  if(!legalDocsState.seleccionId){ showToast('Elige primero un documento guardado.'); return; }
+  if(!legalDocsState.seleccionIds || !legalDocsState.seleccionIds.length){ showToast('Elige primero al menos un documento guardado.'); return; }
   if(!legalDocsState.pregunta.trim()){ showToast('Escribe tu pregunta.'); return; }
   legalDocsState.preguntando = true; legalDocsState.errorPregunta = null; legalDocsState.respuesta = '';
   renderTests();
   try{
-    const texto = await obtenerTextoLegalDoc(legalDocsState.seleccionId);
-    const doc = legalDocsState.lista.find(d=>d.id===legalDocsState.seleccionId);
+    const docs = legalDocsState.seleccionIds.map(id=>legalDocsState.lista.find(d=>d.id===id)).filter(Boolean);
+    const bloques = await Promise.all(docs.map(async d=>{
+      const texto = await obtenerTextoLegalDoc(d.id);
+      return '--- DOCUMENTO: '+d.titulo+' ---\n'+texto+'\n--- FIN DE '+d.titulo+' ---';
+    }));
     const imgParte = await imagenAdjuntaComoContenido();
-    const prompt = 'Eres un asistente que ayuda a estudiar para una oposición española (Guardia Civil). A continuación tienes el texto completo de un documento legal/temario llamado "'+(doc?doc.titulo:'documento')+'". Responde SOLO con información que esté en ese texto; si la respuesta no aparece en el documento, dilo claramente en vez de inventarla. Sé conciso (máximo 6-8 líneas) y cita el artículo o apartado exacto si el documento lo indica.'+(imgParte?NOTA_IMAGEN_ADJUNTA:'')+'\n\n--- DOCUMENTO ---\n'+texto+'\n--- FIN DEL DOCUMENTO ---\n\nPregunta: '+legalDocsState.pregunta.trim();
+    const varios = docs.length > 1;
+    const prompt = 'Eres un asistente que ayuda a estudiar para una oposición española (Guardia Civil). A continuación tienes el texto completo de '+(varios?('varios documentos legales/temario ('+docs.map(d=>d.titulo).join(', ')+')'):('un documento legal/temario llamado "'+(docs[0]?docs[0].titulo:'documento')+'"'))+'. Responde SOLO con información que esté en '+(varios?'esos textos':'ese texto')+'; si la respuesta no aparece, dilo claramente en vez de inventarla. Sé conciso (máximo 6-8 líneas) y cita el artículo/apartado y, si hay varios documentos, de cuál procede cada dato.'+(imgParte?NOTA_IMAGEN_ADJUNTA:'')+'\n\n'+bloques.join('\n\n')+'\n\nPregunta: '+legalDocsState.pregunta.trim();
     const contenido = [{tipo:'texto', texto:prompt}];
     if(imgParte) contenido.push(imgParte);
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.respuesta = respuesta.trim();
-    legalDocsState.respuestaFuente = doc ? doc.titulo : '';
+    legalDocsState.respuestaFuente = docs.map(d=>d.titulo).join(' + ');
+    guardarEnLegalHistorial({ pregunta: legalDocsState.pregunta.trim(), respuesta: legalDocsState.respuesta, fuente: legalDocsState.respuestaFuente, fecha: Date.now() });
   }catch(err){
     console.error(err);
     legalDocsState.errorPregunta = err.message || 'No se pudo obtener respuesta.';
@@ -2158,6 +2223,7 @@ async function preguntarSobreLegalAdhoc(){
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.2, maxTokens:1200}, false);
     legalDocsState.adhocRespuesta = respuesta.trim();
     legalDocsState.adhocRespuestaFuente = legalDocsState.adhocFile.name || 'documento.pdf';
+    guardarEnLegalHistorial({ pregunta: legalDocsState.pregunta.trim(), respuesta: legalDocsState.adhocRespuesta, fuente: legalDocsState.adhocRespuestaFuente, fecha: Date.now() });
   }catch(err){
     console.error(err);
     legalDocsState.adhocError = err.message || 'No se pudo obtener respuesta (si el PDF es muy largo, pide al admin que lo guarde permanentemente en vez de subirlo aquí cada vez).';
@@ -2179,6 +2245,7 @@ async function preguntarSinDocumento(){
     if(imgParte) contenido.push(imgParte);
     const respuesta = await llamarIAConFallback(contenido, {temperature:0.3, maxTokens:1200}, false);
     legalDocsState.ningunaRespuesta = respuesta.trim();
+    guardarEnLegalHistorial({ pregunta: legalDocsState.pregunta.trim() || '(solo captura adjunta)', respuesta: legalDocsState.ningunaRespuesta, fuente: '', fecha: Date.now() });
   }catch(err){
     console.error(err);
     legalDocsState.ningunaError = err.message || 'No se pudo obtener respuesta.';
@@ -2240,7 +2307,7 @@ function renderTestsLegal(body){
             try{
               await borrarLegalDoc(d.id);
               delete legalDocsState.chunksCache[d.id];
-              if(legalDocsState.seleccionId===d.id) legalDocsState.seleccionId = null;
+              legalDocsState.seleccionIds = (legalDocsState.seleccionIds||[]).filter(id=>id!==d.id);
               legalDocsState.cargado = false;
               await cargarLegalDocsLista();
               showToast('Documento borrado ✓');
@@ -2332,25 +2399,33 @@ function renderTestsLegal(body){
       qPanel.appendChild(p);
     } else {
       const selField = document.createElement('div'); selField.className='test-field';
-      selField.innerHTML = '<label for="legaldoc-doc-select">Documento</label>';
-      const sel = document.createElement('select'); sel.id = 'legaldoc-doc-select';
+      selField.innerHTML = '<label>Documento(s) — puedes marcar más de uno si tu pregunta cruza varias leyes</label>';
+      const lista = document.createElement('div'); lista.style.cssText='display:flex;flex-direction:column;gap:6px;';
       legalDocsState.lista.forEach(d=>{
-        const o=document.createElement('option'); o.value=d.id;
-        o.textContent = d.titulo + (d.caracteres ? ' ('+Math.round(d.caracteres/1000)+' mil caracteres)' : '');
-        sel.appendChild(o);
+        const fila = document.createElement('label'); fila.style.cssText='display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:13px;cursor:pointer;';
+        const chk = document.createElement('input'); chk.type='checkbox'; chk.id = 'legaldoc-check-'+d.id;
+        chk.checked = (legalDocsState.seleccionIds||[]).includes(d.id);
+        chk.onchange = ()=>{
+          const ids = new Set(legalDocsState.seleccionIds||[]);
+          if(chk.checked) ids.add(d.id); else ids.delete(d.id);
+          legalDocsState.seleccionIds = Array.from(ids);
+          renderTests();
+        };
+        const txt = document.createElement('span');
+        txt.textContent = d.titulo + (d.caracteres ? ' ('+Math.round(d.caracteres/1000)+' mil caracteres)' : '');
+        fila.appendChild(chk); fila.appendChild(txt);
+        lista.appendChild(fila);
       });
-      sel.value = legalDocsState.seleccionId || legalDocsState.lista[0].id;
-      legalDocsState.seleccionId = sel.value;
-      sel.onchange = ()=>{ legalDocsState.seleccionId = sel.value; renderTests(); };
-      selField.appendChild(sel);
+      selField.appendChild(lista);
       qPanel.appendChild(selField);
-      // Documentos muy grandes se mandan ENTEROS como contexto en cada pregunta: aviso para que no
-      // sea una sorpresa que tarde más o gaste más cuota de la esperada.
-      const docSel = legalDocsState.lista.find(d=>d.id===legalDocsState.seleccionId);
-      if(docSel && docSel.caracteres > 1500000){
+      // Documentos muy grandes (o varios a la vez) se mandan ENTEROS como contexto en cada
+      // pregunta: aviso para que no sea una sorpresa que tarde más o gaste más cuota de la esperada.
+      const docsSel = legalDocsState.lista.filter(d=>(legalDocsState.seleccionIds||[]).includes(d.id));
+      const totalCaracteres = docsSel.reduce((s,d)=>s+(d.caracteres||0), 0);
+      if(totalCaracteres > 1500000){
         const avisoGrande = document.createElement('div');
         avisoGrande.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin-top:6px;';
-        avisoGrande.textContent = '⚠ Este documento es grande ('+Math.round(docSel.caracteres/1000)+' mil caracteres): cada pregunta lo manda entero como contexto, así que puede tardar más y gastar más cuota de lo normal.';
+        avisoGrande.textContent = '⚠ '+(docsSel.length>1?'Entre los documentos marcados suman':'Este documento tiene')+' '+Math.round(totalCaracteres/1000)+' mil caracteres: cada pregunta los manda enteros como contexto, así que puede tardar más y gastar más cuota de lo normal.';
         qPanel.appendChild(avisoGrande);
       }
     }
@@ -2423,6 +2498,38 @@ function renderTestsLegal(body){
     qPanel.appendChild(respBox);
   }
   body.appendChild(qPanel);
+
+  // Historial reciente (solo en este dispositivo): para repasar dudas ya resueltas sin tener que
+  // volver a preguntarlas ni gastar cuota de nuevo.
+  const historial = cargarLegalHistorial();
+  if(historial.length){
+    const histPanel = document.createElement('div'); histPanel.className='test-panel';
+    const histHead = document.createElement('div'); histHead.style.cssText='display:flex;justify-content:space-between;align-items:center;';
+    const histTitulo = document.createElement('h4'); histTitulo.textContent = '🕘 Historial reciente ('+historial.length+')'; histTitulo.style.margin='0';
+    histHead.appendChild(histTitulo);
+    const borrarBtn = document.createElement('button'); borrarBtn.type='button'; borrarBtn.className='btn small ghost';
+    borrarBtn.textContent = 'Borrar historial';
+    borrarBtn.onclick = ()=>{ if(confirm('¿Borrar todo el historial de este dispositivo? No afecta a lo guardado en el banco ni a los documentos.')){ borrarLegalHistorial(); renderTests(); } };
+    histHead.appendChild(borrarBtn);
+    histPanel.appendChild(histHead);
+    historial.forEach((h, idx)=>{
+      const item = document.createElement('details'); item.style.cssText='margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);';
+      const resumen = document.createElement('summary'); resumen.style.cssText='cursor:pointer;font-family:var(--font-mono);font-size:13px;color:var(--cream);';
+      const fecha = new Date(h.fecha||Date.now());
+      resumen.textContent = h.pregunta.slice(0,90) + (h.pregunta.length>90?'…':'') + '  ·  ' + fecha.toLocaleDateString() + ' ' + fecha.toLocaleTimeString().slice(0,5);
+      item.appendChild(resumen);
+      if(h.fuente){
+        const f = document.createElement('div'); f.style.cssText='font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-top:6px;font-weight:600;';
+        f.textContent = '📄 '+h.fuente;
+        item.appendChild(f);
+      }
+      const r = document.createElement('div'); r.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:6px;line-height:1.5;';
+      renderRich(h.respuesta||'', r);
+      item.appendChild(r);
+      histPanel.appendChild(item);
+    });
+    body.appendChild(histPanel);
+  }
 }
 
 /* ===================== COMPARTIR PREGUNTA (PNG / Telegram) =====================
@@ -3225,6 +3332,9 @@ function renderTests(){
   const tabs = isAdmin
     ? [['practicar','Practicar'],['banco','Banco de preguntas'],['anadir','Añadir pregunta'],['temario','Temario'],['legal','Asistente IA'],['progreso','Progreso']]
     : [['practicar','Practicar'],['legal','Asistente IA'],['progreso','Progreso']];
+  // Carga los reportes abiertos una vez en segundo plano (sin bloquear nada) para poder avisar con
+  // un badge en la pestaña del Banco aunque el admin todavía no haya entrado a mirarlo.
+  if(isAdmin && !reportesState.cargado && !reportesState.cargando) cargarReportes();
   // Franja de resumen: da un primer vistazo tipo "panel de control" antes de las pestañas, con
   // los números que más importan (tamaño del banco y precisión global de quien practica).
   const questions = state.testBank.questions || [];
@@ -3246,7 +3356,8 @@ function renderTests(){
   const nav = document.createElement('div'); nav.className='test-subnav';
   tabs.forEach(([key,label])=>{
     const b = document.createElement('button'); b.type='button';
-    b.innerHTML = '<span class="tab-ic">'+(TAB_ICONS[key]||'')+'</span><span>'+label+'</span>';
+    const badge = (key==='banco' && isAdmin && reportesState.lista.length) ? ' <span style="color:var(--amber-ink);font-weight:700;">🚩'+reportesState.lista.length+'</span>' : '';
+    b.innerHTML = '<span class="tab-ic">'+(TAB_ICONS[key]||'')+'</span><span>'+label+badge+'</span>';
     if(testsActiveSubtab===key) b.classList.add('active');
     b.onclick = ()=>{ const cambiaAPracticar = key==='practicar' && testsActiveSubtab!=='practicar'; testsActiveSubtab = key; if(key!=='practicar'){ clearQuizTimer(); testsQuiz=null; } else if(cambiaAPracticar && !testsQuiz){ resetTestsWizard(); } renderTests(); };
     nav.appendChild(b);
@@ -4608,7 +4719,115 @@ function renderTestsProgreso(body){
   body.appendChild(panel);
 }
 
+let reportesState = { lista:[], resueltos:[], cargado:false, cargando:false, error:null, verResueltos:false };
+async function cargarReportes(){
+  if(!firebaseOk || !db || !currentUid) return;
+  reportesState.cargando = true; reportesState.error = null; renderTests();
+  try{
+    const snap = await reportesCollection().get();
+    const todos = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    reportesState.lista = todos.filter(r=>r.estado!=='resuelto').sort((a,b)=>(b.fecha||0)-(a.fecha||0));
+    reportesState.resueltos = todos.filter(r=>r.estado==='resuelto').sort((a,b)=>(b.resueltoFecha||0)-(a.resueltoFecha||0));
+    reportesState.cargado = true;
+  }catch(e){
+    console.error(e);
+    reportesState.error = 'No se pudieron cargar los reportes.';
+  }
+  reportesState.cargando = false; renderTests();
+}
+async function marcarReporteResuelto(id){
+  try{
+    await reportesCollection().doc(id).update({ estado:'resuelto', resueltoFecha: Date.now() });
+    const r = reportesState.lista.find(x=>x.id===id);
+    reportesState.lista = reportesState.lista.filter(r=>r.id!==id);
+    if(r){ r.estado='resuelto'; r.resueltoFecha=Date.now(); reportesState.resueltos.unshift(r); }
+    renderTests();
+  }catch(e){
+    console.error(e);
+    showToast('No se pudo marcar como resuelto.');
+  }
+}
+// Los reportes resueltos no ocupan casi nada en Firestore, pero con meses de uso se acumulan sin
+// ningún sitio para verlos o quitarlos de en medio — esto los borra todos de una vez.
+async function borrarReportesResueltos(){
+  if(!reportesState.resueltos.length){ showToast('No hay reportes resueltos que borrar.'); return; }
+  if(!confirm('¿Borrar los '+reportesState.resueltos.length+' reporte(s) ya resueltos? No se puede deshacer (no afecta a las preguntas, solo al registro del reporte).')) return;
+  try{
+    for(const r of reportesState.resueltos){ await reportesCollection().doc(r.id).delete(); }
+    reportesState.resueltos = [];
+    showToast('Reportes resueltos borrados ✓');
+    renderTests();
+  }catch(e){
+    console.error(e);
+    showToast('No se pudieron borrar todos: '+(e.message||''));
+  }
+}
+function renderReportesPanel(body){
+  if(!reportesState.cargado && !reportesState.cargando) cargarReportes();
+  if(!reportesState.lista.length && !reportesState.resueltos.length && reportesState.cargado) return; // nada que mostrar
+  const panel = document.createElement('div'); panel.className='test-panel';
+  panel.style.borderColor = 'var(--amber)';
+  const h = document.createElement('h4'); h.textContent = '🚩 Preguntas reportadas ('+(reportesState.cargando?'…':reportesState.lista.length)+')';
+  panel.appendChild(h);
+  if(reportesState.error){
+    const e = document.createElement('div'); e.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);'; e.textContent = reportesState.error;
+    panel.appendChild(e);
+  }
+  reportesState.lista.forEach(r=>{
+    const item = document.createElement('div'); item.style.cssText='margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);';
+    const enun = document.createElement('div'); enun.style.cssText='font-family:var(--font-mono);font-size:13px;color:var(--cream);font-weight:600;';
+    enun.textContent = r.enunciado || '(sin enunciado)';
+    item.appendChild(enun);
+    const meta = document.createElement('div'); meta.className='tc-stat';
+    meta.textContent = 'Reportada por '+(r.reportadoPorEmail||'alguien')+' · '+new Date(r.fecha||Date.now()).toLocaleString();
+    item.appendChild(meta);
+    if(r.motivoUsuario){
+      const mot = document.createElement('div'); mot.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:6px;';
+      mot.textContent = '💬 '+r.motivoUsuario;
+      item.appendChild(mot);
+    }
+    const ver = document.createElement('div'); ver.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:6px;line-height:1.5;';
+    ver.textContent = r.veredictoIA ? ('🤖 '+r.veredictoIA) : ('🤖 (la IA no pudo revisarla: '+(r.errorIA||'error desconocido')+')');
+    item.appendChild(ver);
+    const acts = document.createElement('div'); acts.style.cssText='display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;';
+    const verBtn = document.createElement('button'); verBtn.type='button'; verBtn.className='btn small ghost'; verBtn.textContent='Ver pregunta';
+    verBtn.onclick = ()=>{
+      const q = state.testBank.questions.find(x=>x.id===r.preguntaId);
+      if(q) openTestPreviewModal(q); else showToast('Esa pregunta ya no existe en el banco (puede que se haya borrado).');
+    };
+    acts.appendChild(verBtn);
+    const resBtn = document.createElement('button'); resBtn.type='button'; resBtn.className='btn small ghost'; resBtn.textContent='✓ Marcar resuelto';
+    resBtn.onclick = ()=> marcarReporteResuelto(r.id);
+    acts.appendChild(resBtn);
+    item.appendChild(acts);
+    panel.appendChild(item);
+  });
+  if(reportesState.resueltos.length){
+    const toggle = document.createElement('button'); toggle.type='button'; toggle.className='btn small ghost'; toggle.style.marginTop='12px';
+    toggle.textContent = (reportesState.verResueltos?'▾ ':'▸ ')+'Ver resueltos ('+reportesState.resueltos.length+')';
+    toggle.onclick = ()=>{ reportesState.verResueltos = !reportesState.verResueltos; renderTests(); };
+    panel.appendChild(toggle);
+    if(reportesState.verResueltos){
+      const borrarTodosBtn = document.createElement('button'); borrarTodosBtn.type='button'; borrarTodosBtn.className='btn small ghost'; borrarTodosBtn.style.marginTop='8px'; borrarTodosBtn.style.marginLeft='8px';
+      borrarTodosBtn.textContent = '🗑 Borrar todos los resueltos';
+      borrarTodosBtn.onclick = borrarReportesResueltos;
+      panel.appendChild(borrarTodosBtn);
+      reportesState.resueltos.forEach(r=>{
+        const item = document.createElement('div'); item.style.cssText='margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);opacity:0.75;';
+        const enun = document.createElement('div'); enun.style.cssText='font-family:var(--font-mono);font-size:13px;color:var(--cream);font-weight:600;';
+        enun.textContent = r.enunciado || '(sin enunciado)';
+        item.appendChild(enun);
+        const meta = document.createElement('div'); meta.className='tc-stat';
+        meta.textContent = 'Resuelto el '+new Date(r.resueltoFecha||r.fecha||Date.now()).toLocaleString();
+        item.appendChild(meta);
+        panel.appendChild(item);
+      });
+    }
+  }
+  body.appendChild(panel);
+}
 function renderTestsBanco(body){
+  if(isAdmin) renderReportesPanel(body);
   const questions = state.testBank.questions;
   const trash = getTestBankTrash();
   let bancoVisibleCount = TESTBANCO_PAGE_SIZE; // paginación simple: se resetea al cambiar de filtro
@@ -4633,6 +4852,10 @@ function renderTestsBanco(body){
     expBtn.textContent = '🤖 Rellenar explicaciones';
     expBtn.onclick = openRellenarExplicacionesModal;
     btnGroup.appendChild(expBtn);
+    const revBtn = document.createElement('button'); revBtn.type='button'; revBtn.className='btn ghost small';
+    revBtn.textContent = '🤖 Revisar en bloque';
+    revBtn.onclick = openRevisionEnBloqueModal;
+    btnGroup.appendChild(revBtn);
   }
   const trashBtn = document.createElement('button'); trashBtn.type='button'; trashBtn.className='btn ghost small';
   trashBtn.textContent = testsBancoFiltro.papelera ? '← Volver al banco' : `🗑 Papelera (${trash.length})`;
@@ -4892,10 +5115,15 @@ function openTestPreviewModal(q){
     const revisarBtn = document.createElement('button'); revisarBtn.type='button'; revisarBtn.className='btn small ghost'; revisarBtn.textContent='🤖 Revisar con IA';
     const revisarResultado = document.createElement('div');
     revisarResultado.style.cssText='width:100%;font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);display:none;line-height:1.5;';
+    if(q.revisadoIAFecha){
+      const ultimaRev = document.createElement('div'); ultimaRev.style.cssText='width:100%;font-family:var(--font-mono);font-size:11px;color:var(--cream-dim);margin-top:4px;';
+      ultimaRev.textContent = '🤖 Última revisión IA: '+new Date(q.revisadoIAFecha).toLocaleDateString();
+      btnRow.appendChild(ultimaRev);
+    }
     revisarBtn.onclick = async ()=>{
       revisarBtn.disabled = true; revisarBtn.textContent = 'Revisando…';
       try{
-        const texto = await revisarPreguntaConIA(q);
+        const texto = await revisarYMarcar(q);
         revisarResultado.textContent = texto;
         revisarResultado.style.display = 'block';
       }catch(err){
@@ -6033,6 +6261,66 @@ function agregarBloqueIA(card, it){
   }
   card.appendChild(box);
 }
+/* ===== "Reportar pregunta": cualquier cuenta aprobada puede marcar una pregunta como posiblemente
+   mal, con un motivo opcional. Al enviarla, se llama automáticamente a revisarPreguntaConIA() (la
+   misma función que usa el botón de admin) y se guarda el reporte + el veredicto de la IA en
+   Firestore, para que el admin no tenga que ir pregunta por pregunta buscando cuáles revisar. ===== */
+function reportesCollection(){ return db.collection('users').doc(bankOwnerUid()).collection('reportes'); }
+function agregarBloqueReportar(card, it){
+  const q = it.q;
+  if(!currentUid || !firebaseOk) return; // hace falta estar identificado (y con Firestore disponible) para reportar
+  if(!it.reporte) it.reporte = { estado:'inicial', motivo:'' };
+  const box = document.createElement('div'); box.className = 'tq-ia';
+  const btn = (txt, fn)=>{ const b = document.createElement('button'); b.type='button'; b.className='tq-ia-btn'; b.textContent=txt; b.onclick=fn; return b; };
+  if(it.reporte.estado === 'inicial'){
+    box.appendChild(btn('🚩 Reportar esta pregunta', ()=>{ it.reporte.estado='abriendo'; renderTests(); }));
+  } else if(it.reporte.estado === 'abriendo'){
+    const label = document.createElement('div'); label.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-bottom:6px;';
+    label.textContent = '¿Qué crees que está mal? (opcional — la IA también la revisará automáticamente al enviar)';
+    box.appendChild(label);
+    const ta = createOptionTextarea(it.reporte.motivo||'', 'Ej. creo que la opción B también es correcta...', (v)=> it.reporte.motivo = v);
+    box.appendChild(ta);
+    const row = document.createElement('div'); row.style.cssText='display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;';
+    row.appendChild(btn('Enviar reporte', ()=>enviarReportePregunta(it)));
+    row.appendChild(btn('Cancelar', ()=>{ it.reporte.estado='inicial'; renderTests(); }));
+    box.appendChild(row);
+  } else if(it.reporte.estado === 'enviando'){
+    const h = document.createElement('div'); h.className='ia-head'; h.textContent='🚩 Enviando y revisando con IA…'; box.appendChild(h);
+  } else if(it.reporte.estado === 'enviado'){
+    const h = document.createElement('div'); h.className='ia-head'; h.textContent='✓ Reportada — gracias, el admin la revisará.'; box.appendChild(h);
+  } else if(it.reporte.estado === 'error'){
+    const e = document.createElement('div'); e.className='ia-err'; e.textContent = it.reporte.error || 'No se pudo enviar el reporte.'; box.appendChild(e);
+    box.appendChild(btn('Reintentar', ()=>enviarReportePregunta(it)));
+  }
+  card.appendChild(box);
+}
+async function enviarReportePregunta(it){
+  const q = it.q;
+  it.reporte.estado = 'enviando'; renderTests();
+  let veredictoIA = null, errorIA = null;
+  try{ veredictoIA = await revisarYMarcar(q); }
+  catch(e){ errorIA = (e && e.message) || String(e); }
+  try{
+    const email = (auth && auth.currentUser && auth.currentUser.email) || null;
+    await reportesCollection().add({
+      preguntaId: q.id || null,
+      enunciado: (q.enunciado||'').slice(0,300),
+      categoria: q.categoria || null,
+      motivoUsuario: (it.reporte.motivo||'').trim() || null,
+      veredictoIA, errorIA,
+      reportadoPorUid: currentUid,
+      reportadoPorEmail: email,
+      fecha: Date.now(),
+      estado: 'abierto'
+    });
+    it.reporte.estado = 'enviado';
+  }catch(e){
+    console.error(e);
+    it.reporte.estado = 'error';
+    it.reporte.error = (e && e.message) || 'No se pudo guardar el reporte.';
+  }
+  renderTests();
+}
 /* ===================== MEJORAS: rebeldes, notas, retomar test, examen, salud del banco… ===================== */
 // ---- Preguntas rebeldes: 3 fallos seguidos, o (con 4+ intentos) 25 % de acierto o menos y falladas ahora ----
 function esRebelde(q){
@@ -6489,6 +6777,107 @@ function openRellenarExplicacionesModal(){
     actualizaInfo(); pintaLista();
   };
   pintaGuardar();
+  document.body.appendChild(overlay);
+}
+
+// Recuerda la última categoría y tamaño de tanda usados en "Revisar en bloque", para no tener que
+// volver a elegirlos cada vez que lo abres en la misma sesión.
+let revisionBloqueUltimaCategoria = '';
+let revisionBloqueUltimaTanda = 15;
+function openRevisionEnBloqueModal(){
+  if(!hayIAConfigurada()){ showToast('Configura antes una clave de IA en "Añadir pregunta".'); return; }
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-panel);border:1px solid var(--line);border-radius:6px;padding:18px;max-width:640px;width:100%;';
+  overlay.appendChild(box);
+  let cancelado = false, corriendo = false;
+  const resultados = [];
+  const cerrar = ()=>{ cancelado = true; overlay.remove(); renderTests(); };
+  const h = document.createElement('h3'); h.style.cssText = 'font-family:var(--font-display);color:var(--amber-ink);text-transform:uppercase;margin:0 0 10px;'; h.textContent = '🤖 Revisar en bloque con IA';
+  box.appendChild(h);
+  const info = document.createElement('p'); info.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 10px;';
+  box.appendChild(info);
+  const row = document.createElement('div'); row.className = 'test-row';
+  const cf = document.createElement('div'); cf.className = 'test-field'; cf.innerHTML = '<label>Categoría</label>';
+  const catSel = document.createElement('select');
+  const oAll = document.createElement('option'); oAll.value = ''; oAll.textContent = 'Todas'; catSel.appendChild(oAll);
+  TEST_CATEGORIAS.forEach(c=>{ const o = document.createElement('option'); o.value = c.key; o.textContent = c.label; catSel.appendChild(o); });
+  catSel.value = revisionBloqueUltimaCategoria;
+  cf.appendChild(catSel); row.appendChild(cf);
+  const nf = document.createElement('div'); nf.className = 'test-field'; nf.innerHTML = '<label>Cuántas en esta tanda (máx. 40)</label>';
+  const nInp = document.createElement('input'); nInp.type = 'number'; nInp.min = '1'; nInp.max = '40'; nInp.value = String(revisionBloqueUltimaTanda);
+  nf.appendChild(nInp); row.appendChild(nf);
+  box.appendChild(row);
+  const soloProblemasField = document.createElement('label'); soloProblemasField.style.cssText='display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin:-4px 0 8px;';
+  const soloProblemasChk = document.createElement('input'); soloProblemasChk.type='checkbox';
+  soloProblemasField.appendChild(soloProblemasChk);
+  soloProblemasField.appendChild(document.createTextNode('Al terminar, mostrar solo las que la IA marque con posible fallo'));
+  box.appendChild(soloProblemasField);
+  const candidatasDe = ()=> (state.testBank.questions||[]).filter(q=>!q.borrado && q.enunciado
+    && (!catSel.value || q.categoria===catSel.value))
+    .sort((a,b)=>(a.revisadoIAFecha||0)-(b.revisadoIAFecha||0));
+  const actualizaInfo = ()=>{
+    const total = candidatasDe();
+    const sinRevisar = total.filter(q=>!q.revisadoIAFecha).length;
+    info.textContent = total.length+' pregunta(s) en esta categoría ('+sinRevisar+' nunca revisadas). Empieza siempre por las que nunca han pasado por la IA, y si ya las revisaste todas, por las revisadas hace más tiempo — así cada tanda avanza en vez de repetir. Esto gasta una llamada de IA por cada pregunta revisada.';
+  };
+  catSel.onchange = actualizaInfo; actualizaInfo();
+  const btnRow = document.createElement('div'); btnRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px;';
+  const go = document.createElement('button'); go.type = 'button'; go.className = 'btn small'; go.textContent = 'Revisar';
+  const prog = document.createElement('span'); prog.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);';
+  const detener = document.createElement('button'); detener.type = 'button'; detener.className = 'btn small ghost'; detener.textContent = 'Detener'; detener.style.display = 'none';
+  detener.onclick = ()=>{ cancelado = true; };
+  const cerr = document.createElement('button'); cerr.type = 'button'; cerr.className = 'btn small ghost'; cerr.textContent = 'Cerrar'; cerr.onclick = cerrar;
+  btnRow.appendChild(go); btnRow.appendChild(detener); btnRow.appendChild(prog); btnRow.appendChild(cerr);
+  box.appendChild(btnRow);
+  const resumen = document.createElement('div'); resumen.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-bottom:8px;'; box.appendChild(resumen);
+  const lista = document.createElement('div'); box.appendChild(lista);
+  const pintaLista = ()=>{
+    const aMostrar = soloProblemasChk.checked ? resultados.filter(r=>r.posibleFallo || r.error) : resultados;
+    lista.innerHTML = '';
+    const nFallos = resultados.filter(r=>r.posibleFallo).length;
+    resumen.textContent = resultados.length ? ('Revisadas: '+resultados.length+' · con posible fallo: '+nFallos) : '';
+    aMostrar.forEach(r=>{
+      const card = document.createElement('div'); card.className = 'test-card'; card.style.padding = '8px 10px';
+      if(r.posibleFallo) card.style.borderLeft = '3px solid var(--amber)';
+      const sp = document.createElement('div'); sp.style.cssText='font-size:12.5px;font-weight:600;'; sp.textContent = (r.q.enunciado||'').slice(0,140);
+      card.appendChild(sp);
+      if(r.error){
+        const e = document.createElement('div'); e.className = 'ia-err'; e.style.marginTop = '4px'; e.textContent = '⚠ '+r.error; card.appendChild(e);
+      } else {
+        const v = document.createElement('div'); v.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin-top:4px;line-height:1.4;'; v.textContent = r.veredicto; card.appendChild(v);
+      }
+      const abrirBtn = document.createElement('button'); abrirBtn.type='button'; abrirBtn.className='btn small ghost'; abrirBtn.style.marginTop='6px'; abrirBtn.textContent='Ver pregunta';
+      abrirBtn.onclick = ()=> openTestPreviewModal(r.q);
+      card.appendChild(abrirBtn);
+      lista.appendChild(card);
+    });
+  };
+  soloProblemasChk.onchange = pintaLista;
+  go.onclick = async ()=>{
+    if(corriendo) return;
+    const max = Math.max(1, Math.min(40, parseInt(nInp.value,10) || 15));
+    revisionBloqueUltimaCategoria = catSel.value;
+    revisionBloqueUltimaTanda = max;
+    const cand = candidatasDe().slice(0, max);
+    if(!cand.length){ showToast('No hay preguntas con esos filtros.'); return; }
+    corriendo = true; cancelado = false; go.disabled = true; catSel.disabled = true; nInp.disabled = true; detener.style.display = '';
+    for(let i=0;i<cand.length && !cancelado;i++){
+      prog.textContent = 'Pregunta '+(i+1)+' de '+cand.length+'…';
+      const r = { q:cand[i], veredicto:'', posibleFallo:false, error:'' };
+      try{
+        r.veredicto = await revisarYMarcar(cand[i]);
+        r.posibleFallo = /^⚠/.test(r.veredicto.trim());
+      }catch(e){ r.error = (e && e.message) || 'error desconocido'; }
+      resultados.push(r);
+      pintaLista();
+      await new Promise(res=>setTimeout(res, 500));
+    }
+    corriendo = false; go.disabled = false; catSel.disabled = false; nInp.disabled = false; detener.style.display = 'none';
+    prog.textContent = cancelado ? 'Detenido.' : 'Listo.';
+  };
+  pintaLista();
   document.body.appendChild(overlay);
 }
 
@@ -7040,6 +7429,7 @@ function renderTestsQuizUI(body){
     }
     if(revelada) agregarBloqueNotas(card, it);
     if(revelada) agregarBloqueIA(card, it);
+    if(revelada) agregarBloqueReportar(card, it);
     panel.appendChild(card);
   });
   const btnRow = document.createElement('div'); btnRow.className='quiz-actions-bar'; btnRow.style.cssText='display:flex;gap:8px;';
@@ -7255,6 +7645,18 @@ function renderStorageBox(){
   limpiarBtn.textContent = '🧹 Vaciar caché y liberar espacio';
   limpiarBtn.onclick = limpiarCacheApp;
   host.appendChild(limpiarBtn);
+
+  // Documentos legales y reportes: solo se muestran si ya están cargados en memoria (por haber
+  // visitado esas pestañas), para no forzar lecturas extra de Firestore solo por mirar este panel.
+  if(isAdmin && legalDocsState.cargado && legalDocsState.lista.length){
+    const totalCaract = legalDocsState.lista.reduce((s,d)=>s+(d.caracteres||0), 0);
+    host.appendChild(tamEl('div','tam-lista-titulo',
+      'Documentos legales: '+legalDocsState.lista.length+' documento'+(legalDocsState.lista.length===1?'':'s')+' · '+Math.round(totalCaract/1000)+' mil caracteres en total.'));
+  }
+  if(isAdmin && typeof reportesState !== 'undefined' && reportesState.cargado){
+    host.appendChild(tamEl('div','tam-lista-titulo',
+      'Reportes de preguntas: '+reportesState.lista.length+' abierto'+(reportesState.lista.length===1?'':'s')+' pendiente'+(reportesState.lista.length===1?'':'s')+' de revisar.'));
+  }
 
   // Solo el admin gestiona el banco, así que solo él ve qué preguntas pesan más.
   if(isAdmin && m.n){

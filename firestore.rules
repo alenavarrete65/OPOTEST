@@ -94,6 +94,17 @@ service cloud.firestore {
                    (esSuperAdmin() || esEditor(request.auth.uid));
     }
 
+    // Reportes de preguntas: users/{ADMIN_UID}/reportes/{reportId}. Cualquier cuenta aprobada puede
+    // crear un reporte (botón "🚩 Reportar esta pregunta"), pero no puede leer, modificar ni borrar
+    // los reportes de otros — solo la cuenta dueña o un admin puede leerlos y marcarlos resueltos.
+    match /users/{uid}/reportes/{reportId} {
+      allow read: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                  (esSuperAdmin() || esEditor(request.auth.uid));
+      allow create: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" && estaAprobado(request.auth.uid);
+      allow update, delete: if uid == "teAS34tRMVeWGi6qJ0EW59YVV1W2" &&
+                             (esSuperAdmin() || esEditor(request.auth.uid));
+    }
+
     // Cualquier otra ruta queda bloqueada por defecto.
     match /{document=**} {
       allow read, write: if false;

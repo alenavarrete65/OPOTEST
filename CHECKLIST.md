@@ -61,6 +61,10 @@ que las note un usuario.
 - [ ] Con "Subir mi propio PDF" (sin guardarlo), preguntar algo sobre un PDF
       cualquiera y comprobar que responde sin necesidad de que el admin lo suba
       antes.
+- [ ] Marcar dos documentos guardados a la vez (checkboxes) y hacer una
+      pregunta que cruce ambos: la respuesta indica de cuál sale cada dato.
+- [ ] "🕘 Historial reciente" muestra las últimas preguntas/respuestas al final
+      de la pestaña, y "Borrar historial" lo vacía.
 - [ ] Cada respuesta del asistente muestra arriba "📄 Documento: …" con el
       título guardado (o el nombre del PDF, en modo "Subir mi propio PDF").
 - [ ] Borrar un documento guardado como admin: desaparece de la lista y ya no
@@ -74,6 +78,34 @@ que las note un usuario.
       resto del modal.
 - [ ] Probar con una pregunta a la que le cambias la correcta a una opción
       equivocada a propósito: la IA debería avisar de que algo no cuadra.
+- [ ] "🤖 Revisar en bloque" (junto a "Rellenar explicaciones"): filtrar por
+      categoría, poner una tanda pequeña (p. ej. 3) y darle a "Revisar":
+      aparece el progreso, los resultados uno a uno, y "Detener" corta el
+      proceso a mitad sin romper nada. "Ver pregunta" abre cada una.
+
+## Reportar pregunta (cualquier cuenta aprobada)
+- [ ] Al corregir un test, el botón "🚩 Reportar esta pregunta" aparece junto
+      al de "Explícamelo".
+- [ ] Enviar un reporte (con y sin motivo escrito): se ve "Enviando y
+      revisando con IA…" y luego "✓ Reportada".
+- [ ] Como admin, en "Banco de preguntas" aparece arriba el panel
+      "🚩 Preguntas reportadas" con el motivo del usuario y el veredicto de la
+      IA; "Ver pregunta" la abre y "✓ Marcar resuelto" la quita de la lista.
+- [ ] La pestaña "Banco de preguntas" en la navegación muestra un 🚩 con el
+      número de reportes abiertos, sin tener que entrar a mirar.
+- [ ] "Ver resueltos" despliega los ya resueltos, y "Borrar todos los
+      resueltos" los quita de Firestore (no toca las preguntas en sí).
+- [ ] Sin las reglas de `reportes` desplegadas en Firestore, reportar debe dar
+      un error claro, no quedarse colgado.
+
+## Uso de IA y revisión en bloque
+- [ ] Tras hacer alguna pregunta a la IA (asistente, revisar, generar...), el
+      panel de claves de IA muestra "📊 Hoy has hecho N llamada(s)".
+- [ ] En "🤖 Revisar en bloque", revisar una tanda pequeña y luego repetir la
+      misma categoría: la segunda vez empieza por preguntas distintas a la
+      primera (prioriza las nunca revisadas), no por las mismas de siempre.
+- [ ] "Tamaño de tus datos" muestra líneas de "Documentos legales" y
+      "Reportes de preguntas" cuando ya has visitado esas pestañas antes.
 
 ## Tamaño de tus datos
 - [ ] El bloque "Tamaño de tus datos" aparece (encima de "Copia de seguridad") con las
