@@ -1282,9 +1282,15 @@ function renderIAKeyPanel(container, stateObj, opts){
   bodyDiv.appendChild(intro);
   const usoHoy = usoIAHoy();
   if(usoHoy > 0){
-    const usoEl = document.createElement('p'); usoEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin:0 0 12px;';
+    const tk = tokensIAHoy();
+    const usoEl = document.createElement('p'); usoEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin:'+(tk.total>0?'0 0 4px':'0 0 12px')+';';
     usoEl.textContent = '📊 Hoy has hecho '+usoHoy+' llamada'+(usoHoy===1?'':'s')+' a la IA desde este dispositivo (asistente, revisar, generar preguntas...).';
     bodyDiv.appendChild(usoEl);
+    if(tk.total > 0){
+      const tkEl = document.createElement('p'); tkEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin:0 0 12px;';
+      tkEl.textContent = '🔢 Uso aproximado: '+fmtTokens(tk.total)+' tokens hoy ('+fmtTokens(tk.entrada)+' de entrada + '+fmtTokens(tk.salida)+' de salida). Es una referencia de cuota, no un gasto en euros: cada modelo tiene su propio precio y límite gratuito.';
+      bodyDiv.appendChild(tkEl);
+    }
   }
 
   const modoField = document.createElement('div'); modoField.className='test-field'; modoField.style.margin='0 0 14px';
@@ -1803,7 +1809,8 @@ async function llamarGemini(contenido, opts){
   const cand = (data.candidates||[])[0];
   const textPart = cand && cand.content && (cand.content.parts||[]).find(p=>typeof p.text==='string');
   if(!textPart) throw new Error('Gemini no devolvió texto (posible bloqueo de seguridad o cuota agotada).');
-  return textPart.text;
+  const um = data.usageMetadata || {};
+  return { text: textPart.text, usage: { entrada: um.promptTokenCount||0, salida: um.candidatesTokenCount||0 } };
 }
 async function llamarOpenRouter(contenido, opts){
   const apiKey = getOpenRouterKey();
@@ -1834,7 +1841,8 @@ async function llamarOpenRouter(contenido, opts){
   const msg = data.choices && data.choices[0] && data.choices[0].message;
   const text = msg && (typeof msg.content==='string' ? msg.content : (Array.isArray(msg.content) ? msg.content.map(p=>p.text||'').join('') : ''));
   if(!text) throw new Error('OpenRouter no devolvió texto (modelo gratuito saturado; prueba otro modelo).');
-  return text;
+  const us = data.usage || {};
+  return { text, usage: { entrada: us.prompt_tokens||0, salida: us.completion_tokens||0 } };
 }
 async function llamarProveedorExtra(contenido, opts){
   const apiKey = getExtraKey(), baseUrl = (getExtraBaseUrl()||'').trim().replace(/\/+$/,''), model = getExtraModel();
@@ -1858,7 +1866,8 @@ async function llamarProveedorExtra(contenido, opts){
   const msg = data.choices && data.choices[0] && data.choices[0].message;
   const text = msg && (typeof msg.content==='string' ? msg.content : '');
   if(!text) throw new Error(model+' no devolvió texto.');
-  return text;
+  const us = data.usage || {};
+  return { text, usage: { entrada: us.prompt_tokens||0, salida: us.completion_tokens||0 } };
 }
 // Nombre del último proveedor que respondió con éxito, solo para poder mostrarlo en los avisos.
 let ultimoProveedorIA = '';
@@ -1885,6 +1894,34 @@ function usoIAHoy(){
   try{ return parseInt(localStorage.getItem(iaUsoHoyKey())||'0',10); }
   catch(e){ return 0; }
 }
+// Tokens aproximados usados hoy (solo en este dispositivo), a partir del "usage"/"usageMetadata"
+// que devuelve cada proveedor en llamadas con éxito. Sirve para hacerse una idea de cuánta cuota
+// gratuita diaria llevas gastada; no es una cifra de gasto en euros (cada modelo tiene su propio
+// precio, y muchos de los que se usan aquí son gratuitos).
+function iaTokensHoyKey(){ return iaUsoHoyKey().replace('opotest_ia_uso_', 'opotest_ia_tokens_'); }
+function registrarTokensIA(usage){
+  if(!usage) return;
+  const entrada = Number(usage.entrada)||0, salida = Number(usage.salida)||0;
+  if(!entrada && !salida) return;
+  try{
+    const k = iaTokensHoyKey();
+    const actual = JSON.parse(localStorage.getItem(k)||'null') || { entrada:0, salida:0 };
+    actual.entrada += entrada; actual.salida += salida;
+    localStorage.setItem(k, JSON.stringify(actual));
+  }catch(e){ /* contador informativo: si falla, no pasa nada grave */ }
+}
+function tokensIAHoy(){
+  try{
+    const t = JSON.parse(localStorage.getItem(iaTokensHoyKey())||'null') || { entrada:0, salida:0 };
+    return { entrada:t.entrada||0, salida:t.salida||0, total:(t.entrada||0)+(t.salida||0) };
+  }catch(e){ return { entrada:0, salida:0, total:0 }; }
+}
+// Formatea un nº de tokens de forma compacta (1.234 → "1,2 mil") para que quepa en una línea.
+function fmtTokens(n){
+  if(n>=1000000) return (n/1000000).toFixed(1).replace('.',',')+' M';
+  if(n>=1000) return (n/1000).toFixed(1).replace('.',',')+' mil';
+  return String(n);
+}
 async function llamarIAConFallback(contenido, opts, incluirExtra){
   const intentos = [
     { id:'gemini', nombre:'Google Gemini', activo: !!getGeminiKey(), fn: ()=> llamarGemini(contenido, opts) },
@@ -1904,9 +1941,10 @@ async function llamarIAConFallback(contenido, opts, incluirExtra){
   const errores = [];
   for(const intento of activos){
     try{
-      const texto = await intento.fn();
+      const resultado = await intento.fn();
       ultimoProveedorIA = intento.nombre;
-      return texto;
+      registrarTokensIA(resultado && resultado.usage);
+      return resultado.text;
     }catch(err){
       console.error('['+intento.nombre+']', err);
       errores.push(intento.nombre+': '+(err.message||'error desconocido'));

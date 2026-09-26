@@ -100,7 +100,8 @@ que las note un usuario.
 
 ## Uso de IA y revisión en bloque
 - [ ] Tras hacer alguna pregunta a la IA (asistente, revisar, generar...), el
-      panel de claves de IA muestra "📊 Hoy has hecho N llamada(s)".
+      panel de claves de IA muestra "📊 Hoy has hecho N llamada(s)" y, debajo,
+      "🔢 Uso aproximado: X tokens hoy" (solo si algún proveedor devolvió el dato).
 - [ ] En "🤖 Revisar en bloque", revisar una tanda pequeña y luego repetir la
       misma categoría: la segunda vez empieza por preguntas distintas a la
       primera (prioriza las nunca revisadas), no por las mismas de siempre.
