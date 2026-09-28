@@ -1275,24 +1275,12 @@ function createCollapsible(container, titleHtml, stateObj, key, defaultOpen){
 // muestra cuando opts.conExtra es true, porque ese solo se usa para transcribir fotos, no PDFs.
 function renderIAKeyPanel(container, stateObj, opts){
   opts = opts || {};
+  renderIAUsoCard(container); // tarjeta de uso: siempre visible, aunque el panel de claves esté plegado
   const hayAlguna = !!(getGeminiKey() || getOpenRouterKey());
   const bodyDiv = createCollapsible(container, 'Claves de IA (Gemini + OpenRouter'+(opts.conExtra?' + otro':'')+')', stateObj, 'uiKeyOpen', !hayAlguna);
   const intro = document.createElement('p'); intro.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);line-height:1.5;margin:0 0 12px;';
   intro.innerHTML = 'Todas se guardan solo en este dispositivo (no viajan a Firebase). Basta con rellenar UNA. Si rellenas varias, la app las prueba en este orden y salta a la siguiente en cuanto una falla o se le agota la cuota gratuita del día: <b>Gemini → OpenRouter'+(opts.conExtra?' → proveedor extra':'')+'</b>.';
   bodyDiv.appendChild(intro);
-  const usoHoy = usoIAHoy();
-  if(usoHoy > 0){
-    const tk = tokensIAHoy();
-    const usoEl = document.createElement('p'); usoEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin:'+(tk.total>0?'0 0 4px':'0 0 12px')+';';
-    usoEl.textContent = '📊 Hoy has hecho '+usoHoy+' llamada'+(usoHoy===1?'':'s')+' a la IA desde este dispositivo (asistente, revisar, generar preguntas...).';
-    bodyDiv.appendChild(usoEl);
-    if(tk.total > 0){
-      const tkEl = document.createElement('p'); tkEl.style.cssText='font-family:var(--font-mono);font-size:12px;color:var(--cream-dim);margin:0 0 12px;';
-      tkEl.textContent = '🔢 Uso aproximado: '+fmtTokens(tk.total)+' tokens hoy ('+fmtTokens(tk.entrada)+' de entrada + '+fmtTokens(tk.salida)+' de salida). Es una referencia de cuota, no un gasto en euros: cada modelo tiene su propio precio y límite gratuito.';
-      bodyDiv.appendChild(tkEl);
-    }
-  }
-
   const modoField = document.createElement('div'); modoField.className='test-field'; modoField.style.margin='0 0 14px';
   modoField.innerHTML = '<label>¿Cuál usar?</label>';
   const modoSel = document.createElement('select');
@@ -1889,6 +1877,7 @@ function registrarUsoIA(){
     const n = parseInt(localStorage.getItem(k)||'0',10) + 1;
     localStorage.setItem(k, String(n));
   }catch(e){ /* si falla, no pasa nada grave: es solo un contador informativo */ }
+  refrescarTarjetasUsoIA();
 }
 function usoIAHoy(){
   try{ return parseInt(localStorage.getItem(iaUsoHoyKey())||'0',10); }
@@ -1922,6 +1911,99 @@ function fmtTokens(n){
   if(n>=1000) return (n/1000).toFixed(1).replace('.',',')+' mil';
   return String(n);
 }
+// ---- Tarjeta visual de uso de IA (llamadas de hoy por proveedor y las que quedan) ----
+// Solo cuenta lo que haces desde ESTE dispositivo, por día natural (se reinicia a medianoche).
+// Los límites diarios son aproximados y editables: cada proveedor/modelo tiene los suyos y los
+// cambia con el tiempo (sobre todo el plan gratuito de Gemini).
+const IA_PROVEEDORES = [
+  { id:'gemini',     nombre:'Google Gemini',      limiteDef:250, activo:()=>!!getGeminiKey() },
+  { id:'openrouter', nombre:'OpenRouter',         limiteDef:50,  activo:()=>!!getOpenRouterKey() },
+  { id:'extra',      nombre:'Proveedor extra',    limiteDef:100, activo:()=>!!(getExtraKey() && getExtraBaseUrl() && getExtraModel()) }
+];
+function iaUsoProvKey(id){ return iaUsoHoyKey().replace('opotest_ia_uso_', 'opotest_ia_usoprov_'+id+'_'); }
+function iaLimiteKey(id){ return 'opotest_ia_limite_'+id; }
+function usoIAProveedorHoy(id){
+  try{ return parseInt(localStorage.getItem(iaUsoProvKey(id))||'0',10) || 0; }catch(e){ return 0; }
+}
+function registrarUsoProveedor(id){
+  try{
+    const k = iaUsoProvKey(id);
+    localStorage.setItem(k, String((parseInt(localStorage.getItem(k)||'0',10)||0) + 1));
+  }catch(e){ /* contador informativo */ }
+  refrescarTarjetasUsoIA();
+}
+function getIALimite(prov){
+  try{
+    const v = parseInt(localStorage.getItem(iaLimiteKey(prov.id))||'',10);
+    if(v > 0) return v;
+  }catch(e){}
+  return prov.limiteDef;
+}
+function setIALimite(id, n){ try{ localStorage.setItem(iaLimiteKey(id), String(n)); }catch(e){} }
+function pintarIAUsoCard(card){
+  card.textContent = '';
+  const totalHoy = usoIAHoy();
+  const cab = tamEl('div','ia-uso-cab');
+  cab.appendChild(tamEl('span','tam-titulo','📊 Uso de IA · hoy'));
+  cab.appendChild(tamEl('span','ia-uso-total', totalHoy+' pregunta'+(totalHoy===1?'':'s')+' a la IA'));
+  card.appendChild(cab);
+
+  const visibles = IA_PROVEEDORES.filter(p => p.activo() || usoIAProveedorHoy(p.id) > 0);
+  if(!visibles.length){
+    card.appendChild(tamEl('p','tam-intro','Aún no hay ninguna clave de IA configurada. Añade una abajo (Gemini, OpenRouter…) y aquí verás cuántas llamadas llevas y cuántas te quedan hoy.'));
+  }
+  visibles.forEach(prov=>{
+    const usadas = usoIAProveedorHoy(prov.id);
+    const limite = getIALimite(prov);
+    const quedan = Math.max(0, limite - usadas);
+    const ratio = usadas / limite;
+    const nivel = ratio >= 1 ? 'peligro' : (ratio >= 0.8 ? 'aviso' : 'ok');
+    const fila = tamEl('div','tam-fila');
+    const fc = tamEl('div','tam-fila-cab');
+    fc.appendChild(tamEl('span','tam-fila-titulo', prov.nombre + (prov.activo() ? '' : ' (sin clave)')));
+    fc.appendChild(tamEl('span','tam-fila-valor', usadas+' de ~'+limite+' · quedan ~'+quedan));
+    fila.appendChild(fc);
+    const bar = tamEl('div','tam-bar tam-'+nivel);
+    bar.setAttribute('role','progressbar');
+    bar.setAttribute('aria-label','Llamadas de hoy a '+prov.nombre);
+    bar.setAttribute('aria-valuemin','0'); bar.setAttribute('aria-valuemax', String(limite)); bar.setAttribute('aria-valuenow', String(Math.min(usadas, limite)));
+    const fill = document.createElement('i'); fill.style.width = Math.min(100, Math.round(ratio*100)) + '%';
+    bar.appendChild(fill);
+    fila.appendChild(bar);
+    const ajuste = tamEl('div','ia-uso-limite');
+    const lab = tamEl('label', null, 'Límite diario aprox.: ');
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = '1'; inp.step = '1'; inp.inputMode = 'numeric'; inp.value = String(limite);
+    inp.setAttribute('aria-label','Límite diario aproximado de llamadas de '+prov.nombre);
+    inp.onchange = ()=>{ const n = parseInt(inp.value,10); if(n > 0) setIALimite(prov.id, n); refrescarTarjetasUsoIA(); };
+    lab.appendChild(inp);
+    ajuste.appendChild(lab);
+    fila.appendChild(ajuste);
+    card.appendChild(fila);
+  });
+
+  const tk = tokensIAHoy();
+  if(tk.total > 0){
+    card.appendChild(tamEl('div','tam-nota','🔢 Tokens de hoy: '+fmtTokens(tk.total)+' ('+fmtTokens(tk.entrada)+' de entrada + '+fmtTokens(tk.salida)+' de salida). Solo cuentan las llamadas en las que el proveedor devolvió el dato.'));
+  }
+  card.appendChild(tamEl('div','tam-nota','Los límites son una referencia editable (cada modelo y plan tiene el suyo y puede cambiar). Solo se cuenta lo que haces desde este dispositivo y el contador vuelve a 0 a medianoche.'));
+}
+function renderIAUsoCard(container){
+  const card = document.createElement('div');
+  card.className = 'ia-uso-card';
+  container.appendChild(card);
+  pintarIAUsoCard(card);
+  return card;
+}
+function refrescarTarjetasUsoIA(){
+  try{
+    document.querySelectorAll('.ia-uso-card').forEach(c=>{
+      // si el usuario está escribiendo en el campo de límite, no le quitamos el foco
+      if(c.contains(document.activeElement) && document.activeElement.tagName==='INPUT') return;
+      pintarIAUsoCard(c);
+    });
+  }catch(e){}
+}
 async function llamarIAConFallback(contenido, opts, incluirExtra){
   const intentos = [
     { id:'gemini', nombre:'Google Gemini', activo: !!getGeminiKey(), fn: ()=> llamarGemini(contenido, opts) },
@@ -1944,6 +2026,7 @@ async function llamarIAConFallback(contenido, opts, incluirExtra){
       const resultado = await intento.fn();
       ultimoProveedorIA = intento.nombre;
       registrarTokensIA(resultado && resultado.usage);
+      registrarUsoProveedor(intento.id);
       return resultado.text;
     }catch(err){
       console.error('['+intento.nombre+']', err);
@@ -2608,6 +2691,25 @@ function renderTelegramConfigPanel(container){
   row.appendChild(chatField);
   bodyDiv.appendChild(row);
 }
+// Paleta de la imagen exportada según el tema ACTIVO en la app (claro u oscuro). Los valores del
+// tema claro y del oscuro son los mismos que en style.css.
+function exportPalette(){
+  const claro = document.documentElement.getAttribute('data-theme') === 'light';
+  if(claro) return {
+    fondo:'#fffdf6', borde:'#d9c98f', texto:'#1e2a22', etiqueta:'#55524a', pie:'#635b4c',
+    bg:'#f4ecd6', panel:'#fffdf6', panel2:'#efe4c4', line:'#d9c98f', lineStrong:'#8f8258',
+    cream:'#1e2a22', creamDim:'#55524a', amber:'#b8901f', amberDim:'#d4b65c', amberInk:'#755811',
+    red:'#a8402c', redText:'#a8402c', green:'#3f7a54', greenInk:'#35684a', blue:'#3d6b78', muted:'#635b4c',
+    rtRojo:'#b23a26', rtVerde:'#2a6d42', rtAzul:'#2b6a8f', rtMark:'rgba(184,144,31,0.32)'
+  };
+  return {
+    fondo:'#1b2b24', borde:'#34493d', texto:'#ece4d3', etiqueta:'#b9baa8', pie:'#8a8f7d',
+    bg:'#16302a', panel:'#1c3d34', panel2:'#234a3f', line:'#3d6255', lineStrong:'#78a595',
+    cream:'#f4ecd6', creamDim:'#c3bda3', amber:'#c9a227', amberDim:'#8f7a2f', amberInk:'#d8b53a',
+    red:'#b6543f', redText:'#f4a08d', green:'#6f9a6a', greenInk:'#8fc08a', blue:'#8ec0cf', muted:'#aeb5a9',
+    rtRojo:'#ff9a86', rtVerde:'#8fd19a', rtAzul:'#7fc4e8', rtMark:'rgba(201,162,39,0.38)'
+  };
+}
 // Construye (fuera de pantalla) una tarjeta de la pregunta, reutilizando las mismas clases
 // .tq-* que usa el resto de la app para que se vea igual. Por defecto NO revela la respuesta
 // correcta (para publicar la pregunta "en blanco"); con withAnswer=true marca la opción
@@ -2616,20 +2718,19 @@ function renderTelegramConfigPanel(container){
 function buildQuestionExportNode(q, withAnswer){
   const wrap = document.createElement('div');
   // OJO: las clases .tq-* (tq-enun, tq-opt, tq-explic, tq-palabra...) usan var(--bg-panel-2),
-  // var(--cream), var(--line), etc., que cambian de valor según el tema claro/oscuro que tengas
-  // activo AHORA MISMO en la app (:root vs html[data-theme="light"]). Como esta tarjeta se monta
-  // fuera de pantalla pero sigue colgando del <html> real, heredaba esas variables — así que con
-  // el tema claro puesto salía texto claro sobre fondo claro (ilegible) en enunciado y opciones,
-  // aunque el pie sí se veía bien por tener su color fijado aparte. Fijamos aquí TODAS las
-  // variables que usan esas clases a la paleta oscura de siempre, para que la imagen exportada
-  // se vea igual sin importar qué tema tengas puesto en ese momento.
-  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:#1b2b24;border:1px solid #34493d;border-radius:6px;padding:22px;font-family:var(--font-body);color:#ece4d3;box-sizing:border-box;'
-    + '--bg:#16302a;--bg-panel:#1c3d34;--bg-panel-2:#234a3f;--line:#3d6255;--line-strong:#78a595;'
-    + '--cream:#f4ecd6;--cream-dim:#c3bda3;--amber:#c9a227;--amber-dim:#8f7a2f;--amber-ink:#d8b53a;'
-    + '--red:#b6543f;--red-text:#f4a08d;--green:#6f9a6a;--green-ink:#8fc08a;--blue:#8ec0cf;--muted:#aeb5a9;';
+  // var(--cream), var(--line), etc., que cambian según el tema activo (:root vs html[data-theme="light"]).
+  // Esta tarjeta cuelga del <html> real, así que fijamos AQUÍ todas las variables a la paleta del tema
+  // que tengas puesto ahora mismo: con tema claro la imagen sale clara (mejor para imprimir y ahorrar
+  // tinta) y con tema oscuro sale oscura. Así el texto nunca queda claro sobre fondo claro.
+  const P = exportPalette();
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:'+P.fondo+';border:1px solid '+P.borde+';border-radius:6px;padding:22px;font-family:var(--font-body);color:'+P.texto+';box-sizing:border-box;'
+    + '--bg:'+P.bg+';--bg-panel:'+P.panel+';--bg-panel-2:'+P.panel2+';--line:'+P.line+';--line-strong:'+P.lineStrong+';'
+    + '--cream:'+P.cream+';--cream-dim:'+P.creamDim+';--amber:'+P.amber+';--amber-dim:'+P.amberDim+';--amber-ink:'+P.amberInk+';'
+    + '--red:'+P.red+';--red-text:'+P.redText+';--green:'+P.green+';--green-ink:'+P.greenInk+';--blue:'+P.blue+';--muted:'+P.muted+';'
+    + '--rt-rojo:'+P.rtRojo+';--rt-verde:'+P.rtVerde+';--rt-azul:'+P.rtAzul+';--rt-mark:'+P.rtMark+';';
   const top = document.createElement('div'); top.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
   const brand = document.createElement('div'); brand.style.cssText='font-family:var(--font-display);letter-spacing:.14em;text-transform:uppercase;color:var(--amber-ink);font-size:13px;'; brand.textContent='OpoTest';
-  const tag = document.createElement('div'); tag.style.cssText='font-family:var(--font-mono);font-size:12px;color:#b9baa8;text-transform:uppercase;letter-spacing:.05em;'; tag.textContent = questionTemaTag(q);
+  const tag = document.createElement('div'); tag.style.cssText='font-family:var(--font-mono);font-size:12px;color:'+P.etiqueta+';text-transform:uppercase;letter-spacing:.05em;'; tag.textContent = questionTemaTag(q);
   top.appendChild(brand); top.appendChild(tag);
   wrap.appendChild(top);
   const card = document.createElement('div'); card.className = withAnswer ? 'test-quiz-q corregida' : 'test-quiz-q'; card.style.cssText='margin:0;';
@@ -2658,7 +2759,7 @@ function buildQuestionExportNode(q, withAnswer){
     (q.palabras||[]).forEach((p,i)=>{
       const chip=document.createElement('span');
       chip.className = withAnswer ? ('tq-palabra'+(p.incorrecta?' mal':' bien')) : 'tq-palabra';
-      if(!withAnswer){ chip.style.color='#ece4d3'; chip.style.borderColor='#34493d'; }
+      if(!withAnswer){ chip.style.color=P.texto; chip.style.borderColor=P.borde; }
       chip.textContent=(i+1)+'. '+p.texto+(withAnswer ? (p.incorrecta?' ✕':' ✓') : '');
       palRow.appendChild(chip);
     });
@@ -2688,7 +2789,7 @@ function buildQuestionExportNode(q, withAnswer){
     card.appendChild(ex);
   }
   wrap.appendChild(card);
-  const foot = document.createElement('div'); foot.style.cssText='margin-top:16px;font-family:var(--font-mono);font-size:12px;color:#8a8f7d;text-align:right;';
+  const foot = document.createElement('div'); foot.style.cssText='margin-top:16px;font-family:var(--font-mono);font-size:12px;color:'+P.pie+';text-align:right;';
   foot.textContent = withAnswer ? 'Solución ✅' : '¿Te la sabes? 🧠';
   wrap.appendChild(foot);
   return wrap;
@@ -2714,7 +2815,7 @@ async function exportQuestionPNG(q, withAnswer){
     node = buildQuestionExportNode(q, withAnswer);
     document.body.appendChild(node);
     if(document.fonts && document.fonts.ready) await document.fonts.ready;
-    const canvas = await window.html2canvas(node, { backgroundColor:'#1b2b24', scale:2, useCORS:true });
+    const canvas = await window.html2canvas(node, { backgroundColor: exportPalette().fondo, scale:2, useCORS:true });
     const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
     if(!blob) throw new Error('No se pudo generar el PNG.');
     const filename = 'opotest-pregunta-'+(q.id||Date.now())+(withAnswer?'-solucion':'')+'.png';
