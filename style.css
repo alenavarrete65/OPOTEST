@@ -1125,3 +1125,49 @@
   .ia-uso-total{font-size:13px;color:var(--cream);font-variant-numeric:tabular-nums;}
   .ia-uso-limite{margin-top:6px;font-size:12px;color:var(--cream-dim);}
   .ia-uso-limite input{width:76px;margin-left:4px;padding:3px 6px;font-size:12px;}
+
+  /* ---- Selección y exportación en lote (solo admin) ---- */
+  .sel-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;position:sticky;top:6px;z-index:8;background:var(--bg-panel);border:1px solid var(--amber-dim);border-radius:8px;padding:8px 10px;margin:0 0 10px;box-shadow:var(--shadow-soft);}
+  .sel-info{font-family:var(--font-mono);font-size:12px;color:var(--amber-ink);margin-right:auto;}
+  .sel-bar .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .sel-cb{flex:0 0 auto;width:20px;height:20px;margin:0 8px 0 0;accent-color:var(--amber);cursor:pointer;}
+  .test-card.sel-on{outline:2px solid var(--amber);outline-offset:-2px;}
+  .tc-head:has(.sel-cb){align-items:flex-start;}
+
+  /* ---- Panel "Cómo vas" (Progreso) ---- */
+  .evo-panel{margin-bottom:20px;}
+  .evo-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px;}
+  .evo-kpi{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+  .evo-kpi.ok{border-color:var(--green);}
+  .evo-kpi.mal{border-color:var(--red);}
+  .evo-kpi-l{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--cream-dim);}
+  .evo-kpi-v{font-family:var(--font-display);font-size:22px;color:var(--amber-ink);margin:2px 0;line-height:1.15;}
+  .evo-kpi-d{font-size:12px;color:var(--cream-dim);line-height:1.35;}
+  .evo-semanas{display:flex;align-items:flex-end;gap:6px;height:150px;padding:4px 2px 0;}
+  .evo-sem{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;height:100%;}
+  .evo-sem-pct{height:14px;font-family:var(--font-mono);font-size:10.5px;color:var(--cream-dim);line-height:14px;}
+  .evo-sem-box{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;}
+  .evo-sem-bar{width:70%;max-width:38px;background:var(--amber-dim);border-radius:4px 4px 0 0;min-height:0;transition:height .3s;}
+  .evo-sem.actual .evo-sem-bar{background:var(--amber);}
+  .evo-sem-n{font-family:var(--font-mono);font-size:11px;color:var(--cream);margin-top:3px;}
+  .evo-sem-l{font-family:var(--font-mono);font-size:10px;color:var(--cream-dim);}
+
+  /* ---- Simulacro sin distracciones ---- */
+  body.modo-sim .tq-star, body.modo-sim .tq-speak{display:none !important;}
+  body.modo-sim .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px));}
+
+  /* ---- Ergonomía en móvil durante un test ---- */
+  .quiz-actions-bar .quiz-correct-btn{flex:1 1 60%;}
+  .quiz-actions-bar .quiz-next-btn{flex:1 1 40%;}
+  @media (max-width:640px){
+    body.has-quiz-bar .quiz-actions-bar{
+      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));margin:8px -12px 0;
+      border-top:1px solid var(--line);box-shadow:0 -6px 14px rgba(0,0,0,0.18);z-index:20;
+    }
+    body.has-quiz-bar .quiz-actions-bar .btn{min-height:48px;font-size:15px;}
+    body.has-quiz-bar .test-quiz-q .tq-opt{min-height:52px;padding:10px 12px;align-items:center;}
+    body.has-quiz-bar .test-quiz-q .tq-word-btn, body.has-quiz-bar .test-quiz-q .tq-orto-chip{min-height:46px;}
+    body.has-quiz-bar .quiz-tools button{min-width:42px;height:40px;}
+    body.has-quiz-bar .quiz-timer-badge{font-size:15px;}
+    .sel-bar .btn.small{flex:1 1 44%;min-height:44px;}
+  }

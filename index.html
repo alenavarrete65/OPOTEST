@@ -2808,6 +2808,7 @@ function loadHtml2Canvas(){
   return html2canvasLoading;
 }
 async function exportQuestionPNG(q, withAnswer){
+  if(!isAdmin){ showToast('Solo los administradores pueden exportar preguntas.'); return; }
   showToast(withAnswer ? 'Generando imagen de la solución…' : 'Generando imagen…');
   let node = null;
   try{
@@ -3459,7 +3460,12 @@ function renderTests(){
   const host = document.getElementById('testsHost');
   if(!host) return;
   guardarTestEnCurso();
-  document.body.classList.toggle('modo-conc', modoConcentracion && !!testsQuiz && !testsQuiz.corregido && testsActiveSubtab==='practicar');
+  const enSimActivo = !!testsQuiz && !!testsQuiz.simulacro && !testsQuiz.corregido && testsActiveSubtab==='practicar';
+  const quizAbierto = !!testsQuiz && !testsQuiz.corregido && testsActiveSubtab==='practicar';
+  // Simulacro en curso: modo concentración SIEMPRE (sin cabecera, resumen ni pestañas), sin ayudas y a pantalla limpia.
+  document.body.classList.toggle('modo-conc', (modoConcentracion && quizAbierto) || enSimActivo);
+  document.body.classList.toggle('modo-sim', enSimActivo);
+  document.body.classList.toggle('has-quiz-bar', quizAbierto);
   host.innerHTML = '';
   // Los usuarios no-admin solo pueden practicar (y ver su propio progreso): no ven el banco de
   // preguntas (verlo, editarlo o borrarlo) ni la opción de añadir preguntas nuevas.
@@ -4773,6 +4779,7 @@ function renderTestsProgreso(body){
   resumen.textContent = totalPreguntas+' preguntas en el banco · '+practicadas.length+' practicada(s) al menos una vez · '+totalIntentos+' intento(s) en total'+(precisionGlobal!==null ? ' · '+precisionGlobal+'% de acierto global' : '');
   panel.appendChild(resumen);
 
+  const cv = buildPanelEvolucion(questions); if(cv) panel.appendChild(cv);
   const evo = buildGraficaEvolucion(); if(evo) panel.appendChild(evo);
   const simL = buildListaSimulacros(); if(simL) panel.appendChild(simL);
   if(!totalIntentos){
@@ -4970,6 +4977,7 @@ function renderTestsBanco(body){
   const questions = state.testBank.questions;
   const trash = getTestBankTrash();
   let bancoVisibleCount = TESTBANCO_PAGE_SIZE; // paginación simple: se resetea al cambiar de filtro
+  let refrescarSel = ()=>{};
   const panel = document.createElement('div'); panel.className='test-panel';
   const total = questions.length;
   const porCat = TEST_CATEGORIAS.map(c=>({c, n:questions.filter(q=>q.categoria===c.key).length}));
@@ -4995,6 +5003,11 @@ function renderTestsBanco(body){
     revBtn.textContent = '🤖 Revisar en bloque';
     revBtn.onclick = openRevisionEnBloqueModal;
     btnGroup.appendChild(revBtn);
+    const selBtn = document.createElement('button'); selBtn.type='button'; selBtn.className='btn ghost small';
+    selBtn.textContent = testsBancoSelModo ? '✕ Salir de selección' : '☑ Seleccionar / exportar';
+    selBtn.title = 'Elige varias preguntas para sacar sus PNG en lote o generar un test imprimible en PDF';
+    selBtn.onclick = ()=>{ testsBancoSelModo = !testsBancoSelModo; renderTests(); };
+    btnGroup.appendChild(selBtn);
   }
   const trashBtn = document.createElement('button'); trashBtn.type='button'; trashBtn.className='btn ghost small';
   trashBtn.textContent = testsBancoFiltro.papelera ? '← Volver al banco' : `🗑 Papelera (${trash.length})`;
@@ -5108,7 +5121,17 @@ function renderTestsBanco(body){
       card.style.borderLeft = '3px solid '+testCatColor(q.categoria);
       card.title = 'Pulsa para ver la pregunta completa';
       card.onclick = ()=> openTestPreviewModal(q);
+      let selCb = null;
+      if(testsBancoSelModo){
+        selCb = document.createElement('input'); selCb.type = 'checkbox'; selCb.className = 'sel-cb'; selCb.checked = testsBancoSel.has(q.id);
+        selCb.setAttribute('aria-label', 'Seleccionar esta pregunta');
+        const alternar = ()=>{ if(testsBancoSel.has(q.id)) testsBancoSel.delete(q.id); else testsBancoSel.add(q.id); selCb.checked = testsBancoSel.has(q.id); card.classList.toggle('sel-on', selCb.checked); refrescarSel(); };
+        selCb.onclick = e=>{ e.stopPropagation(); if(testsBancoSel.has(q.id)) testsBancoSel.delete(q.id); else testsBancoSel.add(q.id); card.classList.toggle('sel-on', selCb.checked); refrescarSel(); };
+        card.onclick = alternar; card.title = 'Pulsa para (de)seleccionar';
+        card.classList.toggle('sel-on', selCb.checked);
+      }
       const head = document.createElement('div'); head.className='tc-head';
+      if(selCb) head.appendChild(selCb);
       const imgTag = (q.imagenes && q.imagenes.length) ? ' 🖼' : '';
       const headTxt = document.createElement('span');
       headTxt.textContent = (q.enunciado||'(sin enunciado)').slice(0,140) + imgTag;
@@ -5157,7 +5180,239 @@ function renderTestsBanco(body){
     moreBtn.onclick = ()=>{ bancoVisibleCount += TESTBANCO_PAGE_SIZE; paintList(); };
     list.appendChild(moreBtn);
   }
+  if(isAdmin && testsBancoSelModo && !testsBancoFiltro.papelera){
+    const selBar = document.createElement('div'); selBar.className = 'sel-bar';
+    const info = document.createElement('span'); info.className = 'sel-info';
+    selBar.appendChild(info);
+    const acciones = [];
+    const selQs = ()=> questions.filter(q=> testsBancoSel.has(q.id)).sort((a,b)=> b.creado - a.creado);
+    const mk = (txt, title, fn, necesitaSel)=>{
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ghost small'; b.textContent = txt; b.title = title; b.onclick = fn;
+      selBar.appendChild(b); if(necesitaSel) acciones.push(b); return b;
+    };
+    mk('Seleccionar las filtradas', 'Marca todas las preguntas que cumplen el filtro actual', ()=>{ questions.filter(matchesFiltro).forEach(q=> testsBancoSel.add(q.id)); paintList(); refrescarSel(); });
+    mk('Limpiar', 'Quita la selección', ()=>{ testsBancoSel.clear(); paintList(); refrescarSel(); });
+    mk('📸 PNG sin respuesta', 'ZIP con una imagen por pregunta, sin marcar la correcta', ()=> exportarPNGLote(selQs(), false), true);
+    mk('🧾 PNG con respuesta', 'ZIP con una imagen por pregunta, con la correcta y la explicación', ()=> exportarPNGLote(selQs(), true), true);
+    mk('🖨 Test imprimible (PDF)', 'PDF en blanco y negro con las preguntas y, aparte, la hoja de soluciones', ()=> openTestImprimibleModal(selQs()), true);
+    refrescarSel = ()=>{
+      const n = selQs().length;
+      info.textContent = n+' seleccionada'+(n===1?'':'s');
+      acciones.forEach(b=>{ b.disabled = !n; });
+    };
+    refrescarSel();
+    panel.insertBefore(selBar, list);
+  }
   paintList();
+}
+
+/* ===================== EXPORTACIONES EN LOTE (SOLO ADMIN) =====================
+   Selección de varias preguntas en el Banco para (a) sacar todos sus PNG de golpe (ZIP) y (b) generar
+   un test imprimible en PDF (blanco y negro, con la hoja de soluciones en un archivo aparte).
+   OJO: es una restricción de la interfaz (los botones solo salen a cuentas admin). Las cuentas de
+   lectura siguen pudiendo practicar con las preguntas, que es para lo que sirve el banco. */
+let testsBancoSel = new Set();
+let testsBancoSelModo = false;
+function descargarBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 4000);
+}
+let jszipLoading = null;
+function loadJSZip(){
+  if(window.JSZip) return Promise.resolve();
+  if(jszipLoading) return jszipLoading;
+  jszipLoading = new Promise((resolve, reject)=>{
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    sc.onload = ()=> resolve();
+    sc.onerror = ()=>{ jszipLoading = null; reject(new Error('No se pudo cargar la librería ZIP.')); };
+    document.head.appendChild(sc);
+  });
+  return jszipLoading;
+}
+async function exportarPNGLote(qs, withAnswer){
+  if(!isAdmin){ showToast('Solo los administradores pueden exportar preguntas.'); return; }
+  if(!qs.length){ showToast('Selecciona al menos una pregunta.'); return; }
+  if(qs.length > 60 && !confirm('Vas a generar '+qs.length+' imágenes de golpe. Puede tardar y gastar bastante memoria en el móvil. ¿Continuar?')) return;
+  const archivos = [];
+  try{
+    await loadHtml2Canvas();
+    for(let i=0;i<qs.length;i++){
+      showToast('Generando imagen '+(i+1)+' de '+qs.length+'…');
+      const node = buildQuestionExportNode(qs[i], withAnswer);
+      document.body.appendChild(node);
+      try{
+        if(document.fonts && document.fonts.ready) await document.fonts.ready;
+        const canvas = await window.html2canvas(node, { backgroundColor: exportPalette().fondo, scale:2, useCORS:true });
+        const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
+        if(!blob) throw new Error('No se pudo generar el PNG de la pregunta '+(i+1)+'.');
+        archivos.push({ nombre:'opotest-'+String(i+1).padStart(2,'0')+'-'+(qs[i].id||i)+(withAnswer?'-solucion':'')+'.png', blob });
+      } finally { if(node.parentNode) node.parentNode.removeChild(node); }
+      await new Promise(r=> setTimeout(r, 20));
+    }
+    try{
+      await loadJSZip();
+      const zip = new window.JSZip();
+      archivos.forEach(a=> zip.file(a.nombre, a.blob));
+      const zb = await zip.generateAsync({ type:'blob' });
+      descargarBlob(zb, 'opotest-preguntas'+(withAnswer?'-con-respuesta':'-sin-respuesta')+'.zip');
+      showToast('ZIP con '+archivos.length+' imagen'+(archivos.length===1?'':'es')+' descargado ✓');
+    }catch(zipErr){
+      console.error(zipErr);
+      archivos.forEach((a,i)=> setTimeout(()=> descargarBlob(a.blob, a.nombre), i*400));
+      showToast('No se pudo crear el ZIP: se descargan las imágenes una a una.');
+    }
+  }catch(err){
+    console.error(err);
+    showToast(err.message || 'No se pudo exportar el lote.');
+  }
+}
+// Respuesta correcta de una pregunta en texto corto (para la hoja de soluciones).
+function respuestaCorrectaTexto(q){
+  const tipo = qTipo(q);
+  if(tipo==='gramatica') return q.correcta ? 'Frase correcta' : 'Frase incorrecta';
+  if(tipo==='ortografia'){
+    const malas = (q.palabras||[]).map((p,i)=> p.incorrecta ? (i+1)+' ('+p.texto+')' : null).filter(Boolean);
+    return 'Mal escrita: '+(malas.length ? malas.join(', ') : 'ninguna');
+  }
+  const L = 'ABCDEFGHIJ';
+  const op = (q.opciones||[])[q.correcta];
+  return L[q.correcta]+')'+(op ? ' '+op : '');
+}
+async function exportarTestImprimiblePDF(qs, opts){
+  if(!isAdmin){ showToast('Solo los administradores pueden generar este PDF.'); return; }
+  if(!pdfLibDisponible()){ showToast('No se pudo generar el PDF: la librería no está disponible sin conexión.'); return; }
+  if(!qs.length){ showToast('Selecciona al menos una pregunta.'); return; }
+  opts = opts || {};
+  const lista = qs.slice();
+  if(opts.mezclar){ for(let i=lista.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [lista[i],lista[j]] = [lista[j],lista[i]]; } }
+  showToast('Generando el PDF…');
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const fecha = new Date().toLocaleDateString('es-ES');
+  const LETRAS = 'ABCDEFGHIJ';
+  async function embedImagen(doc, durl){
+    try{
+      const m = /^data:image\/(png|jpe?g);base64,(.+)$/i.exec(durl||'');
+      if(!m) return null;
+      const bin = atob(m[2]); const bytes = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+      return /png/i.test(m[1]) ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    }catch(e){ return null; }
+  }
+  async function construir(modo){
+    const doc = await PDFDocument.create();
+    const fR = await doc.embedFont(StandardFonts.Helvetica), fB = await doc.embedFont(StandardFonts.HelveticaBold);
+    const W = 595.28, H = 841.89, M = 48, CW = W - 2*M;
+    const negro = rgb(0,0,0), gris = rgb(0.4,0.4,0.4);
+    let page = doc.addPage([W,H]), y = H - M;
+    const ensure = h=>{ if(y - h < M + 16){ page = doc.addPage([W,H]); y = H - M; } };
+    function lineas(texto, font, size, ancho){
+      const out = []; let cur = '';
+      String(pdfSafe(texto)).split(/\s+/).filter(Boolean).forEach(w=>{
+        const prueba = cur ? cur+' '+w : w;
+        if(font.widthOfTextAtSize(prueba, size) <= ancho) cur = prueba;
+        else { if(cur) out.push(cur); cur = w; }
+      });
+      if(cur) out.push(cur);
+      return out.length ? out : [''];
+    }
+    function escribir(texto, o){
+      o = o || {};
+      const font = o.font || fR, size = o.size || 10.5, x = o.x!=null ? o.x : M, ancho = o.ancho || (CW - (x - M)), gap = o.gap!=null ? o.gap : 3;
+      lineas(texto, font, size, ancho).forEach(l=>{ ensure(size+gap); page.drawText(l, { x, y: y-size, size, font, color:o.color||negro }); y -= size+gap; });
+    }
+    escribir(modo==='test' ? 'OpoTest · Test' : 'OpoTest · Hoja de soluciones', { font:fB, size:16, gap:6 });
+    escribir(fecha+' · '+lista.length+' pregunta'+(lista.length===1?'':'s')+(modo==='test' ? '' : ' · corresponde al test del mismo número de preguntas'), { size:9.5, color:gris, gap:8 });
+    if(modo==='test'){ escribir('Nombre: ______________________________        Fecha: ____ / ____ / ________', { size:10, gap:12 }); }
+    for(let i=0;i<lista.length;i++){
+      const q = lista[i], tipo = qTipo(q), n = i+1;
+      if(modo==='test'){
+        ensure(60); y -= 4;
+        if(tipo==='gramatica'){
+          escribir(n+'. ¿Es correcta esta frase?', { font:fB });
+          escribir('"'+(q.enunciado||'')+'"', { x:M+14, ancho:CW-14 });
+          escribir('(   ) Correcta        (   ) Incorrecta', { x:M+14 });
+        } else if(tipo==='ortografia'){
+          const nuevo = ortoEsFormatoNuevo(q.enunciado, q.palabras);
+          if(nuevo){
+            const parts = fraseParts(q.enunciado); const porIdx = new Map();
+            q.palabras.forEach((pl,k)=>{ if(typeof pl.idx==='number') porIdx.set(pl.idx, k+1); });
+            let frase = '';
+            for(let k=0;k<parts.length;k++){ frase += parts[k]; if(k%2===1 && porIdx.has((k-1)/2)) frase += '('+porIdx.get((k-1)/2)+')'; }
+            escribir(n+'. ¿Qué palabra numerada está mal escrita?', { font:fB });
+            escribir(frase, { x:M+14, ancho:CW-14 });
+            escribir('(   ) 1     (   ) 2     (   ) 3     (   ) 4', { x:M+14 });
+          } else {
+            escribir(n+'. ¿Cuál de estas palabras está mal escrita?', { font:fB });
+            escribir((q.palabras||[]).map((pl,k)=>(k+1)+'. '+pl.texto).join('     '), { x:M+14, ancho:CW-14 });
+          }
+        } else {
+          escribir(n+'. '+(q.enunciado || '(ver imagen)'), { font:fB });
+        }
+        if(q.imagenes && q.imagenes.length){
+          for(const durl of q.imagenes){
+            const img = await embedImagen(doc, durl);
+            if(!img){ escribir('(imagen: ver en la app)', { x:M+14, size:9, color:gris }); continue; }
+            const esc = Math.min(1, 260/img.width, 150/img.height);
+            const w = img.width*esc, h = img.height*esc;
+            ensure(h+6); page.drawImage(img, { x:M+14, y:y-h, width:w, height:h }); y -= h+6;
+          }
+        }
+        if(tipo==='multiple'){ (q.opciones||[]).forEach((op,oi)=>{ escribir(LETRAS[oi]+') '+op, { x:M+14, ancho:CW-14 }); }); }
+        y -= 4;
+      } else {
+        escribir(n+'.  '+respuestaCorrectaTexto(q), { size:10, gap:2 });
+        if(opts.explicaciones && q.explicacion){ escribir(stripRich(q.explicacion), { x:M+16, ancho:CW-16, size:8.5, color:gris, gap:2 }); y -= 3; }
+      }
+    }
+    const paginas = doc.getPages();
+    paginas.forEach((pg,i)=> pg.drawText('OpoTest · '+(modo==='test'?'test':'soluciones')+' · página '+(i+1)+' de '+paginas.length, { x:M, y:24, size:8, font:fR, color:gris }));
+    return new Blob([await doc.save()], { type:'application/pdf' });
+  }
+  try{
+    const sello = new Date().toISOString().slice(0,10);
+    descargarBlob(await construir('test'), 'opotest-test-'+sello+'.pdf');
+    if(opts.soluciones){
+      const sol = await construir('soluciones');
+      setTimeout(()=> descargarBlob(sol, 'opotest-soluciones-'+sello+'.pdf'), 600);
+    }
+    showToast('PDF generado ✓'+(opts.soluciones ? ' (test + soluciones, 2 archivos)' : ''));
+  }catch(err){
+    console.error(err);
+    showToast('No se pudo generar el PDF: '+(err.message||'error'));
+  }
+}
+function openTestImprimibleModal(qs){
+  if(!isAdmin) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
+  const cerrar = ()=>{ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+  overlay.onclick = e=>{ if(e.target===overlay) cerrar(); };
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg-panel);border:1px solid var(--line);border-radius:6px;padding:18px;max-width:460px;width:100%;';
+  overlay.appendChild(box);
+  const h = document.createElement('h3'); h.style.cssText = 'font-family:var(--font-display);color:var(--amber-ink);text-transform:uppercase;margin:0 0 6px;'; h.textContent = '🖨 Test imprimible';
+  box.appendChild(h);
+  const info = document.createElement('p'); info.style.cssText = 'font-size:13px;color:var(--cream-dim);margin:0 0 12px;';
+  info.textContent = qs.length+' pregunta'+(qs.length===1?'':'s')+'. PDF en blanco y negro (ahorra tinta). Las preguntas con imagen WebP se sustituyen por un aviso.';
+  box.appendChild(info);
+  const opt = {};
+  const mkChk = (clave, texto, def)=>{
+    const l = document.createElement('label'); l.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;font-size:14px;color:var(--cream);cursor:pointer;';
+    const c = document.createElement('input'); c.type = 'checkbox'; c.checked = def; opt[clave] = def; c.onchange = ()=>{ opt[clave] = c.checked; };
+    l.appendChild(c); l.appendChild(document.createTextNode(texto)); box.appendChild(l);
+  };
+  mkChk('soluciones', 'Generar también la hoja de soluciones (archivo aparte)', true);
+  mkChk('explicaciones', 'Incluir las explicaciones en la hoja de soluciones', false);
+  mkChk('mezclar', 'Mezclar el orden de las preguntas', false);
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:14px;';
+  const no = document.createElement('button'); no.type = 'button'; no.className = 'btn ghost'; no.textContent = 'Cancelar'; no.onclick = cerrar;
+  const si = document.createElement('button'); si.type = 'button'; si.className = 'btn'; si.textContent = 'Generar PDF';
+  si.onclick = ()=>{ cerrar(); exportarTestImprimiblePDF(qs, opt); };
+  row.appendChild(no); row.appendChild(si); box.appendChild(row);
+  document.body.appendChild(overlay);
 }
 
 function openTestPreviewModal(q){
@@ -6551,12 +6806,17 @@ function buildQuizTools(){
     if(activo) b.classList.add('on');
     b.onclick = fn; box.appendChild(b); return b;
   };
-  mk('🎯', 'Modo concentración: oculta el resto de la app mientras haces el test', ()=>{ modoConcentracion = !modoConcentracion; renderTests(); }, modoConcentracion);
+  const enSim = !!(testsQuiz && testsQuiz.simulacro);
+  if(!enSim) mk('🎯', 'Modo concentración: oculta el resto de la app mientras haces el test', ()=>{ modoConcentracion = !modoConcentracion; renderTests(); }, modoConcentracion);
   mk('A−', 'Letra más pequeña', ()=>cambiarZoom(-0.1));
   mk('A+', 'Letra más grande', ()=>cambiarZoom(0.1));
   mk('📳', 'Vibración al responder (solo móviles compatibles)', ()=>{ vibracionOn = !vibracionOn; try{ localStorage.setItem('opotest-vib', vibracionOn?'1':'0'); }catch(e){} if(vibracionOn) vibrar(true); renderTests(); }, vibracionOn);
-  mk('🔊', audioModoActivo ? 'Modo audio activo: leyendo las preguntas en voz alta. Pulsa para detener.' : 'Modo audio: lee en voz alta, una tras otra, las preguntas de este test (para repasar sin mirar la pantalla)', toggleModoAudio, audioModoActivo);
-  mk(velocidadAudio()+'x', 'Velocidad de lectura del modo audio (pulsa para cambiarla)', ciclarVelocidadAudio);
+  if(!enSim) mk('🔊', audioModoActivo ? 'Modo audio activo: leyendo las preguntas en voz alta. Pulsa para detener.' : 'Modo audio: lee en voz alta, una tras otra, las preguntas de este test (para repasar sin mirar la pantalla)', toggleModoAudio, audioModoActivo);
+  if(!enSim) mk(velocidadAudio()+'x', 'Velocidad de lectura del modo audio (pulsa para cambiarla)', ciclarVelocidadAudio);
+  if(enSim) mk('✕', 'Abandonar el simulacro (se pierden las respuestas)', ()=>{
+    if(!confirm('¿Abandonar el simulacro? Se perderán las respuestas de este intento.')) return;
+    clearQuizTimer(); borrarTestEnCurso(); testsQuiz = null; resetTestsWizard(); renderTests();
+  });
   return box;
 }
 // Atajos de teclado en escritorio: 1-4 o A-D responden a la pregunta sin contestar más alta que se ve en pantalla.
@@ -6710,6 +6970,95 @@ function agregarBloqueNotas(card, it){
   card.appendChild(box);
 }
 // ---- Gráfica de evolución (Progreso) ----
+// Panel resumen de progreso ("Cómo vas"): 4 tarjetas + barras de las últimas 6 semanas.
+// Semanas de lunes a domingo. Volumen = preguntas practicadas por día (progreso.porDia, ~45 días);
+// acierto = tests guardados en el historial (últimos 40).
+function buildPanelEvolucion(questions){
+  const hist = progreso.historial || [], sims = progreso.simulacros || [], porDia = progreso.porDia || {};
+  if(!hist.length && !sims.length && !Object.keys(porDia).length && !progreso.examenFecha) return null;
+  const DIA = 864e5, SEM = 7*DIA, NSEM = 6;
+  const hoy0 = new Date(); hoy0.setHours(0,0,0,0);
+  const lunes = new Date(hoy0); lunes.setDate(lunes.getDate() - ((lunes.getDay()+6)%7));
+  const ini0 = lunes.getTime() - (NSEM-1)*SEM;
+  const semanas = Array.from({length:NSEM}, (_,i)=>({ ini: ini0 + i*SEM, preg:0, n:0, ac:0 }));
+  const idxDe = t=>{ const i = Math.floor((t - ini0)/SEM); return (i>=0 && i<NSEM) ? i : -1; };
+  hist.forEach(h=>{ const i = idxDe(h.t); if(i>=0){ semanas[i].n += h.n; semanas[i].ac += h.ac; } });
+  Object.keys(porDia).forEach(k=>{
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k); if(!m) return;
+    const i = idxDe(new Date(Number(m[1]), Number(m[2])-1, Number(m[3])).getTime());
+    if(i>=0) semanas[i].preg += Number(porDia[k])||0;
+  });
+  semanas.forEach(w=>{ if(w.n > w.preg) w.preg = w.n; });
+  const pct = w=> w.n ? Math.round(w.ac/w.n*100) : null;
+
+  const wrap = document.createElement('div'); wrap.className = 'evo-panel';
+  const title = document.createElement('h5');
+  title.style.cssText = 'margin:0 0 8px;font-family:var(--font-display);color:var(--amber-ink);text-transform:uppercase;font-size:13px;letter-spacing:.04em;';
+  title.textContent = '🧭 Cómo vas';
+  wrap.appendChild(title);
+  const grid = document.createElement('div'); grid.className = 'evo-kpis'; wrap.appendChild(grid);
+  const kpi = (etiqueta, valor, detalle, clase)=>{
+    const k = document.createElement('div'); k.className = 'evo-kpi'+(clase ? ' '+clase : '');
+    const e = document.createElement('div'); e.className = 'evo-kpi-l'; e.textContent = etiqueta;
+    const v = document.createElement('div'); v.className = 'evo-kpi-v'; v.textContent = valor;
+    k.appendChild(e); k.appendChild(v);
+    if(detalle){ const d = document.createElement('div'); d.className = 'evo-kpi-d'; d.textContent = detalle; k.appendChild(d); }
+    grid.appendChild(k);
+  };
+  // 1) Esta semana
+  const w0 = semanas[NSEM-1], w1 = semanas[NSEM-2];
+  let detSem = 'Aún sin tests esta semana';
+  if(pct(w0)!==null){
+    detSem = pct(w0)+'% de acierto';
+    if(pct(w1)!==null){ const d = pct(w0)-pct(w1); detSem += ' · '+(d>0?'▲ +'+d:(d<0?'▼ '+d:'= igual'))+' pts vs. anterior'; }
+  }
+  kpi('Esta semana', w0.preg+' pregunta'+(w0.preg===1?'':'s'), detSem);
+  // 2) Simulacros de conocimientos
+  const simCon = sims.filter(x=>x.tipo!=='psico');
+  if(simCon.length){
+    const ult = simCon[simCon.length-1], ult3 = simCon.slice(-3);
+    const media = ult3.reduce((a,x)=>a+Number(x.nota||0),0)/ult3.length;
+    kpi('Último simulacro', fmtNota(ult.nota)+' / '+ult.max, 'Media de los últimos '+ult3.length+': '+fmtNota(media)+(ult.apto===null ? '' : ' · '+(ult.apto?'APTO':'NO APTO')), ult.apto===false ? 'mal' : (ult.apto ? 'ok' : ''));
+  } else kpi('Simulacros', '—', 'Haz uno desde Practicar para ver tu nota estimada');
+  // 3) Examen
+  if(progreso.examenFecha){
+    const [ey,em,ed] = progreso.examenFecha.split('-').map(Number);
+    const dias = Math.round((new Date(ey,em-1,ed).getTime() - hoy0.getTime())/DIA);
+    kpi('Examen', dias>0 ? dias+' día'+(dias===1?'':'s') : (dias===0 ? '¡Hoy!' : 'Ya pasó'), progreso.examenFecha.split('-').reverse().join('/'));
+  } else kpi('Examen', '—', 'Marca la fecha en Practicar para ver la cuenta atrás');
+  // 4) Temario dominado
+  const nT = testCatTemas('conocimientos');
+  if(nT){
+    let dom = 0, sinVer = 0;
+    for(let t=1;t<=nT;t++){
+      const qs = questions.filter(q=> q.categoria==='conocimientos' && Number(q.tema)===t);
+      const e = estadoTemaMapa(qs);
+      if(e.clave==='dominado') dom++; else if(e.clave==='sinver' || e.clave==='vacio') sinVer++;
+    }
+    kpi('Temario', dom+' / '+nT, 'temas dominados · '+sinVer+' sin ver', dom===nT ? 'ok' : '');
+  }
+  // Barras semanales
+  const maxP = Math.max(1, ...semanas.map(w=>w.preg));
+  const sw = document.createElement('div'); sw.className = 'evo-semanas'; sw.setAttribute('role','img');
+  sw.setAttribute('aria-label','Preguntas practicadas por semana en las últimas '+NSEM+' semanas');
+  semanas.forEach((w,i)=>{
+    const col = document.createElement('div'); col.className = 'evo-sem'+(i===NSEM-1 ? ' actual' : '');
+    const top = document.createElement('div'); top.className = 'evo-sem-pct'; top.textContent = pct(w)!==null ? pct(w)+'%' : '';
+    const barBox = document.createElement('div'); barBox.className = 'evo-sem-box';
+    const bar = document.createElement('div'); bar.className = 'evo-sem-bar'; bar.style.height = Math.max(w.preg ? 4 : 0, Math.round(w.preg/maxP*100))+'%';
+    bar.title = w.preg+' pregunta(s)'+(pct(w)!==null ? ' · '+pct(w)+'% de acierto' : '');
+    barBox.appendChild(bar);
+    const num = document.createElement('div'); num.className = 'evo-sem-n'; num.textContent = String(w.preg);
+    const f = new Date(w.ini); const lab = document.createElement('div'); lab.className = 'evo-sem-l'; lab.textContent = f.getDate()+'/'+(f.getMonth()+1);
+    col.appendChild(top); col.appendChild(barBox); col.appendChild(num); col.appendChild(lab);
+    sw.appendChild(col);
+  });
+  wrap.appendChild(sw);
+  const leyenda = document.createElement('div'); leyenda.className = 'evo-nota';
+  leyenda.textContent = 'Barras: preguntas practicadas por semana (semana que empieza el día indicado). Encima, tu % de acierto en los tests de esa semana.';
+  wrap.appendChild(leyenda);
+  return wrap;
+}
 function buildGraficaEvolucion(){
   const h = progreso.historial.slice(-20);
   if(!h.length) return null;
@@ -7379,6 +7728,19 @@ function buildScoreBanner(){
   });
   return wrap;
 }
+function itemSinResponder(it){ return it.respuesta===null || (Array.isArray(it.respuesta) && it.respuesta.every(v=>v===null || v===false || v===undefined)); }
+// Salta (con scroll suave) a la primera pregunta sin contestar que queda por debajo de la que se está viendo;
+// si no hay ninguna por debajo, vuelve a buscar desde el principio.
+function irASiguienteSinResponder(){
+  if(!testsQuiz) return;
+  const cards = Array.from(document.querySelectorAll('.test-quiz-q[data-qi]'));
+  if(!cards.length) return;
+  const corte = window.innerHeight*0.35;
+  const pendiente = c=>{ const it = testsQuiz.items[Number(c.dataset.qi)]; return it && itemSinResponder(it); };
+  let destino = cards.find(c=> pendiente(c) && c.getBoundingClientRect().top > corte) || cards.find(pendiente);
+  if(!destino){ showToast('¡Has respondido todas! Ya puedes corregir.'); return; }
+  destino.scrollIntoView({ behavior:'smooth', block:'center' });
+}
 function renderTestsQuizUI(body){
   // Actualiza en vivo "N / total respondidas" sin repintar toda la pantalla (evita perder la
   // posición del scroll cada vez que se marca una opción en un test largo).
@@ -7426,7 +7788,7 @@ function renderTestsQuizUI(body){
       }
     }
     const revelada = testsQuiz.corregido || (testsQuiz.instantaneo && it.revelado);
-    const card = document.createElement('div'); card.className='test-quiz-q'+(revelada?' corregida':'');
+    const card = document.createElement('div'); card.className='test-quiz-q'+(revelada?' corregida':''); card.dataset.qi = String(i);
     card.appendChild(botonEstrella(it));
     card.appendChild(botonAudio(it));
     const esOrtoNuevo = tipo==='ortografia' && ortoEsFormatoNuevo(q.enunciado, q.palabras);
@@ -7573,7 +7935,11 @@ function renderTestsQuizUI(body){
   });
   const btnRow = document.createElement('div'); btnRow.className='quiz-actions-bar'; btnRow.style.cssText='display:flex;gap:8px;';
   if(!testsQuiz.corregido){
-    const corrBtn = document.createElement('button'); corrBtn.type='button'; corrBtn.className='btn'; corrBtn.style.width='100%'; corrBtn.textContent='Corregir test';
+    const sigBtn = document.createElement('button'); sigBtn.type='button'; sigBtn.className='btn ghost quiz-next-btn'; sigBtn.textContent='⬇ Sin responder';
+    sigBtn.title = 'Ir a la siguiente pregunta que aún no has contestado';
+    sigBtn.onclick = irASiguienteSinResponder;
+    btnRow.appendChild(sigBtn);
+    const corrBtn = document.createElement('button'); corrBtn.type='button'; corrBtn.className='btn quiz-correct-btn'; corrBtn.textContent='Corregir test';
     corrBtn.onclick = corregirQuizActual;
     btnRow.appendChild(corrBtn);
   } else {
